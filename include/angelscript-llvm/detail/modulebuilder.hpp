@@ -13,12 +13,14 @@
 namespace asllvm::detail
 {
 
+class FunctionBuilder;
+
 class ModuleBuilder
 {
 public:
 	ModuleBuilder(std::string_view angelscript_module_name);
 
-	llvm::Function* create_function(asIScriptFunction& function);
+	FunctionBuilder create_function(asIScriptFunction& function);
 
 	void dump_state() const;
 

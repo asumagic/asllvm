@@ -2,6 +2,7 @@
 
 #include <angelscript-llvm/detail/builder.hpp>
 #include <angelscript-llvm/detail/modulebuilder.hpp>
+#include <angelscript-llvm/detail/functionbuilder.hpp>
 #include <fmt/core.h>
 
 namespace asllvm
@@ -60,7 +61,7 @@ JitCompiler::CompileStatus JitCompiler::compile(asIScriptEngine& engine, asIScri
 
 	detail::ModuleBuilder& module_builder = m_module_map[function.GetModuleName()];
 
-	llvm::Function* llvm_function = module_builder.create_function(function);
+	detail::FunctionBuilder function_builder = module_builder.create_function(function);
 
 	const asDWORD* bytecode_current = bytecode;
 	const asDWORD* bytecode_end = bytecode + length;
