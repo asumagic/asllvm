@@ -1,6 +1,7 @@
 #pragma once
 
 #include <llvm/IR/Function.h>
+#include <llvm/IR/BasicBlock.h>
 
 namespace asllvm::detail
 {
@@ -15,6 +16,7 @@ public:
 private:
 	ModuleBuilder* m_module_builder;
 	llvm::Function* m_function;
+	llvm::BasicBlock* m_entry_block;
 };
 
 }

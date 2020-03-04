@@ -98,6 +98,7 @@ JitCompiler::CompileStatus JitCompiler::compile(asIScriptEngine& engine, asIScri
 
 		default:
 		{
+			// TODO: function_builder.translate(bytecode_current, info);
 			diagnostic(engine, fmt::format("Hit unrecognized bytecode instruction {}, aborting", info.name), asMSGTYPE_ERROR);
 			return CompileStatus::UNIMPLEMENTED;
 		}
