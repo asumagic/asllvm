@@ -1,4 +1,7 @@
 #include <angelscript-llvm/jit.hpp>
+
+#include <angelscript-llvm/detail/builder.hpp>
+#include <angelscript-llvm/detail/modulebuilder.hpp>
 #include <fmt/core.h>
 
 namespace asllvm
@@ -48,6 +51,11 @@ JitCompiler::CompileStatus JitCompiler::compile(asIScriptEngine& engine, asIScri
 		diagnostic(engine, "Null bytecode passed by engine", asMSGTYPE_WARNING);
 		return CompileStatus::NULL_BYTECODE;
 	}
+
+	// TODO: this can be reused instead
+	detail::Builder builder;
+
+	detail::ModuleBuilder module_builder{function.GetModuleName()};
 
 	const asDWORD* bytecode_current = bytecode;
 	const asDWORD* bytecode_end = bytecode + length;

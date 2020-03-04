@@ -4,6 +4,9 @@ project(angelscript-llvm LANGUAGES CXX)
 
 add_library(angelscript-llvm
     src/angelscript-llvm/jit.cpp
+    src/angelscript-llvm/detail/builder.cpp
+    src/angelscript-llvm/detail/llvmglobals.cpp
+    src/angelscript-llvm/detail/modulebuilder.cpp
 )
 
 # TODO: on GNUC, -fno-strict-aliasing should be passed
@@ -11,7 +14,11 @@ add_library(angelscript-llvm
 
 target_compile_features(angelscript-llvm PUBLIC cxx_std_17)
 target_include_directories(angelscript-llvm PRIVATE include/)
-target_link_libraries(angelscript-llvm angelscript pthread fmt)
+target_link_libraries(angelscript-llvm
+    angelscript pthread
+    fmt
+    LLVM
+)
 
 add_subdirectory(3rd)
 add_subdirectory(samples/simple)
