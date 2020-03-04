@@ -1,6 +1,7 @@
 #include <angelscript-llvm/detail/modulemap.hpp>
 
 #include <angelscript-llvm/detail/llvmglobals.hpp>
+#include <fmt/core.h>
 
 namespace asllvm::detail
 {
@@ -16,6 +17,15 @@ ModuleBuilder& ModuleMap::operator[](std::string_view name)
 	const auto [it, success] = m_map.emplace(std::string(name), ModuleBuilder{name});
 
 	return it->second;
+}
+
+void ModuleMap::dump_state() const
+{
+	for (const auto& [name, module_builder] : m_map)
+	{
+		fmt::print(stderr, "\nModule '{}':\n", name);
+		module_builder.dump_state();
+	}
 }
 
 }

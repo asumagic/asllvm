@@ -17,6 +17,8 @@ int JitCompiler::CompileFunction(asIScriptFunction* function, asJITFunction* out
 
 	CompileStatus status = compile(engine, *function, *output);
 
+	dump_state();
+
 	if (status == CompileStatus::SUCCESS)
 	{
 		m_debug_state = {};
@@ -119,6 +121,11 @@ void JitCompiler::diagnostic(asIScriptEngine& engine, const std::string& text, a
 	edited_text += text;
 
 	engine.WriteMessage(section, 0, 0, message_type, edited_text.c_str());
+}
+
+void JitCompiler::dump_state() const
+{
+	m_module_map.dump_state();
 }
 
 }

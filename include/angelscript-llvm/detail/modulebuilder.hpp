@@ -20,6 +20,8 @@ public:
 
 	llvm::Function* create_function(asIScriptFunction& function);
 
+	void dump_state() const;
+
 private:
 	std::unique_ptr<llvm::Module> m_module;
 };

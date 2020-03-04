@@ -15,6 +15,8 @@ class ModuleMap
 public:
 	ModuleBuilder& operator[](std::string_view name);
 
+	void dump_state() const;
+
 private:
 	std::unordered_map<std::string, ModuleBuilder> m_map;
 };

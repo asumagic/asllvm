@@ -37,6 +37,8 @@ private:
 
 	void diagnostic(asIScriptEngine& engine, const std::string& message, asEMsgType message_type = asMSGTYPE_INFORMATION) const;
 
+	void dump_state() const;
+
 	JitConfig m_config;
 	detail::ModuleMap m_module_map;
 };
