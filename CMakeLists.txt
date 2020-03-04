@@ -7,6 +7,8 @@ add_library(angelscript-llvm
     src/angelscript-llvm/detail/builder.cpp
     src/angelscript-llvm/detail/llvmglobals.cpp
     src/angelscript-llvm/detail/modulebuilder.cpp
+    src/angelscript-llvm/detail/modulecommon.cpp
+    src/angelscript-llvm/detail/modulemap.cpp
 )
 
 # TODO: on GNUC, -fno-strict-aliasing should be passed

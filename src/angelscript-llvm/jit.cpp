@@ -34,7 +34,7 @@ void JitCompiler::ReleaseJITFunction(asJITFunction func)
 
 }
 
-JitCompiler::CompileStatus JitCompiler::compile(asIScriptEngine& engine, asIScriptFunction& function, asJITFunction& output) const
+JitCompiler::CompileStatus JitCompiler::compile(asIScriptEngine& engine, asIScriptFunction& function, asJITFunction& output)
 {
 	m_debug_state.compiling_function = &function;
 
@@ -52,10 +52,11 @@ JitCompiler::CompileStatus JitCompiler::compile(asIScriptEngine& engine, asIScri
 		return CompileStatus::NULL_BYTECODE;
 	}
 
+
 	// TODO: this can be reused instead
 	detail::Builder builder;
 
-	detail::ModuleBuilder module_builder{function.GetModuleName()};
+	detail::ModuleBuilder& module_builder = m_module_map[function.GetModuleName()];
 
 	const asDWORD* bytecode_current = bytecode;
 	const asDWORD* bytecode_end = bytecode + length;

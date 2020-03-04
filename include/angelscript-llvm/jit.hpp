@@ -2,6 +2,7 @@
 
 #include <angelscript.h>
 #include <angelscript-llvm/config.hpp>
+#include <angelscript-llvm/detail/modulemap.hpp>
 
 #include <string>
 
@@ -32,11 +33,12 @@ private:
 		UNIMPLEMENTED
 	};
 
-	CompileStatus compile(asIScriptEngine& engine, asIScriptFunction& function, asJITFunction& output) const;
+	CompileStatus compile(asIScriptEngine& engine, asIScriptFunction& function, asJITFunction& output);
 
 	void diagnostic(asIScriptEngine& engine, const std::string& message, asEMsgType message_type = asMSGTYPE_INFORMATION) const;
 
 	JitConfig m_config;
+	detail::ModuleMap m_module_map;
 };
 
 }
