@@ -23,7 +23,7 @@ int JitCompiler::CompileFunction(asIScriptFunction* function, asJITFunction* out
 		return 0;
 	}
 
-	diagnostic(engine, "Function was not JITted", asMSGTYPE_WARNING);
+	diagnostic(engine, "Function was not JITted. This may cause problems when other function reference this one.\n", asMSGTYPE_WARNING);
 
 	m_debug_state = {};
 	return -1;
@@ -57,6 +57,8 @@ JitCompiler::CompileStatus JitCompiler::compile(asIScriptEngine& engine, asIScri
 	detail::Builder builder;
 
 	detail::ModuleBuilder& module_builder = m_module_map[function.GetModuleName()];
+
+	std::unique_ptr<llvm::Function> llvm_function = module_builder.create_function(function);
 
 	const asDWORD* bytecode_current = bytecode;
 	const asDWORD* bytecode_end = bytecode + length;
