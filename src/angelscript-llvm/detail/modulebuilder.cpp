@@ -19,14 +19,14 @@ std::unique_ptr<llvm::Function> ModuleBuilder::create_function(asIScriptFunction
 	std::array<llvm::Type*, 0> types;
 	llvm::FunctionType* function_type = llvm::FunctionType::get(llvm::Type::getVoidTy(context), types, false);
 
-	return std::unique_ptr<llvm::Function>{
+	return llvm::Function::Create(
 		llvm::Function::Create(
 			function_type,
 			llvm::Function::ExternalLinkage,
 			make_function_name(function.GetName(), function.GetNamespace()),
-			m_module.get()
-		)
-	};
+		*m_module.get()
+	);
+}
 }
 
 }

@@ -58,7 +58,7 @@ JitCompiler::CompileStatus JitCompiler::compile(asIScriptEngine& engine, asIScri
 
 	detail::ModuleBuilder& module_builder = m_module_map[function.GetModuleName()];
 
-	std::unique_ptr<llvm::Function> llvm_function = module_builder.create_function(function);
+	llvm::Function* llvm_function = module_builder.create_function(function);
 
 	const asDWORD* bytecode_current = bytecode;
 	const asDWORD* bytecode_end = bytecode + length;

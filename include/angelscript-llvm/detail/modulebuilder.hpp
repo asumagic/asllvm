@@ -18,7 +18,7 @@ class ModuleBuilder
 public:
 	ModuleBuilder(std::string_view angelscript_module_name);
 
-	std::unique_ptr<llvm::Function> create_function(asIScriptFunction& function);
+	llvm::Function* create_function(asIScriptFunction& function);
 
 private:
 	std::unique_ptr<llvm::Module> m_module;
