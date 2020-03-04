@@ -49,6 +49,48 @@ JitCompiler::CompileStatus JitCompiler::compile(asIScriptEngine& engine, asIScri
 		return CompileStatus::NULL_BYTECODE;
 	}
 
+	const asDWORD* bytecode_current = bytecode;
+	const asDWORD* bytecode_end = bytecode + length;
+
+	while (bytecode_current < bytecode_end)
+	{
+		const asSBCInfo info = asBCInfo[*reinterpret_cast<const asBYTE*>(bytecode_current)];
+		const std::size_t instruction_size = asBCTypeSize[info.type];
+
+		switch (info.bc)
+		{
+		case asBC_JitEntry:
+		{
+			if (m_config.verbose)
+			{
+				diagnostic(engine, "Found JIT entry point, patching as valid entry point");
+			}
+
+			// If this argument is zero (the default), the script engine will never call into the JIT.
+			asBC_PTRARG(bytecode_current) = 1;
+
+			break;
+		}
+
+		case asBC_SUSPEND:
+		{
+			if (m_config.verbose)
+			{
+				diagnostic(engine, "Found VM suspend, these are unsupported and ignored", asMSGTYPE_WARNING);
+			}
+
+			break;
+		}
+
+		default:
+		{
+			diagnostic(engine, fmt::format("Hit unrecognized bytecode instruction {}, aborting", info.name), asMSGTYPE_ERROR);
+			return CompileStatus::UNIMPLEMENTED;
+		}
+		}
+
+		bytecode_current += instruction_size;
+	}
 
 	return CompileStatus::UNIMPLEMENTED;
 }
