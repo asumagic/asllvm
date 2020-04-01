@@ -24,8 +24,6 @@ class ModuleBuilder
 	void dump_state() const;
 
 	private:
-	llvm::Type* llvm_type(int type_id);
-
 	JitCompiler&                  m_compiler;
 	std::unique_ptr<llvm::Module> m_module;
 };

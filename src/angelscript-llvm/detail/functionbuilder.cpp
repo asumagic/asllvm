@@ -24,64 +24,87 @@ FunctionBuilder::FunctionBuilder(
 
 void FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 {
+	const auto walk_bytecode = [&](auto&& func) {
+		asDWORD* bytecode_current = bytecode;
+		asDWORD* bytecode_end     = bytecode + length;
+
+		while (bytecode_current < bytecode_end)
+		{
+			const asSBCInfo   info             = asBCInfo[*reinterpret_cast<const asBYTE*>(bytecode_current)];
+			const std::size_t instruction_size = asBCTypeSize[info.type];
+
+			func(bytecode_current);
+
+			bytecode_current += instruction_size;
+		}
+	};
+
+	// TODO: move to create_function()
+	{
+		std::size_t parameter_count = m_script_function.GetParamCount();
+		for (std::size_t i = 0; i < parameter_count; ++i)
+		{
+			int         type_id = 0;
+			const char* name    = nullptr;
+			m_script_function.GetParam(i, &type_id, nullptr, &name);
+
+			llvm::Type* type = m_compiler.builder().script_type_to_llvm_type(type_id);
+
+			llvm::Argument* llvm_argument = get_argument(i);
+
+			if (name != nullptr)
+			{
+				llvm_argument->setName(name);
+			}
+		}
+	}
+
+	walk_bytecode([this](auto* bytecode) { return preprocess_instruction(bytecode); });
+	walk_bytecode([this](auto* bytecode) { return read_instruction(bytecode); });
+}
+
+void FunctionBuilder::preprocess_instruction(asDWORD* bytecode)
+{
 	asIScriptEngine& engine = *m_script_function.GetEngine();
 
-	const asDWORD* bytecode_current = bytecode;
-	const asDWORD* bytecode_end     = bytecode + length;
+	const asSBCInfo info = asBCInfo[*reinterpret_cast<const asBYTE*>(bytecode)];
 
-	while (bytecode_current < bytecode_end)
+	switch (info.bc)
 	{
-		const asSBCInfo   info             = asBCInfo[*reinterpret_cast<const asBYTE*>(bytecode_current)];
-		const std::size_t instruction_size = asBCTypeSize[info.type];
+	case asBC_JitEntry:
+	case asBC_SUSPEND:
+	case asBC_CpyVtoR4:
+	case asBC_RET:
+	{
+		break;
+	}
 
-		switch (info.bc)
-		{
-		case asBC_JitEntry:
-		{
-			if (m_compiler.config().verbose)
-			{
-				m_compiler.diagnostic(engine, "Found JIT entry point, patching as valid entry point");
-			}
+	case asBC_ADDi:
+	{
+		auto target = asBC_SWORDARG0(bytecode);
+		reserve_variable(target);
+		break;
+	}
 
-			// If this argument is zero (the default), the script engine will never call into the JIT.
-			asBC_PTRARG(bytecode_current) = 1;
+	case asBC_CpyVtoV4:
+	{
+		auto target = asBC_SWORDARG0(bytecode);
+		reserve_variable(target);
+		break;
+	}
 
-			break;
-		}
-
-		case asBC_SUSPEND:
-		{
-			if (m_compiler.config().verbose)
-			{
-				m_compiler.diagnostic(engine, "Found VM suspend, these are unsupported and ignored", asMSGTYPE_WARNING);
-			}
-
-			break;
-		}
-
-		default:
-		{
-			HandledInstruction handled = read_instruction(bytecode_current);
-
-			if (!handled.was_recognized)
-			{
-				throw std::runtime_error{fmt::format("hit unrecognized bytecode instruction {}, aborting", info.name)};
-			}
-		}
-		}
-
-		bytecode_current += instruction_size;
+	default:
+	{
+		throw std::runtime_error{fmt::format("cannot preprocess unrecognized instruction '{}'", info.name)};
+	}
 	}
 }
 
-FunctionBuilder::HandledInstruction FunctionBuilder::read_instruction(const asDWORD* bytecode)
+void FunctionBuilder::read_instruction(asDWORD* bytecode)
 {
-	const asSBCInfo   info             = asBCInfo[*reinterpret_cast<const asBYTE*>(bytecode)];
-	const std::size_t instruction_size = asBCTypeSize[info.type];
+	asIScriptEngine& engine = *m_script_function.GetEngine();
 
-	HandledInstruction handled;
-	handled.was_recognized = true;
-	handled.read_bytes     = instruction_size;
+	const asSBCInfo info = asBCInfo[*reinterpret_cast<const asBYTE*>(bytecode)];
 
 	if (info.bc != asBC_RET && m_return_emitted)
 	{
@@ -90,6 +113,29 @@ FunctionBuilder::HandledInstruction FunctionBuilder::read_instruction(const asDW
 
 	switch (info.bc)
 	{
+	case asBC_JitEntry:
+	{
+		if (m_compiler.config().verbose)
+		{
+			m_compiler.diagnostic(engine, "Found JIT entry point, patching as valid entry point");
+		}
+
+		// If this argument is zero (the default), the script engine will never call into the JIT.
+		asBC_PTRARG(bytecode) = 1;
+
+		break;
+	}
+
+	case asBC_SUSPEND:
+	{
+		if (m_compiler.config().verbose)
+		{
+			m_compiler.diagnostic(engine, "Found VM suspend, these are unsupported and ignored", asMSGTYPE_WARNING);
+		}
+
+		break;
+	}
+
 	case asBC_ADDi:
 	{
 		auto target = asBC_SWORDARG0(bytecode);
@@ -140,19 +186,16 @@ FunctionBuilder::HandledInstruction FunctionBuilder::read_instruction(const asDW
 
 	default:
 	{
-		handled.was_recognized = false;
-		break;
+		throw std::runtime_error{fmt::format("could not recognize bytecode instruction '{}'", info.name)};
 	}
 	}
-
-	return handled;
 }
 
 llvm::Value* FunctionBuilder::load_stack_value(short i, llvm::Type* type)
 {
 	if (i > 0)
 	{
-		llvm::AllocaInst* variable = get_stack_variable(i, type);
+		llvm::Value* variable = get_stack_variable(i, type);
 		return m_compiler.builder().ir_builder().CreateLoad(type, variable);
 	}
 	else
@@ -169,39 +212,38 @@ void FunctionBuilder::store_stack_value(short i, llvm::Value* value)
 	}
 	else
 	{
-		llvm::AllocaInst* variable = get_stack_variable(i, value->getType());
+		llvm::Value* variable = get_stack_variable(i, value->getType());
 		m_compiler.builder().ir_builder().CreateStore(value, variable);
 	}
 }
 
-llvm::AllocaInst* FunctionBuilder::get_stack_variable(short i, llvm::Type* type)
+llvm::Value* FunctionBuilder::get_stack_variable(short i, llvm::Type* type)
 {
-	auto it = m_local_variables.find(i);
-
-	if (it == m_local_variables.end())
+	if (i < 0)
 	{
-		return allocate_stack_variable(i, type);
+		return get_argument(-i);
 	}
 
-	// TODO: check if this is the correct way
-	if (it->second->getType() != type->getPointerTo())
-	{
-		throw std::runtime_error{"cannot reuse stack variable with this type"};
-	}
-
-	return it->second;
+	return m_compiler.builder().ir_builder().CreateBitCast(m_allocated_variables.at(i - 1), type->getPointerTo());
 }
 
-llvm::AllocaInst* FunctionBuilder::allocate_stack_variable(short i, llvm::Type* type)
+llvm::AllocaInst* FunctionBuilder::allocate_stack_variable(short i)
 {
-	auto emplace_result = m_local_variables.emplace(i, m_compiler.builder().ir_builder().CreateAlloca(type));
+	return m_allocated_variables.emplace_back(
+		m_compiler.builder().ir_builder().CreateAlloca(llvm::IntegerType::getInt64Ty(context)));
+}
 
-	if (!emplace_result.second)
+void FunctionBuilder::reserve_variable(short count)
+{
+	if (count < 0)
 	{
-		throw std::runtime_error{"tried to allocate stack variable twice"};
+		return;
 	}
 
-	return emplace_result.first->second;
+	for (std::size_t i = m_allocated_variables.size(); i < count; ++i)
+	{
+		allocate_stack_variable(i);
+	}
 }
 
 llvm::Argument* FunctionBuilder::get_argument(std::size_t i) { return &*(m_llvm_function->args().begin() + i); }

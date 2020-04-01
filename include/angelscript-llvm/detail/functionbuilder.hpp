@@ -5,19 +5,13 @@
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
-#include <map>
+#include <vector>
 
 namespace asllvm::detail
 {
 class FunctionBuilder
 {
 	public:
-	struct HandledInstruction
-	{
-		std::size_t read_bytes;
-		bool        was_recognized : 1;
-	};
-
 	FunctionBuilder(
 		JitCompiler&       compiler,
 		ModuleBuilder&     module_builder,
@@ -27,12 +21,14 @@ class FunctionBuilder
 	void read_bytecode(asDWORD* bytecode, asUINT length);
 
 	private:
-	HandledInstruction read_instruction(const asDWORD* bytecode);
-	llvm::Value*       load_stack_value(short i, llvm::Type* type);
-	void               store_stack_value(short i, llvm::Value* value);
+	void         preprocess_instruction(asDWORD* bytecode);
+	void         read_instruction(asDWORD* bytecode);
+	llvm::Value* load_stack_value(short i, llvm::Type* type);
+	void         store_stack_value(short i, llvm::Value* value);
 
-	llvm::AllocaInst* get_stack_variable(short i, llvm::Type* type);
-	llvm::AllocaInst* allocate_stack_variable(short i, llvm::Type* type);
+	llvm::Value*      get_stack_variable(short i, llvm::Type* type);
+	llvm::AllocaInst* allocate_stack_variable(short i);
+	void              reserve_variable(short count);
 
 	llvm::Argument* get_argument(std::size_t i);
 
@@ -41,10 +37,10 @@ class FunctionBuilder
 
 	asIScriptFunction& m_script_function;
 
-	llvm::Function*                    m_llvm_function;
-	llvm::BasicBlock*                  m_entry_block;
-	std::map<short, llvm::AllocaInst*> m_local_variables;
-	bool                               m_return_emitted = false;
+	llvm::Function*                m_llvm_function;
+	llvm::BasicBlock*              m_entry_block;
+	bool                           m_return_emitted = false;
+	std::vector<llvm::AllocaInst*> m_allocated_variables;
 };
 
 } // namespace asllvm::detail

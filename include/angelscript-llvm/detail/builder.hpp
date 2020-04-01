@@ -2,6 +2,7 @@
 
 #include <angelscript-llvm/detail/fwd.hpp>
 #include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/Type.h>
 
 namespace asllvm::detail
 {
@@ -12,9 +13,10 @@ class Builder
 
 	llvm::IRBuilder<>& ir_builder() { return m_ir_builder; }
 
-	private:
-	JitCompiler& m_compiler;
+	llvm::Type* script_type_to_llvm_type(int type_id);
 
+	private:
+	JitCompiler&      m_compiler;
 	llvm::IRBuilder<> m_ir_builder;
 };
 
