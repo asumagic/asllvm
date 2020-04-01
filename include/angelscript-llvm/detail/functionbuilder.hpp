@@ -1,22 +1,14 @@
 #pragma once
 
+#include <angelscript-llvm/detail/fwd.hpp>
 #include <angelscript.h>
-
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <map>
 
-namespace asllvm
-{
-class JitCompiler;
-}
-
 namespace asllvm::detail
 {
-class Builder;
-class ModuleBuilder;
-
 struct HandledInstruction
 {
 	std::size_t read_bytes;

@@ -1,11 +1,7 @@
 #pragma once
 
+#include <angelscript-llvm/detail/fwd.hpp>
 #include <llvm/IR/IRBuilder.h>
-
-namespace asllvm
-{
-class JitCompiler;
-}
 
 namespace asllvm::detail
 {

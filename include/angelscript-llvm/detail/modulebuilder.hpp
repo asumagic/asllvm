@@ -2,7 +2,7 @@
 
 #include <angelscript.h>
 
-#include <angelscript-llvm/detail/builder.hpp>
+#include <angelscript-llvm/detail/fwd.hpp>
 
 // TODO: we can get rid of this dependency, we just need some trickery due to std::unique_ptr requiring the definition
 //       of llvm::Module to be present because of the deleter. this can be worked around.
@@ -12,15 +12,8 @@
 #include <memory>
 #include <string_view>
 
-namespace asllvm
-{
-class JitCompiler;
-}
-
 namespace asllvm::detail
 {
-class FunctionBuilder;
-
 class ModuleBuilder
 {
 	public:

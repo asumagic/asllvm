@@ -1,17 +1,12 @@
 #pragma once
 
-#include <angelscript-llvm/detail/builder.hpp>
+#include <angelscript-llvm/detail/fwd.hpp>
 #include <angelscript-llvm/detail/modulebuilder.hpp>
 
 #include <memory>
 #include <string>
 #include <string_view>
 #include <unordered_map>
-
-namespace asllvm
-{
-class JitCompiler;
-}
 
 namespace asllvm::detail
 {
