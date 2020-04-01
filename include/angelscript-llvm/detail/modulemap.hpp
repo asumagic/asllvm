@@ -1,29 +1,33 @@
 #pragma once
 
-#include <angelscript-llvm/detail/modulebuilder.hpp>
 #include <angelscript-llvm/detail/builder.hpp>
+#include <angelscript-llvm/detail/modulebuilder.hpp>
 
-#include <unordered_map>
+#include <memory>
 #include <string>
 #include <string_view>
-#include <memory>
+#include <unordered_map>
+
+namespace asllvm
+{
+class JitCompiler;
+}
 
 namespace asllvm::detail
 {
-
 class ModuleMap
 {
-public:
-	ModuleMap(Builder& builder);
+	public:
+	ModuleMap(JitCompiler& compiler);
 
 	ModuleBuilder& operator[](std::string_view name);
 
 	void dump_state() const;
 
-private:
-	Builder* m_builder;
+	private:
+	JitCompiler& m_compiler;
 
 	std::unordered_map<std::string, ModuleBuilder> m_map;
 };
 
-}
+} // namespace asllvm::detail

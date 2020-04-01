@@ -1,8 +1,8 @@
 #include <angelscript-llvm/detail/modulebuilder.hpp>
 
+#include <angelscript-llvm/detail/functionbuilder.hpp>
 #include <angelscript-llvm/detail/llvmglobals.hpp>
 #include <angelscript-llvm/detail/modulecommon.hpp>
-#include <angelscript-llvm/detail/functionbuilder.hpp>
 
 #include <fmt/core.h>
 
@@ -10,10 +10,8 @@
 
 namespace asllvm::detail
 {
-
-ModuleBuilder::ModuleBuilder(Builder& builder, std::string_view angelscript_module_name) :
-	m_builder{builder},
-	m_module{std::make_unique<llvm::Module>(make_module_name(angelscript_module_name), context)}
+ModuleBuilder::ModuleBuilder(JitCompiler& compiler, std::string_view angelscript_module_name) :
+	m_compiler{compiler}, m_module{std::make_unique<llvm::Module>(make_module_name(angelscript_module_name), context)}
 {}
 
 FunctionBuilder ModuleBuilder::create_function(asIScriptFunction& function)
@@ -37,16 +35,11 @@ FunctionBuilder ModuleBuilder::create_function(asIScriptFunction& function)
 		function_type,
 		llvm::Function::InternalLinkage,
 		make_function_name(function.GetName(), function.GetNamespace()),
-		*m_module.get()
-	);
+		*m_module.get());
 
 	llvm_function->setCallingConv(llvm::CallingConv::Fast);
 
-	return {
-		m_builder,
-		*this,
-		llvm_function
-	};
+	return {m_compiler, *this, function, llvm_function};
 }
 
 void ModuleBuilder::dump_state() const
@@ -73,4 +66,4 @@ llvm::Type* ModuleBuilder::llvm_type(int type_id)
 	}
 }
 
-}
+} // namespace asllvm::detail

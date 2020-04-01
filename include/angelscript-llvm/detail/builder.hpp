@@ -2,21 +2,24 @@
 
 #include <llvm/IR/IRBuilder.h>
 
+namespace asllvm
+{
+class JitCompiler;
+}
+
 namespace asllvm::detail
 {
-
 class Builder
 {
-public:
-	Builder();
+	public:
+	Builder(JitCompiler& compiler);
 
-	llvm::IRBuilder<>& ir_builder()
-	{
-		return m_ir_builder;
-	}
+	llvm::IRBuilder<>& ir_builder() { return m_ir_builder; }
 
-private:
+	private:
+	JitCompiler& m_compiler;
+
 	llvm::IRBuilder<> m_ir_builder;
 };
 
-}
+} // namespace asllvm::detail

@@ -12,25 +12,29 @@
 #include <memory>
 #include <string_view>
 
+namespace asllvm
+{
+class JitCompiler;
+}
+
 namespace asllvm::detail
 {
-
 class FunctionBuilder;
 
 class ModuleBuilder
 {
-public:
-	ModuleBuilder(Builder& builder, std::string_view angelscript_module_name);
+	public:
+	ModuleBuilder(JitCompiler& compiler, std::string_view angelscript_module_name);
 
 	FunctionBuilder create_function(asIScriptFunction& function);
 
 	void dump_state() const;
 
-private:
+	private:
 	llvm::Type* llvm_type(int type_id);
 
-	Builder& m_builder;
+	JitCompiler&                  m_compiler;
 	std::unique_ptr<llvm::Module> m_module;
 };
 
-}
+} // namespace asllvm::detail

@@ -5,8 +5,7 @@
 
 namespace asllvm::detail
 {
-
-ModuleMap::ModuleMap(Builder& builder) : m_builder{&builder} {}
+ModuleMap::ModuleMap(JitCompiler& compiler) : m_compiler{compiler} {}
 
 ModuleBuilder& ModuleMap::operator[](std::string_view name)
 {
@@ -16,7 +15,7 @@ ModuleBuilder& ModuleMap::operator[](std::string_view name)
 		return it->second;
 	}
 
-	const auto [it, success] = m_map.emplace(std::string(name), ModuleBuilder{*m_builder, name});
+	const auto [it, success] = m_map.emplace(std::string(name), ModuleBuilder{m_compiler, name});
 
 	return it->second;
 }
@@ -30,4 +29,4 @@ void ModuleMap::dump_state() const
 	}
 }
 
-}
+} // namespace asllvm::detail

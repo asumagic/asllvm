@@ -4,9 +4,5 @@
 
 namespace asllvm::detail
 {
-
-Builder::Builder() :
-	m_ir_builder{context}
-{}
-
-}
+Builder::Builder(JitCompiler& compiler) : m_compiler{compiler}, m_ir_builder{context} {}
+} // namespace asllvm::detail

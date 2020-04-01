@@ -1,7 +1,7 @@
-void main()
+/*void main()
 {
 	print("Hello, world!");
-}
+}*/
 /*
 void no_op() {}
 
@@ -88,10 +88,17 @@ void string_usage()
 	s += 123;
 }*/
 
-int add(int a, int b)
+int16 add_i16(int16 a, int16 b)
 {
 	return a + b;
-}/*
+}
+
+int add_i32(int a, int b)
+{
+	return a + b;
+}
+
+/*
 
 int float_to_int_conversion(float x)
 {
