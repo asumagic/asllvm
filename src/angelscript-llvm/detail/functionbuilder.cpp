@@ -71,6 +71,7 @@ void FunctionBuilder::preprocess_instruction(asDWORD* bytecode)
 
 	switch (info.bc)
 	{
+	// These instructions do not write to the stack
 	case asBC_JitEntry:
 	case asBC_SUSPEND:
 	case asBC_CpyVtoR4:
@@ -79,14 +80,11 @@ void FunctionBuilder::preprocess_instruction(asDWORD* bytecode)
 		break;
 	}
 
+	// These instructions write to the stack, always at the first sword
 	case asBC_ADDi:
-	{
-		auto target = asBC_SWORDARG0(bytecode);
-		reserve_variable(target);
-		break;
-	}
-
 	case asBC_CpyVtoV4:
+	case asBC_swTOi:
+	case asBC_iTOw:
 	{
 		auto target = asBC_SWORDARG0(bytecode);
 		reserve_variable(target);
@@ -166,9 +164,28 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 	{
 		m_return_emitted = true;
 
-		// TODO: this is probably an incorrect assumption: how does this work for user objects and floats?
-		llvm::Type* type = llvm::IntegerType::getInt32Ty(context);
-		m_compiler.builder().ir_builder().CreateRet(load_stack_value(asBC_SWORDARG0(bytecode), type));
+		m_compiler.builder().ir_builder().CreateRet(
+			load_stack_value(asBC_SWORDARG0(bytecode), m_llvm_function->getReturnType()));
+
+		break;
+	}
+
+	case asBC_swTOi:
+	{
+		// TODO: sign extend should not be done on unsigned types
+
+		m_compiler.builder().ir_builder().CreateSExt(
+			load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt16Ty(context)),
+			llvm::IntegerType::getInt32Ty(context));
+
+		break;
+	}
+
+	case asBC_iTOw:
+	{
+		m_compiler.builder().ir_builder().CreateTrunc(
+			load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt32Ty(context)),
+			llvm::IntegerType::getInt16Ty(context));
 
 		break;
 	}
