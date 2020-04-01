@@ -9,15 +9,15 @@
 
 namespace asllvm::detail
 {
-struct HandledInstruction
-{
-	std::size_t read_bytes;
-	bool        was_recognized : 1;
-};
-
 class FunctionBuilder
 {
 	public:
+	struct HandledInstruction
+	{
+		std::size_t read_bytes;
+		bool        was_recognized : 1;
+	};
+
 	FunctionBuilder(
 		JitCompiler&       compiler,
 		ModuleBuilder&     module_builder,

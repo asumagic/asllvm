@@ -61,7 +61,7 @@ void FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 
 		default:
 		{
-			detail::HandledInstruction handled = read_instruction(bytecode_current);
+			HandledInstruction handled = read_instruction(bytecode_current);
 
 			if (!handled.was_recognized)
 			{
@@ -74,7 +74,7 @@ void FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 	}
 }
 
-HandledInstruction FunctionBuilder::read_instruction(const asDWORD* bytecode)
+FunctionBuilder::HandledInstruction FunctionBuilder::read_instruction(const asDWORD* bytecode)
 {
 	const asSBCInfo   info             = asBCInfo[*reinterpret_cast<const asBYTE*>(bytecode)];
 	const std::size_t instruction_size = asBCTypeSize[info.type];

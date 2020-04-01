@@ -7,7 +7,6 @@ class JitCompiler;
 
 namespace detail
 {
-struct HandledInstruction;
 class Builder;
 class FunctionBuilder;
 class ModuleBuilder;
