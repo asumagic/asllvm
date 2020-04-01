@@ -9,19 +9,34 @@ namespace asllvm
 {
 
 JitCompiler::JitCompiler(JitConfig config) :
-	m_config{config}
+	m_config{config},
+	m_module_map{m_builder}
 {}
 
 int JitCompiler::CompileFunction(asIScriptFunction* function, asJITFunction* output)
 {
 	asIScriptEngine& engine = *function->GetEngine();
 
-	CompileStatus status = compile(engine, *function, *output);
+	CompileStatus status = CompileStatus::ICE;
+
+	try
+	{
+		status = compile(engine, *function, *output);
+	}
+	catch (std::runtime_error& error)
+	{
+		diagnostic(engine, fmt::format("Failed to compile module: {}\n", error.what()), asMSGTYPE_ERROR);
+	}
 
 	dump_state();
 
 	if (status == CompileStatus::SUCCESS)
 	{
+		if (m_config.verbose)
+		{
+			diagnostic(engine, "Function JITted successfully.\n", asMSGTYPE_INFORMATION);
+		}
+
 		m_debug_state = {};
 		return 0;
 	}
@@ -57,9 +72,9 @@ JitCompiler::CompileStatus JitCompiler::compile(asIScriptEngine& engine, asIScri
 
 
 	// TODO: this can be reused instead
-	detail::Builder builder;
-
 	detail::ModuleBuilder& module_builder = m_module_map[function.GetModuleName()];
+
+		try { // yolo
 
 	detail::FunctionBuilder function_builder = module_builder.create_function(function);
 
@@ -98,16 +113,25 @@ JitCompiler::CompileStatus JitCompiler::compile(asIScriptEngine& engine, asIScri
 
 		default:
 		{
-			// TODO: function_builder.translate(bytecode_current, info);
-			diagnostic(engine, fmt::format("Hit unrecognized bytecode instruction {}, aborting", info.name), asMSGTYPE_ERROR);
-			return CompileStatus::UNIMPLEMENTED;
+			detail::HandledInstruction handled = function_builder.read_instruction(bytecode_current);
+
+			if (!handled.was_recognized)
+			{
+				diagnostic(engine, fmt::format("Hit unrecognized bytecode instruction {}, aborting", info.name), asMSGTYPE_ERROR);
+				return CompileStatus::UNIMPLEMENTED;
+			}
 		}
 		}
 
 		bytecode_current += instruction_size;
 	}
 
-	return CompileStatus::UNIMPLEMENTED;
+	}  catch (std::runtime_error& e) {
+		module_builder.dump_state();
+		throw;
+	}
+
+	return CompileStatus::SUCCESS;
 }
 
 void JitCompiler::diagnostic(asIScriptEngine& engine, const std::string& text, asEMsgType message_type) const

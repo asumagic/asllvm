@@ -3,6 +3,7 @@
 #include <angelscript.h>
 #include <angelscript-llvm/config.hpp>
 #include <angelscript-llvm/detail/modulemap.hpp>
+#include <angelscript-llvm/detail/builder.hpp>
 
 #include <string>
 
@@ -30,7 +31,9 @@ private:
 
 		NULL_BYTECODE,
 
-		UNIMPLEMENTED
+		UNIMPLEMENTED,
+
+		ICE
 	};
 
 	CompileStatus compile(asIScriptEngine& engine, asIScriptFunction& function, asJITFunction& output);
@@ -40,6 +43,7 @@ private:
 	void dump_state() const;
 
 	JitConfig m_config;
+	detail::Builder m_builder;
 	detail::ModuleMap m_module_map;
 };
 

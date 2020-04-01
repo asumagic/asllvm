@@ -6,6 +6,8 @@
 namespace asllvm::detail
 {
 
+ModuleMap::ModuleMap(Builder& builder) : m_builder{&builder} {}
+
 ModuleBuilder& ModuleMap::operator[](std::string_view name)
 {
 	// TODO: this string conversion should not be necessary
@@ -14,7 +16,7 @@ ModuleBuilder& ModuleMap::operator[](std::string_view name)
 		return it->second;
 	}
 
-	const auto [it, success] = m_map.emplace(std::string(name), ModuleBuilder{name});
+	const auto [it, success] = m_map.emplace(std::string(name), ModuleBuilder{*m_builder, name});
 
 	return it->second;
 }
