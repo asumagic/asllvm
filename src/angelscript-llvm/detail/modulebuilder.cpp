@@ -33,15 +33,19 @@ FunctionBuilder ModuleBuilder::create_function(asIScriptFunction& function)
 
 	llvm::FunctionType* function_type = llvm::FunctionType::get(return_type, types, false);
 
+	llvm::Function* llvm_function = llvm::Function::Create(
+		function_type,
+		llvm::Function::InternalLinkage,
+		make_function_name(function.GetName(), function.GetNamespace()),
+		*m_module.get()
+	);
+
+	llvm_function->setCallingConv(llvm::CallingConv::Fast);
+
 	return {
 		m_builder,
 		*this,
-		llvm::Function::Create(
-			function_type,
-			llvm::Function::InternalLinkage,
-			make_function_name(function.GetName(), function.GetNamespace()),
-			*m_module.get()
-		)
+		llvm_function
 	};
 }
 
