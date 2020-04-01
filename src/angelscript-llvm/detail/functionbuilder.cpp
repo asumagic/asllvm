@@ -75,6 +75,7 @@ void FunctionBuilder::preprocess_instruction(asDWORD* bytecode)
 	case asBC_JitEntry:
 	case asBC_SUSPEND:
 	case asBC_CpyVtoR4:
+	case asBC_CpyVtoR8:
 	case asBC_RET:
 	{
 		break;
@@ -82,8 +83,12 @@ void FunctionBuilder::preprocess_instruction(asDWORD* bytecode)
 
 	// These instructions write to the stack, always at the first sword
 	case asBC_ADDi:
+	case asBC_ADDi64:
 	case asBC_CpyVtoV4:
+	case asBC_CpyVtoV8:
+	case asBC_sbTOi:
 	case asBC_swTOi:
+	case asBC_iTOb:
 	case asBC_iTOw:
 	{
 		auto target = asBC_SWORDARG0(bytecode);
@@ -148,24 +153,60 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 		break;
 	}
 
+	case asBC_ADDi64:
+	{
+		auto target = asBC_SWORDARG0(bytecode) / 2;
+		auto a      = asBC_SWORDARG1(bytecode) / 2;
+		auto b      = asBC_SWORDARG2(bytecode) / 2;
+
+		llvm::Type* type = llvm::IntegerType::getInt64Ty(context);
+
+		store_stack_value(
+			target, m_compiler.builder().ir_builder().CreateAdd(load_stack_value(a, type), load_stack_value(b, type)));
+
+		break;
+	}
+
 	case asBC_CpyVtoV4:
 	{
 		auto target = asBC_SWORDARG0(bytecode);
 		auto source = asBC_SWORDARG1(bytecode);
 
-		// TODO: this is probably an incorrect assumption: how does this work for user objects and floats?
 		llvm::Type* type = llvm::IntegerType::getInt32Ty(context);
 		store_stack_value(target, load_stack_value(source, type));
 
 		break;
 	}
 
+	case asBC_CpyVtoV8:
+	{
+		auto target = asBC_SWORDARG0(bytecode);
+		auto source = asBC_SWORDARG1(bytecode);
+
+		llvm::Type* type = llvm::IntegerType::getInt64Ty(context);
+		store_stack_value(target, load_stack_value(source, type));
+
+		break;
+	}
+
 	case asBC_CpyVtoR4:
+	case asBC_CpyVtoR8:
 	{
 		m_return_emitted = true;
 
 		m_compiler.builder().ir_builder().CreateRet(
 			load_stack_value(asBC_SWORDARG0(bytecode), m_llvm_function->getReturnType()));
+
+		break;
+	}
+
+	case asBC_sbTOi:
+	{
+		// TODO: sign extend should not be done on unsigned types
+
+		m_compiler.builder().ir_builder().CreateSExt(
+			load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt8Ty(context)),
+			llvm::IntegerType::getInt32Ty(context));
 
 		break;
 	}
@@ -177,6 +218,15 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 		m_compiler.builder().ir_builder().CreateSExt(
 			load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt16Ty(context)),
 			llvm::IntegerType::getInt32Ty(context));
+
+		break;
+	}
+
+	case asBC_iTOb:
+	{
+		m_compiler.builder().ir_builder().CreateTrunc(
+			load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt32Ty(context)),
+			llvm::IntegerType::getInt8Ty(context));
 
 		break;
 	}
