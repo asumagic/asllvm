@@ -6,19 +6,19 @@
 namespace asllvm::detail
 {
 Builder::Builder(JitCompiler& compiler) :
-	m_compiler{compiler}, m_ir_builder{context}, m_common_definitions{build_common_definitions()}
+	m_compiler{compiler}, m_ir_builder{*context}, m_common_definitions{build_common_definitions()}
 {}
 
 llvm::Type* Builder::script_type_to_llvm_type(int type_id) const
 {
 	switch (type_id)
 	{
-	case asTYPEID_VOID: return llvm::Type::getVoidTy(context);
-	case asTYPEID_BOOL: return llvm::Type::getInt1Ty(context);
-	case asTYPEID_INT8: return llvm::Type::getInt8Ty(context);
-	case asTYPEID_INT16: return llvm::Type::getInt16Ty(context);
-	case asTYPEID_INT32: return llvm::Type::getInt32Ty(context);
-	case asTYPEID_INT64: return llvm::Type::getInt64Ty(context);
+	case asTYPEID_VOID: return llvm::Type::getVoidTy(*context);
+	case asTYPEID_BOOL: return llvm::Type::getInt1Ty(*context);
+	case asTYPEID_INT8: return llvm::Type::getInt8Ty(*context);
+	case asTYPEID_INT16: return llvm::Type::getInt16Ty(*context);
+	case asTYPEID_INT32: return llvm::Type::getInt32Ty(*context);
+	case asTYPEID_INT64: return llvm::Type::getInt64Ty(*context);
 	default: throw std::runtime_error{"type not implemented"};
 	}
 }
@@ -50,10 +50,10 @@ CommonDefinitions Builder::build_common_definitions()
 {
 	CommonDefinitions definitions;
 
-	auto* boolt = llvm::Type::getInt1Ty(context);
-	auto* voidp = llvm::Type::getInt8Ty(context)->getPointerTo();
-	auto* dword = llvm::Type::getInt32Ty(context);
-	auto* qword = llvm::Type::getInt64Ty(context);
+	auto* boolt = llvm::Type::getInt1Ty(*context);
+	auto* voidp = llvm::Type::getInt8Ty(*context)->getPointerTo();
+	auto* dword = llvm::Type::getInt32Ty(*context);
+	auto* qword = llvm::Type::getInt64Ty(*context);
 
 	std::array<llvm::Type*, 8> types{{
 		dword->getPointerTo(), // programPointer

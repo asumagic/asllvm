@@ -4,18 +4,22 @@
 #include <angelscript-llvm/detail/llvmglobals.hpp>
 #include <angelscript-llvm/detail/modulecommon.hpp>
 #include <angelscript-llvm/jit.hpp>
-
-#include <fmt/core.h>
-
 #include <array>
+#include <fmt/core.h>
+#include <llvm/ExecutionEngine/Orc/LLJIT.h>
+#include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
+#include <llvm/IR/LegacyPassManager.h>
+#include <llvm/Support/TargetSelect.h>
+#include <llvm/Transforms/IPO.h>
+#include <llvm/Transforms/IPO/PassManagerBuilder.h>
 
 namespace asllvm::detail
 {
 ModuleBuilder::ModuleBuilder(JitCompiler& compiler, std::string_view angelscript_module_name) :
-	m_compiler{compiler}, m_module{std::make_unique<llvm::Module>(make_module_name(angelscript_module_name), context)}
+	m_compiler{compiler}, m_module{std::make_unique<llvm::Module>(make_module_name(angelscript_module_name), *context)}
 {}
 
-FunctionBuilder ModuleBuilder::create_function(asIScriptFunction& function)
+FunctionBuilder ModuleBuilder::create_function(asIScriptFunction& function, asJITFunction& jit_function_output)
 {
 	std::vector<llvm::Type*> types;
 
@@ -32,16 +36,56 @@ FunctionBuilder ModuleBuilder::create_function(asIScriptFunction& function)
 
 	llvm::FunctionType* function_type = llvm::FunctionType::get(return_type, types, false);
 
-	llvm::Function* llvm_function = llvm::Function::Create(
-		function_type,
-		llvm::Function::InternalLinkage,
-		make_function_name(function.GetName(), function.GetNamespace()),
-		*m_module.get());
+	const std::string name = make_function_name(function.GetName(), function.GetNamespace());
+
+	llvm::Function* llvm_function
+		= llvm::Function::Create(function_type, llvm::Function::InternalLinkage, name, *m_module.get());
 
 	// TODO: fix this, but how to CreateCall with this convention?! in functionbuilder.cpp
 	// llvm_function->setCallingConv(llvm::CallingConv::Fast);
 
+	m_jit_functions.emplace_back(name, &jit_function_output);
+
 	return {m_compiler, *this, function, llvm_function};
+}
+
+void ModuleBuilder::build()
+{
+	llvm::InitializeNativeTarget();
+	llvm::InitializeNativeTargetAsmPrinter();
+
+	llvm::PassManagerBuilder pmb;
+	pmb.OptLevel           = 3;
+	pmb.Inliner            = llvm::createFunctionInliningPass(275);
+	pmb.DisableUnrollLoops = false;
+	pmb.LoopVectorize      = true;
+	pmb.SLPVectorize       = true;
+
+	llvm::legacy::PassManager pm;
+	pmb.populateModulePassManager(pm);
+
+	pm.run(*m_module);
+
+	auto jit = [&] {
+		auto jit = llvm::orc::LLJITBuilder().create();
+
+		if (!jit)
+		{
+			llvm::cantFail(jit.takeError());
+		}
+
+		return std::move(jit.get());
+	}();
+
+	dump_state();
+
+	ExitOnErr(jit->addIRModule(llvm::orc::ThreadSafeModule(std::move(m_module), std::move(context))));
+
+	for (auto& pair : m_jit_functions)
+	{
+		auto entry   = ExitOnErr(jit->lookup(pair.first + ".jitentry"));
+		*pair.second = reinterpret_cast<asJITFunction>(entry.getAddress());
+	}
 }
 
 void ModuleBuilder::dump_state() const

@@ -2,7 +2,6 @@
 
 namespace asllvm::detail
 {
-
-llvm::LLVMContext context;
-
-}
+std::unique_ptr<llvm::LLVMContext> context = std::make_unique<llvm::LLVMContext>();
+llvm::ExitOnError                  ExitOnErr;
+} // namespace asllvm::detail

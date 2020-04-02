@@ -15,6 +15,11 @@ int JitCompiler::CompileFunction(asIScriptFunction* function, asJITFunction* out
 
 	CompileStatus status = CompileStatus::ICE;
 
+	if (std::string_view(function->GetName()) == "main")
+	{
+		return -1;
+	}
+
 	try
 	{
 		status = compile(engine, *function, *output);
@@ -26,6 +31,8 @@ int JitCompiler::CompileFunction(asIScriptFunction* function, asJITFunction* out
 
 	if (status == CompileStatus::SUCCESS)
 	{
+		// TODO: apply IR optimizations
+
 		if (m_config.verbose)
 		{
 			diagnostic(engine, "Function JITted successfully.\n", asMSGTYPE_INFORMATION);
@@ -84,17 +91,20 @@ JitCompiler::compile(asIScriptEngine& engine, asIScriptFunction& function, asJIT
 
 	try // yolo
 	{
-		detail::FunctionBuilder function_builder = module_builder.create_function(function);
+		detail::FunctionBuilder function_builder = module_builder.create_function(function, output);
 		function_builder.read_bytecode(bytecode, length);
-		function_builder.create_wrapper_function();
+		llvm::Function* function = function_builder.create_wrapper_function();
+
+		// TODO: def shouldn't be there
+		module_builder.build();
 	}
 	catch (std::runtime_error& e)
 	{
-		module_builder.dump_state();
+		// module_builder.dump_state();
 		throw;
 	}
 
-	module_builder.dump_state();
+	// module_builder.dump_state();
 
 	return CompileStatus::SUCCESS;
 }

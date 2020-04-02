@@ -1,3 +1,13 @@
+int add_i32(int a, int b)
+{
+	return a + b;
+}
+
+void main()
+{
+	print('' + add_i32(10, 20));
+}
+
 /*void main()
 {
 	print("Hello, world!");
@@ -87,26 +97,6 @@ void string_usage()
 	string s;
 	s += 123;
 }*/
-
-int8 add_i8(int8 a, int8 b)
-{
-	return a + b;
-}
-
-int16 add_i16(int16 a, int16 b)
-{
-	return a + b;
-}
-
-int add_i32(int a, int b)
-{
-	return a + b;
-}
-
-int64 add_i64(int64 a, int64 b)
-{
-	return a + b;
-}
 
 /*
 

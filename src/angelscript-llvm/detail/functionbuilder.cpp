@@ -19,7 +19,7 @@ FunctionBuilder::FunctionBuilder(
 	m_module_builder{module_builder},
 	m_script_function{script_function},
 	m_llvm_function{llvm_function},
-	m_entry_block{llvm::BasicBlock::Create(context, "entry", llvm_function)}
+	m_entry_block{llvm::BasicBlock::Create(*context, "entry", llvm_function)}
 {
 	m_compiler.builder().ir_builder().SetInsertPoint(m_entry_block);
 }
@@ -76,9 +76,9 @@ llvm::Function* FunctionBuilder::create_wrapper_function()
 	llvm::IRBuilder<>& ir   = m_compiler.builder().ir_builder();
 	CommonDefinitions& defs = m_compiler.builder().definitions();
 
-	const std::array<llvm::Type*, 2> types{defs.vm_registers->getPointerTo(), llvm::IntegerType::getInt64Ty(context)};
+	const std::array<llvm::Type*, 2> types{defs.vm_registers->getPointerTo(), llvm::IntegerType::getInt64Ty(*context)};
 
-	llvm::Type* return_type = llvm::Type::getVoidTy(context);
+	llvm::Type* return_type = llvm::Type::getVoidTy(*context);
 
 	llvm::Function* wrapper_function = llvm::Function::Create(
 		llvm::FunctionType::get(return_type, types, false),
@@ -88,7 +88,7 @@ llvm::Function* FunctionBuilder::create_wrapper_function()
 
 	wrapper_function->setCallingConv(llvm::CallingConv::C);
 
-	llvm::BasicBlock* block = llvm::BasicBlock::Create(context, "entry", wrapper_function);
+	llvm::BasicBlock* block = llvm::BasicBlock::Create(*context, "entry", wrapper_function);
 
 	ir.SetInsertPoint(block);
 
@@ -99,16 +99,16 @@ llvm::Function* FunctionBuilder::create_wrapper_function()
 	arg->setName("jitarg");
 
 	llvm::Value* fp = [&] {
-		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0),
-											llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 1)};
+		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(llvm::Type::getInt64Ty(*context), 0),
+											llvm::ConstantInt::get(llvm::Type::getInt32Ty(*context), 1)};
 
 		auto* pointer = ir.CreateGEP(registers, indices);
-		return ir.CreateLoad(llvm::Type::getInt32Ty(context)->getPointerTo(), pointer, "stackFramePointer");
+		return ir.CreateLoad(llvm::Type::getInt32Ty(*context)->getPointerTo(), pointer, "stackFramePointer");
 	}();
 
 	llvm::Value* value_register = [&] {
-		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0),
-											llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 3)};
+		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(llvm::Type::getInt64Ty(*context), 0),
+											llvm::ConstantInt::get(llvm::Type::getInt32Ty(*context), 3)};
 
 		return ir.CreateGEP(registers, indices, "valueRegister");
 	}();
@@ -123,7 +123,7 @@ llvm::Function* FunctionBuilder::create_wrapper_function()
 			throw std::runtime_error{"expected parameter to be mapped - did earlier read_bytecode() fail?"};
 		}
 
-		std::array<llvm::Value*, 1> indices{llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), it->second)};
+		std::array<llvm::Value*, 1> indices{llvm::ConstantInt::get(llvm::Type::getInt64Ty(*context), it->second)};
 
 		llvm::Type* arg_type = (m_llvm_function->arg_begin() + i)->getType();
 
@@ -134,7 +134,7 @@ llvm::Function* FunctionBuilder::create_wrapper_function()
 
 	auto* ret = ir.CreateCall(m_llvm_function, args, "ret");
 
-	if (m_llvm_function->getReturnType() != llvm::Type::getVoidTy(context))
+	if (m_llvm_function->getReturnType() != llvm::Type::getVoidTy(*context))
 	{
 		ir.CreateStore(ret, value_register);
 	}
@@ -226,7 +226,7 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 		auto a      = asBC_SWORDARG1(bytecode);
 		auto b      = asBC_SWORDARG2(bytecode);
 
-		llvm::Type* type = llvm::IntegerType::getInt32Ty(context);
+		llvm::Type* type = llvm::IntegerType::getInt32Ty(*context);
 
 		store_stack_value(
 			target, m_compiler.builder().ir_builder().CreateAdd(load_stack_value(a, type), load_stack_value(b, type)));
@@ -240,7 +240,7 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 		auto a      = asBC_SWORDARG1(bytecode);
 		auto b      = asBC_SWORDARG2(bytecode);
 
-		llvm::Type* type = llvm::IntegerType::getInt64Ty(context);
+		llvm::Type* type = llvm::IntegerType::getInt64Ty(*context);
 
 		store_stack_value(
 			target, m_compiler.builder().ir_builder().CreateAdd(load_stack_value(a, type), load_stack_value(b, type)));
@@ -253,7 +253,7 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 		auto target = asBC_SWORDARG0(bytecode);
 		auto source = asBC_SWORDARG1(bytecode);
 
-		llvm::Type* type = llvm::IntegerType::getInt32Ty(context);
+		llvm::Type* type = llvm::IntegerType::getInt32Ty(*context);
 		store_stack_value(target, load_stack_value(source, type));
 
 		break;
@@ -264,7 +264,7 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 		auto target = asBC_SWORDARG0(bytecode);
 		auto source = asBC_SWORDARG1(bytecode);
 
-		llvm::Type* type = llvm::IntegerType::getInt64Ty(context);
+		llvm::Type* type = llvm::IntegerType::getInt64Ty(*context);
 		store_stack_value(target, load_stack_value(source, type));
 
 		break;
@@ -286,8 +286,8 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 		// TODO: sign extend should not be done on unsigned types
 
 		m_compiler.builder().ir_builder().CreateSExt(
-			load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt8Ty(context)),
-			llvm::IntegerType::getInt32Ty(context));
+			load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt8Ty(*context)),
+			llvm::IntegerType::getInt32Ty(*context));
 
 		break;
 	}
@@ -297,8 +297,8 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 		// TODO: sign extend should not be done on unsigned types
 
 		m_compiler.builder().ir_builder().CreateSExt(
-			load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt16Ty(context)),
-			llvm::IntegerType::getInt32Ty(context));
+			load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt16Ty(*context)),
+			llvm::IntegerType::getInt32Ty(*context));
 
 		break;
 	}
@@ -306,8 +306,8 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 	case asBC_iTOb:
 	{
 		m_compiler.builder().ir_builder().CreateTrunc(
-			load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt32Ty(context)),
-			llvm::IntegerType::getInt8Ty(context));
+			load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt32Ty(*context)),
+			llvm::IntegerType::getInt8Ty(*context));
 
 		break;
 	}
@@ -315,8 +315,8 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 	case asBC_iTOw:
 	{
 		m_compiler.builder().ir_builder().CreateTrunc(
-			load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt32Ty(context)),
-			llvm::IntegerType::getInt16Ty(context));
+			load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt32Ty(*context)),
+			llvm::IntegerType::getInt16Ty(*context));
 
 		break;
 	}
@@ -389,7 +389,7 @@ void FunctionBuilder::reserve_variable(StackVariableIdentifier id)
 
 	for (std::size_t i = m_highest_allocated + 1; i <= id; ++i)
 	{
-		m_variables.emplace(i, m_compiler.builder().ir_builder().CreateAlloca(llvm::IntegerType::getInt64Ty(context)));
+		m_variables.emplace(i, m_compiler.builder().ir_builder().CreateAlloca(llvm::IntegerType::getInt64Ty(*context)));
 	}
 
 	m_highest_allocated = id;
