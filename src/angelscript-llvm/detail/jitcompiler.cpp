@@ -52,7 +52,7 @@ int JitCompiler::jit_compile(asIScriptFunction* function, asJITFunction* output)
 
 		if (*output == nullptr)
 		{
-			*output = lazy_jit_compiler;
+			*output = m_config.allow_late_jit_compiles ? late_jit_compile : invalid_late_jit_compile;
 		}
 
 		m_debug_state = {};
@@ -118,10 +118,19 @@ JitCompiler::compile(asIScriptEngine& engine, asIScriptFunction& function, asJIT
 	return CompileStatus::SUCCESS;
 }
 
-void JitCompiler::lazy_jit_compiler([[maybe_unused]] asSVMRegisters* registers, [[maybe_unused]] asPWORD jit_arg)
+void JitCompiler::invalid_late_jit_compile(asSVMRegisters* registers, asPWORD jit_arg)
 {
 	throw std::runtime_error{
-		"tried invoking JIT function, but module was not built. did you forget to call BuildModules()?"};
+		"JIT module was not built and late JIT compiles were disabled. application forgot a call to BuildModule()."};
+}
+
+void JitCompiler::late_jit_compile([[maybe_unused]] asSVMRegisters* registers, [[maybe_unused]] asPWORD jit_arg)
+{
+	reinterpret_cast<JitCompiler*>(jit_arg)->build_modules();
+
+	// We do not know what module we were missing... but we know it has been built, now.
+	// Returning without affecting registers (and, in particular, the programPointer) means this JIT entry point will be
+	// entered again, but now with the correct pointer.
 }
 
 void JitCompiler::dump_state() const { m_module_map.dump_state(); }

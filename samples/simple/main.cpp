@@ -120,8 +120,6 @@ int main()
 
 	build(engine, "build", "script.as");
 
-	jit.BuildModules();
-
 	{
 		asIScriptModule*   module   = engine->GetModule("build");
 		asIScriptFunction* function = module->GetFunctionByDecl("void main()");

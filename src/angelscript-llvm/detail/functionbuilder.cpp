@@ -220,8 +220,9 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 			m_compiler.diagnostic(engine, "Found JIT entry point, patching as valid entry point");
 		}
 
-		// If this argument is zero (the default), the script engine will never call into the JIT.
-		asBC_PTRARG(bytecode) = 1;
+		// Pass the JitCompiler as the jitArg value, which can be used by lazy_jit_compiler().
+		// TODO: this is probably UB
+		asBC_PTRARG(bytecode) = reinterpret_cast<asPWORD>(&m_compiler);
 
 		break;
 	}

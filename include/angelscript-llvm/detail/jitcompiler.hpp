@@ -50,7 +50,8 @@ class JitCompiler
 
 	CompileStatus compile(asIScriptEngine& engine, asIScriptFunction& function, asJITFunction& output);
 
-	static void lazy_jit_compiler(asSVMRegisters* registers, asPWORD jit_arg);
+	static void late_jit_compile(asSVMRegisters* registers, asPWORD jit_arg);
+	static void invalid_late_jit_compile(asSVMRegisters* registers, asPWORD jit_arg);
 
 	void dump_state() const;
 

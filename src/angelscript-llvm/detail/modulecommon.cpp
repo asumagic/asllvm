@@ -39,6 +39,7 @@ std::string make_function_name(std::string_view angelscript_function_name, std::
 		}
 	}
 
+	// TODO: JIT symbols are common for all modules. this should be per module instead to prevent conflicts.
 	return fmt::format("asllvm.localmodule.{}{}", namespace_fixed, angelscript_function_name);
 }
 
