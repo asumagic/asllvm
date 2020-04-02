@@ -64,18 +64,12 @@ void ModuleBuilder::build()
 
 	pm.run(*m_module);
 
-	auto jit = [&] {
-		auto jit = llvm::orc::LLJITBuilder().create();
+	auto jit = ExitOnError(llvm::orc::LLJITBuilder().create());
 
-		if (!jit)
-		{
-			llvm::cantFail(jit.takeError());
-		}
-
-		return std::move(jit.get());
-	}();
-
-	dump_state();
+	if (m_compiler.config().verbose)
+	{
+		dump_state();
+	}
 
 	ExitOnError(
 		jit->addIRModule(llvm::orc::ThreadSafeModule(std::move(m_module), m_compiler.builder().extract_old_context())));

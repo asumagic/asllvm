@@ -1,6 +1,7 @@
 #include <angelscript-llvm/detail/modulemap.hpp>
 
 #include <angelscript-llvm/detail/llvmglobals.hpp>
+#include <angelscript-llvm/jit.hpp>
 #include <fmt/core.h>
 
 namespace asllvm::detail
