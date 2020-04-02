@@ -34,6 +34,8 @@ class FunctionBuilder
 	//! \exception Throws a std::runtime_error if code generation has failed.
 	void read_bytecode(asDWORD* bytecode, asUINT length);
 
+	llvm::Function* create_wrapper_function();
+
 	private:
 	void preprocess_instruction(asDWORD* bytecode);
 	void read_instruction(asDWORD* bytecode);
@@ -68,11 +70,12 @@ class FunctionBuilder
 
 	asIScriptFunction& m_script_function;
 
-	llvm::Function*               m_llvm_function;
-	llvm::BasicBlock*             m_entry_block;
-	bool                          m_return_emitted = false;
-	std::map<short, llvm::Value*> m_variables;
-	short                         m_highest_allocated = 0;
+	llvm::Function*                                 m_llvm_function;
+	llvm::BasicBlock*                               m_entry_block;
+	bool                                            m_return_emitted = false;
+	std::map<StackVariableIdentifier, llvm::Value*> m_variables;
+	std::map<std::size_t, StackVariableIdentifier>  m_parameter_offsets; // TODO: this could be a vector or even omitted
+	short                                           m_highest_allocated = 0;
 };
 
 } // namespace asllvm::detail

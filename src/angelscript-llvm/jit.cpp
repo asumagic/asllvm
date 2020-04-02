@@ -86,6 +86,7 @@ JitCompiler::compile(asIScriptEngine& engine, asIScriptFunction& function, asJIT
 	{
 		detail::FunctionBuilder function_builder = module_builder.create_function(function);
 		function_builder.read_bytecode(bytecode, length);
+		function_builder.create_wrapper_function();
 	}
 	catch (std::runtime_error& e)
 	{

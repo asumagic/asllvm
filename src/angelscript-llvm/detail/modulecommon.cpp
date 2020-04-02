@@ -4,7 +4,6 @@
 
 namespace asllvm::detail
 {
-
 std::string make_module_name(std::string_view angelscript_module_name)
 {
 	return fmt::format("asllvm.module.{}", angelscript_module_name);
@@ -43,4 +42,8 @@ std::string make_function_name(std::string_view angelscript_function_name, std::
 	return fmt::format("asllvm.localmodule.{}{}", namespace_fixed, angelscript_function_name);
 }
 
+std::string make_jit_entry_name(std::string_view angelscript_function_name, std::string_view namespace_name)
+{
+	return make_function_name(angelscript_function_name, namespace_name) + ".jitentry";
 }
+} // namespace asllvm::detail

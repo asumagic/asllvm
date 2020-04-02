@@ -21,6 +21,8 @@ class ModuleBuilder
 
 	FunctionBuilder create_function(asIScriptFunction& function);
 
+	llvm::Module& module() { return *m_module; }
+
 	void dump_state() const;
 
 	private:

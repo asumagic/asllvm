@@ -38,7 +38,8 @@ FunctionBuilder ModuleBuilder::create_function(asIScriptFunction& function)
 		make_function_name(function.GetName(), function.GetNamespace()),
 		*m_module.get());
 
-	llvm_function->setCallingConv(llvm::CallingConv::Fast);
+	// TODO: fix this, but how to CreateCall with this convention?! in functionbuilder.cpp
+	// llvm_function->setCallingConv(llvm::CallingConv::Fast);
 
 	return {m_compiler, *this, function, llvm_function};
 }
@@ -52,5 +53,4 @@ void ModuleBuilder::dump_state() const
 
 	m_module->print(llvm::errs(), nullptr);
 }
-
 } // namespace asllvm::detail

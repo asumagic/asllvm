@@ -2,8 +2,10 @@
 
 #include <angelscript-llvm/detail/llvmglobals.hpp>
 #include <angelscript-llvm/detail/modulebuilder.hpp>
+#include <angelscript-llvm/detail/modulecommon.hpp>
 #include <angelscript-llvm/jit.hpp>
 
+#include <array>
 #include <fmt/core.h>
 
 namespace asllvm::detail
@@ -58,6 +60,7 @@ void FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 				llvm_argument->setName(name);
 			}
 
+			m_parameter_offsets.emplace(i, current_stack_offset);
 			m_variables.emplace(current_stack_offset, llvm_argument);
 
 			current_stack_offset -= m_compiler.builder().is_script_type_64(type_id) ? 2 : 1;
@@ -66,6 +69,79 @@ void FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 
 	walk_bytecode([this](auto* bytecode) { return preprocess_instruction(bytecode); });
 	walk_bytecode([this](auto* bytecode) { return read_instruction(bytecode); });
+}
+
+llvm::Function* FunctionBuilder::create_wrapper_function()
+{
+	llvm::IRBuilder<>& ir   = m_compiler.builder().ir_builder();
+	CommonDefinitions& defs = m_compiler.builder().definitions();
+
+	const std::array<llvm::Type*, 2> types{defs.vm_registers->getPointerTo(), llvm::IntegerType::getInt64Ty(context)};
+
+	llvm::Type* return_type = llvm::Type::getVoidTy(context);
+
+	llvm::Function* wrapper_function = llvm::Function::Create(
+		llvm::FunctionType::get(return_type, types, false),
+		llvm::Function::ExternalLinkage,
+		make_function_name(m_script_function.GetName(), m_script_function.GetNamespace()) + ".jitentry",
+		m_module_builder.module());
+
+	wrapper_function->setCallingConv(llvm::CallingConv::C);
+
+	llvm::BasicBlock* block = llvm::BasicBlock::Create(context, "entry", wrapper_function);
+
+	ir.SetInsertPoint(block);
+
+	llvm::Argument* registers = &*(wrapper_function->arg_begin() + 0);
+	registers->setName("vmregs");
+
+	llvm::Argument* arg = &*(wrapper_function->arg_begin() + 1);
+	arg->setName("jitarg");
+
+	llvm::Value* fp = [&] {
+		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0),
+											llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 1)};
+
+		auto* pointer = ir.CreateGEP(registers, indices);
+		return ir.CreateLoad(llvm::Type::getInt32Ty(context)->getPointerTo(), pointer, "stackFramePointer");
+	}();
+
+	llvm::Value* value_register = [&] {
+		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0),
+											llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 3)};
+
+		return ir.CreateGEP(registers, indices, "valueRegister");
+	}();
+
+	std::vector<llvm::Value*> args(m_script_function.GetParamCount());
+
+	for (short i = 0; i < m_script_function.GetParamCount(); ++i)
+	{
+		auto it = m_parameter_offsets.find(i);
+		if (it == m_parameter_offsets.end())
+		{
+			throw std::runtime_error{"expected parameter to be mapped - did earlier read_bytecode() fail?"};
+		}
+
+		std::array<llvm::Value*, 1> indices{llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), it->second)};
+
+		llvm::Type* arg_type = (m_llvm_function->arg_begin() + i)->getType();
+
+		llvm::Value* pointer = ir.CreateGEP(fp, indices);
+		pointer              = ir.CreateBitCast(pointer, arg_type->getPointerTo());
+		args[i]              = ir.CreateLoad(arg_type, pointer);
+	}
+
+	auto* ret = ir.CreateCall(m_llvm_function, args, "ret");
+
+	if (m_llvm_function->getReturnType() != llvm::Type::getVoidTy(context))
+	{
+		ir.CreateStore(ret, value_register);
+	}
+
+	ir.CreateRetVoid();
+
+	return wrapper_function;
 }
 
 void FunctionBuilder::preprocess_instruction(asDWORD* bytecode)
