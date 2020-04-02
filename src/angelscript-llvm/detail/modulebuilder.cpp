@@ -17,6 +17,11 @@ ModuleBuilder::ModuleBuilder(JitCompiler& compiler, std::string_view angelscript
 	m_module{std::make_unique<llvm::Module>(make_module_name(angelscript_module_name), compiler.builder().context())}
 {}
 
+void ModuleBuilder::add_jit_function(std::string name, asJITFunction* function)
+{
+	m_jit_functions.emplace_back(std::move(name), function);
+}
+
 FunctionBuilder ModuleBuilder::create_function(asIScriptFunction& function, asJITFunction& jit_function_output)
 {
 	std::vector<llvm::Type*> types;
@@ -41,8 +46,6 @@ FunctionBuilder ModuleBuilder::create_function(asIScriptFunction& function, asJI
 
 	// TODO: fix this, but how to CreateCall with this convention?! in functionbuilder.cpp
 	// llvm_function->setCallingConv(llvm::CallingConv::Fast);
-
-	m_jit_functions.emplace_back(name, &jit_function_output);
 
 	return {m_compiler, *this, function, llvm_function};
 }

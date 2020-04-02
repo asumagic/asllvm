@@ -23,6 +23,7 @@ class ModuleBuilder
 	public:
 	ModuleBuilder(JitCompiler& compiler, std::string_view angelscript_module_name);
 
+	void            add_jit_function(std::string name, asJITFunction* function);
 	FunctionBuilder create_function(asIScriptFunction& function, asJITFunction& jit_function_output);
 	void            build();
 

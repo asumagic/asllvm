@@ -4,6 +4,7 @@
 #include <angelscript-llvm/detail/functionbuilder.hpp>
 #include <angelscript-llvm/detail/llvmglobals.hpp>
 #include <angelscript-llvm/detail/modulebuilder.hpp>
+#include <angelscript-llvm/detail/modulecommon.hpp>
 #include <fmt/core.h>
 #include <llvm/Support/TargetSelect.h>
 
@@ -28,11 +29,6 @@ int JitCompiler::jit_compile(asIScriptFunction* function, asJITFunction* output)
 	asIScriptEngine& engine = *function->GetEngine();
 
 	CompileStatus status = CompileStatus::ICE;
-
-	if (std::string_view(function->GetName()) == "main")
-	{
-		return -1;
-	}
 
 	try
 	{
@@ -112,8 +108,11 @@ JitCompiler::compile(asIScriptEngine& engine, asIScriptFunction& function, asJIT
 	detail::ModuleBuilder& module_builder = m_module_map[function.GetModuleName()];
 
 	detail::FunctionBuilder function_builder = module_builder.create_function(function, output);
+
 	function_builder.read_bytecode(bytecode, length);
 	function_builder.create_wrapper_function();
+
+	module_builder.add_jit_function(make_function_name(function.GetName(), function.GetNamespace()), &output);
 
 	return CompileStatus::SUCCESS;
 }

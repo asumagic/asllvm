@@ -24,7 +24,7 @@ FunctionBuilder::FunctionBuilder(
 	m_compiler.builder().ir_builder().SetInsertPoint(m_entry_block);
 }
 
-void FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
+llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 {
 	const auto walk_bytecode = [&](auto&& func) {
 		asDWORD* bytecode_current = bytecode;
@@ -67,8 +67,18 @@ void FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 		}
 	}
 
-	walk_bytecode([this](auto* bytecode) { return preprocess_instruction(bytecode); });
-	walk_bytecode([this](auto* bytecode) { return read_instruction(bytecode); });
+	try
+	{
+		walk_bytecode([this](auto* bytecode) { return preprocess_instruction(bytecode); });
+		walk_bytecode([this](auto* bytecode) { return read_instruction(bytecode); });
+	}
+	catch (std::exception& exception)
+	{
+		m_llvm_function->removeFromParent();
+		throw;
+	}
+
+	return m_llvm_function;
 }
 
 llvm::Function* FunctionBuilder::create_wrapper_function()

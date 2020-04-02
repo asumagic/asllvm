@@ -32,7 +32,7 @@ class FunctionBuilder
 	// TODO: exceptions should make more sense than just a std::runtime_error
 	//! \brief Generates the LLVM IR for _an entire function_ given its AngelScript bytecode.
 	//! \exception Throws a std::runtime_error if code generation has failed.
-	void read_bytecode(asDWORD* bytecode, asUINT length);
+	llvm::Function* read_bytecode(asDWORD* bytecode, asUINT length);
 
 	llvm::Function* create_wrapper_function();
 
