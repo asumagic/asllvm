@@ -24,7 +24,8 @@ class FunctionBuilder
 	//!		- When >1, refers to a local variable or temporary stack slot.
 	//! \note
 	//!		Since a stack slot is 32-bit in AngelScript, 64-bit values take up two slots.
-	//!		We do not really care however, and just emit (at most) one extra stack value that may not get used.
+	//!		We do not really care for local variables, and just emit (at most) one extra stack value that may not get
+	//!		used. We, however, _do_ care for arguments.
 	using StackVariableIdentifier = std::int16_t;
 
 	// TODO: exceptions should make more sense than just a std::runtime_error
@@ -61,17 +62,16 @@ class FunctionBuilder
 	//!		incorrectly be performed within the branch. This is a problem if the same stack slot is reused elsewhere.
 	void reserve_variable(StackVariableIdentifier count);
 
-	llvm::Argument* get_argument(std::size_t i);
-
 	JitCompiler&   m_compiler;
 	ModuleBuilder& m_module_builder;
 
 	asIScriptFunction& m_script_function;
 
-	llvm::Function*                m_llvm_function;
-	llvm::BasicBlock*              m_entry_block;
-	bool                           m_return_emitted = false;
-	std::vector<llvm::AllocaInst*> m_allocated_variables;
+	llvm::Function*               m_llvm_function;
+	llvm::BasicBlock*             m_entry_block;
+	bool                          m_return_emitted = false;
+	std::map<short, llvm::Value*> m_variables;
+	short                         m_highest_allocated = 0;
 };
 
 } // namespace asllvm::detail

@@ -41,7 +41,8 @@ void FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 
 	// TODO: move to create_function()
 	{
-		std::size_t parameter_count = m_script_function.GetParamCount();
+		std::size_t parameter_count      = m_script_function.GetParamCount();
+		short       current_stack_offset = 0;
 		for (std::size_t i = 0; i < parameter_count; ++i)
 		{
 			int         type_id = 0;
@@ -50,12 +51,16 @@ void FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 
 			llvm::Type* type = m_compiler.builder().script_type_to_llvm_type(type_id);
 
-			llvm::Argument* llvm_argument = get_argument(i);
+			llvm::Argument* llvm_argument = &*(m_llvm_function->arg_begin() + i);
 
 			if (name != nullptr)
 			{
 				llvm_argument->setName(name);
 			}
+
+			m_variables.emplace(current_stack_offset, llvm_argument);
+
+			current_stack_offset -= m_compiler.builder().is_script_type_64(type_id) ? 2 : 1;
 		}
 	}
 
@@ -265,10 +270,14 @@ llvm::Value* FunctionBuilder::load_stack_value(StackVariableIdentifier i, llvm::
 		llvm::Value* variable = get_stack_variable(i, type);
 		return m_compiler.builder().ir_builder().CreateLoad(type, variable);
 	}
-	else
+
+	auto it = m_variables.find(i);
+	if (it == m_variables.end())
 	{
-		return get_argument(std::size_t(-i));
+		throw std::runtime_error{"parameter unexpectedly not found"};
 	}
+
+	return &*it->second;
 }
 
 void FunctionBuilder::store_stack_value(StackVariableIdentifier i, llvm::Value* value)
@@ -286,28 +295,28 @@ void FunctionBuilder::store_stack_value(StackVariableIdentifier i, llvm::Value* 
 
 llvm::Value* FunctionBuilder::get_stack_variable(StackVariableIdentifier i, llvm::Type* type)
 {
-	if (i < 0)
+	auto it = m_variables.find(i);
+	if (it == m_variables.end())
 	{
-		return get_argument(-i);
+		throw std::runtime_error{"variable unexpectedly not allocated"};
 	}
 
-	return m_compiler.builder().ir_builder().CreateBitCast(m_allocated_variables.at(i - 1), type->getPointerTo());
+	return m_compiler.builder().ir_builder().CreateBitCast(it->second, type->getPointerTo());
 }
 
-void FunctionBuilder::reserve_variable(StackVariableIdentifier count)
+void FunctionBuilder::reserve_variable(StackVariableIdentifier id)
 {
-	if (count < 0)
+	if (id < 0)
 	{
 		return;
 	}
 
-	for (std::size_t i = m_allocated_variables.size(); i < count; ++i)
+	for (std::size_t i = m_highest_allocated + 1; i <= id; ++i)
 	{
-		m_allocated_variables.emplace_back(
-			m_compiler.builder().ir_builder().CreateAlloca(llvm::IntegerType::getInt64Ty(context)));
+		m_variables.emplace(i, m_compiler.builder().ir_builder().CreateAlloca(llvm::IntegerType::getInt64Ty(context)));
 	}
-}
 
-llvm::Argument* FunctionBuilder::get_argument(std::size_t i) { return &*(m_llvm_function->args().begin() + i); }
+	m_highest_allocated = id;
+}
 
 } // namespace asllvm::detail
