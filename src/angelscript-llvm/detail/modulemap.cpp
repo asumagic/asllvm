@@ -20,6 +20,16 @@ ModuleBuilder& ModuleMap::operator[](std::string_view name)
 	return it->second;
 }
 
+void ModuleMap::build_modules()
+{
+	for (auto& it : m_map)
+	{
+		it.second.build();
+	}
+
+	m_map.clear();
+}
+
 void ModuleMap::dump_state() const
 {
 	for (const auto& [name, module_builder] : m_map)

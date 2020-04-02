@@ -4,8 +4,8 @@
 #include <scriptstdstring/scriptstdstring.h>
 
 #include <iostream>
-#include <utility>
 #include <string>
+#include <utility>
 
 constexpr int fail_code = 1;
 
@@ -56,10 +56,7 @@ void message_callback(const asSMessageInfo* info, [[maybe_unused]] void* param)
 			  << '\n';
 }
 
-void print(const std::string& message)
-{
-	std::cout << message << '\n';
-}
+void print(const std::string& message) { std::cout << message << '\n'; }
 
 void setup_jit(asIScriptEngine* engine, asllvm::JitCompiler& jit)
 {
@@ -123,8 +120,10 @@ int main()
 
 	build(engine, "build", "script.as");
 
+	jit.build_modules();
+
 	{
-		asIScriptModule* module = engine->GetModule("build");
+		asIScriptModule*   module   = engine->GetModule("build");
 		asIScriptFunction* function = module->GetFunctionByDecl("void main()");
 
 		if (function == nullptr)

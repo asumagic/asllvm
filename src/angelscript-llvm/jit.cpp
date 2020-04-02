@@ -31,8 +31,6 @@ int JitCompiler::CompileFunction(asIScriptFunction* function, asJITFunction* out
 
 	if (status == CompileStatus::SUCCESS)
 	{
-		// TODO: apply IR optimizations
-
 		if (m_config.verbose)
 		{
 			diagnostic(engine, "Function JITted successfully.\n", asMSGTYPE_INFORMATION);
@@ -68,6 +66,8 @@ void JitCompiler::diagnostic(asIScriptEngine& engine, const std::string& text, a
 	engine.WriteMessage(section, 0, 0, message_type, edited_text.c_str());
 }
 
+void JitCompiler::build_modules() { m_module_map.build_modules(); }
+
 JitCompiler::CompileStatus
 JitCompiler::compile(asIScriptEngine& engine, asIScriptFunction& function, asJITFunction& output)
 {
@@ -89,22 +89,9 @@ JitCompiler::compile(asIScriptEngine& engine, asIScriptFunction& function, asJIT
 
 	detail::ModuleBuilder& module_builder = m_module_map[function.GetModuleName()];
 
-	try // yolo
-	{
-		detail::FunctionBuilder function_builder = module_builder.create_function(function, output);
-		function_builder.read_bytecode(bytecode, length);
-		llvm::Function* function = function_builder.create_wrapper_function();
-
-		// TODO: def shouldn't be there
-		module_builder.build();
-	}
-	catch (std::runtime_error& e)
-	{
-		// module_builder.dump_state();
-		throw;
-	}
-
-	// module_builder.dump_state();
+	detail::FunctionBuilder function_builder = module_builder.create_function(function, output);
+	function_builder.read_bytecode(bytecode, length);
+	function_builder.create_wrapper_function();
 
 	return CompileStatus::SUCCESS;
 }

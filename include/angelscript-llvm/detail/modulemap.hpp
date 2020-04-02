@@ -17,6 +17,8 @@ class ModuleMap
 
 	ModuleBuilder& operator[](std::string_view name);
 
+	void build_modules();
+
 	void dump_state() const;
 
 	private:

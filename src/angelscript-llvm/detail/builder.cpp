@@ -2,23 +2,34 @@
 
 #include <angelscript-llvm/detail/llvmglobals.hpp>
 #include <angelscript.h>
+#include <llvm/Support/TargetSelect.h>
 
 namespace asllvm::detail
 {
+LibraryInitializer::LibraryInitializer()
+{
+	llvm::InitializeNativeTarget();
+	llvm::InitializeNativeTargetAsmPrinter();
+}
+
 Builder::Builder(JitCompiler& compiler) :
-	m_compiler{compiler}, m_ir_builder{*context}, m_common_definitions{build_common_definitions()}
+	m_initializer{},
+	m_context{setup_context()},
+	m_compiler{compiler},
+	m_ir_builder{*m_context},
+	m_common_definitions{setup_common_definitions()}
 {}
 
 llvm::Type* Builder::script_type_to_llvm_type(int type_id) const
 {
 	switch (type_id)
 	{
-	case asTYPEID_VOID: return llvm::Type::getVoidTy(*context);
-	case asTYPEID_BOOL: return llvm::Type::getInt1Ty(*context);
-	case asTYPEID_INT8: return llvm::Type::getInt8Ty(*context);
-	case asTYPEID_INT16: return llvm::Type::getInt16Ty(*context);
-	case asTYPEID_INT32: return llvm::Type::getInt32Ty(*context);
-	case asTYPEID_INT64: return llvm::Type::getInt64Ty(*context);
+	case asTYPEID_VOID: return llvm::Type::getVoidTy(*m_context);
+	case asTYPEID_BOOL: return llvm::Type::getInt1Ty(*m_context);
+	case asTYPEID_INT8: return llvm::Type::getInt8Ty(*m_context);
+	case asTYPEID_INT16: return llvm::Type::getInt16Ty(*m_context);
+	case asTYPEID_INT32: return llvm::Type::getInt32Ty(*m_context);
+	case asTYPEID_INT64: return llvm::Type::getInt64Ty(*m_context);
 	default: throw std::runtime_error{"type not implemented"};
 	}
 }
@@ -46,14 +57,26 @@ bool Builder::is_script_type_64(int type_id) const
 	}
 }
 
-CommonDefinitions Builder::build_common_definitions()
+llvm::LLVMContext& Builder::context() { return *m_context; }
+
+std::unique_ptr<llvm::LLVMContext> Builder::extract_old_context()
+{
+	auto old_context = std::move(m_context);
+
+	m_context            = setup_context();
+	m_common_definitions = setup_common_definitions();
+
+	return old_context;
+}
+
+CommonDefinitions Builder::setup_common_definitions()
 {
 	CommonDefinitions definitions;
 
-	auto* boolt = llvm::Type::getInt1Ty(*context);
-	auto* voidp = llvm::Type::getInt8Ty(*context)->getPointerTo();
-	auto* dword = llvm::Type::getInt32Ty(*context);
-	auto* qword = llvm::Type::getInt64Ty(*context);
+	auto* boolt = llvm::Type::getInt1Ty(*m_context);
+	auto* voidp = llvm::Type::getInt8Ty(*m_context)->getPointerTo();
+	auto* dword = llvm::Type::getInt32Ty(*m_context);
+	auto* qword = llvm::Type::getInt64Ty(*m_context);
 
 	std::array<llvm::Type*, 8> types{{
 		dword->getPointerTo(), // programPointer
@@ -70,4 +93,6 @@ CommonDefinitions Builder::build_common_definitions()
 
 	return definitions;
 }
+
+std::unique_ptr<llvm::LLVMContext> Builder::setup_context() { return std::make_unique<llvm::LLVMContext>(); }
 } // namespace asllvm::detail

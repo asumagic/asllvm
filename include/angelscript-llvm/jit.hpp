@@ -19,11 +19,12 @@ class JitCompiler : public asIJITCompiler
 	virtual void ReleaseJITFunction(asJITFunction func) override;
 
 	detail::Builder& builder() { return m_builder; }
-
 	const JitConfig& config() const { return m_config; }
 
 	void diagnostic(
 		asIScriptEngine& engine, const std::string& message, asEMsgType message_type = asMSGTYPE_INFORMATION) const;
+
+	void build_modules();
 
 	private:
 	mutable struct
@@ -50,5 +51,4 @@ class JitCompiler : public asIJITCompiler
 	detail::Builder   m_builder;
 	detail::ModuleMap m_module_map;
 };
-
 } // namespace asllvm

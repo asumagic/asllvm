@@ -16,7 +16,8 @@
 namespace asllvm::detail
 {
 ModuleBuilder::ModuleBuilder(JitCompiler& compiler, std::string_view angelscript_module_name) :
-	m_compiler{compiler}, m_module{std::make_unique<llvm::Module>(make_module_name(angelscript_module_name), *context)}
+	m_compiler{compiler},
+	m_module{std::make_unique<llvm::Module>(make_module_name(angelscript_module_name), compiler.builder().context())}
 {}
 
 FunctionBuilder ModuleBuilder::create_function(asIScriptFunction& function, asJITFunction& jit_function_output)
@@ -51,9 +52,6 @@ FunctionBuilder ModuleBuilder::create_function(asIScriptFunction& function, asJI
 
 void ModuleBuilder::build()
 {
-	llvm::InitializeNativeTarget();
-	llvm::InitializeNativeTargetAsmPrinter();
-
 	llvm::PassManagerBuilder pmb;
 	pmb.OptLevel           = 3;
 	pmb.Inliner            = llvm::createFunctionInliningPass(275);
@@ -79,11 +77,12 @@ void ModuleBuilder::build()
 
 	dump_state();
 
-	ExitOnErr(jit->addIRModule(llvm::orc::ThreadSafeModule(std::move(m_module), std::move(context))));
+	ExitOnError(
+		jit->addIRModule(llvm::orc::ThreadSafeModule(std::move(m_module), m_compiler.builder().extract_old_context())));
 
 	for (auto& pair : m_jit_functions)
 	{
-		auto entry   = ExitOnErr(jit->lookup(pair.first + ".jitentry"));
+		auto entry   = ExitOnError(jit->lookup(pair.first + ".jitentry"));
 		*pair.second = reinterpret_cast<asJITFunction>(entry.getAddress());
 	}
 
