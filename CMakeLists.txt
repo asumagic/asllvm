@@ -6,6 +6,7 @@ add_library(angelscript-llvm
     src/angelscript-llvm/jit.cpp
     src/angelscript-llvm/detail/builder.cpp
     src/angelscript-llvm/detail/functionbuilder.cpp
+    src/angelscript-llvm/detail/jitcompiler.cpp
     src/angelscript-llvm/detail/llvmglobals.cpp
     src/angelscript-llvm/detail/modulebuilder.cpp
     src/angelscript-llvm/detail/modulecommon.cpp

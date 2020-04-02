@@ -3,10 +3,11 @@
 namespace asllvm
 {
 struct JitConfig;
-class JitCompiler;
+class JitInterface;
 
 namespace detail
 {
+class JitCompiler;
 class Builder;
 class FunctionBuilder;
 class ModuleBuilder;

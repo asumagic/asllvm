@@ -1,9 +1,9 @@
 #include <angelscript-llvm/detail/modulebuilder.hpp>
 
 #include <angelscript-llvm/detail/functionbuilder.hpp>
+#include <angelscript-llvm/detail/jitcompiler.hpp>
 #include <angelscript-llvm/detail/llvmglobals.hpp>
 #include <angelscript-llvm/detail/modulecommon.hpp>
-#include <angelscript-llvm/jit.hpp>
 #include <array>
 #include <fmt/core.h>
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>

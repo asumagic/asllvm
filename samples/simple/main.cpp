@@ -58,7 +58,7 @@ void message_callback(const asSMessageInfo* info, [[maybe_unused]] void* param)
 
 void print(const std::string& message) { std::cout << message << '\n'; }
 
-void setup_jit(asIScriptEngine* engine, asllvm::JitCompiler& jit)
+void setup_jit(asIScriptEngine* engine, asllvm::JitInterface& jit)
 {
 	engine->SetEngineProperty(asEP_INCLUDE_JIT_INSTRUCTIONS, true);
 
@@ -113,14 +113,14 @@ int main()
 	asllvm::JitConfig config;
 	config.verbose = true;
 
-	asllvm::JitCompiler jit{config};
+	asllvm::JitInterface jit{config};
 	setup_jit(engine, jit);
 
 	register_interface(engine);
 
 	build(engine, "build", "script.as");
 
-	jit.build_modules();
+	jit.BuildModules();
 
 	{
 		asIScriptModule*   module   = engine->GetModule("build");
