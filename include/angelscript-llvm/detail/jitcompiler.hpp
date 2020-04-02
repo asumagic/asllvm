@@ -4,10 +4,16 @@
 #include <angelscript-llvm/detail/builder.hpp>
 #include <angelscript-llvm/detail/modulemap.hpp>
 #include <angelscript.h>
+#include <llvm/ExecutionEngine/Orc/LLJIT.h>
 #include <string>
 
 namespace asllvm::detail
 {
+struct LibraryInitializer
+{
+	LibraryInitializer();
+};
+
 class JitCompiler
 {
 	public:
@@ -16,8 +22,9 @@ class JitCompiler
 	int  jit_compile(asIScriptFunction* function, asJITFunction* output);
 	void jit_free(asJITFunction function);
 
-	Builder&         builder() { return m_builder; }
-	const JitConfig& config() const { return m_config; }
+	llvm::orc::LLJIT& jit() { return *m_jit; }
+	Builder&          builder() { return m_builder; }
+	const JitConfig&  config() const { return m_config; }
 
 	void diagnostic(
 		asIScriptEngine& engine, const std::string& message, asEMsgType message_type = asMSGTYPE_INFORMATION) const;
@@ -45,9 +52,11 @@ class JitCompiler
 
 	void dump_state() const;
 
-	JitConfig m_config;
-	Builder   m_builder;
-	ModuleMap m_module_map;
+	[[no_unique_address]] LibraryInitializer m_llvm_initializer;
+	std::unique_ptr<llvm::orc::LLJIT>        m_jit;
+	JitConfig                                m_config;
+	Builder                                  m_builder;
+	ModuleMap                                m_module_map;
 };
 
 } // namespace asllvm::detail

@@ -7,6 +7,8 @@ class JitInterface;
 
 namespace detail
 {
+struct LibraryInitializer;
+struct CommonDefinitions;
 class JitCompiler;
 class Builder;
 class FunctionBuilder;

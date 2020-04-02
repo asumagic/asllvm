@@ -2,12 +2,26 @@
 
 #include <angelscript-llvm/detail/builder.hpp>
 #include <angelscript-llvm/detail/functionbuilder.hpp>
+#include <angelscript-llvm/detail/llvmglobals.hpp>
 #include <angelscript-llvm/detail/modulebuilder.hpp>
 #include <fmt/core.h>
+#include <llvm/Support/TargetSelect.h>
 
 namespace asllvm::detail
 {
-JitCompiler::JitCompiler(JitConfig config) : m_config{config}, m_builder{*this}, m_module_map{*this} {}
+LibraryInitializer::LibraryInitializer()
+{
+	llvm::InitializeNativeTarget();
+	llvm::InitializeNativeTargetAsmPrinter();
+}
+
+JitCompiler::JitCompiler(JitConfig config) :
+	m_llvm_initializer{},
+	m_jit{ExitOnError(llvm::orc::LLJITBuilder().create())},
+	m_config{config},
+	m_builder{*this},
+	m_module_map{*this}
+{}
 
 int JitCompiler::jit_compile(asIScriptFunction* function, asJITFunction* output)
 {

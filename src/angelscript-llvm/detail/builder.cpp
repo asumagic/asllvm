@@ -2,20 +2,15 @@
 
 #include <angelscript-llvm/detail/llvmglobals.hpp>
 #include <angelscript.h>
-#include <llvm/Support/TargetSelect.h>
+#include <llvm/Transforms/IPO.h>
+#include <llvm/Transforms/IPO/PassManagerBuilder.h>
 
 namespace asllvm::detail
 {
-LibraryInitializer::LibraryInitializer()
-{
-	llvm::InitializeNativeTarget();
-	llvm::InitializeNativeTargetAsmPrinter();
-}
-
 Builder::Builder(JitCompiler& compiler) :
-	m_initializer{},
 	m_context{setup_context()},
 	m_compiler{compiler},
+	m_pass_manager{setup_pass_manager()},
 	m_ir_builder{*m_context},
 	m_common_definitions{setup_common_definitions()}
 {}
@@ -57,6 +52,8 @@ bool Builder::is_script_type_64(int type_id) const
 	}
 }
 
+llvm::legacy::PassManager& Builder::optimizer() { return m_pass_manager; }
+
 llvm::LLVMContext& Builder::context() { return *m_context; }
 
 std::unique_ptr<llvm::LLVMContext> Builder::extract_old_context()
@@ -95,4 +92,19 @@ CommonDefinitions Builder::setup_common_definitions()
 }
 
 std::unique_ptr<llvm::LLVMContext> Builder::setup_context() { return std::make_unique<llvm::LLVMContext>(); }
+
+llvm::legacy::PassManager Builder::setup_pass_manager()
+{
+	llvm::PassManagerBuilder pmb;
+	pmb.OptLevel           = 3;
+	pmb.Inliner            = llvm::createFunctionInliningPass(275);
+	pmb.DisableUnrollLoops = false;
+	pmb.LoopVectorize      = true;
+	pmb.SLPVectorize       = true;
+
+	llvm::legacy::PassManager pm;
+	pmb.populateModulePassManager(pm);
+
+	return pm;
+}
 } // namespace asllvm::detail

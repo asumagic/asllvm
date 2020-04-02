@@ -8,10 +8,7 @@
 #include <fmt/core.h>
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
 #include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Support/TargetSelect.h>
-#include <llvm/Transforms/IPO.h>
-#include <llvm/Transforms/IPO/PassManagerBuilder.h>
 
 namespace asllvm::detail
 {
@@ -52,36 +49,21 @@ FunctionBuilder ModuleBuilder::create_function(asIScriptFunction& function, asJI
 
 void ModuleBuilder::build()
 {
-	llvm::PassManagerBuilder pmb;
-	pmb.OptLevel           = 3;
-	pmb.Inliner            = llvm::createFunctionInliningPass(275);
-	pmb.DisableUnrollLoops = false;
-	pmb.LoopVectorize      = true;
-	pmb.SLPVectorize       = true;
-
-	llvm::legacy::PassManager pm;
-	pmb.populateModulePassManager(pm);
-
-	pm.run(*m_module);
-
-	auto jit = ExitOnError(llvm::orc::LLJITBuilder().create());
+	m_compiler.builder().optimizer().run(*m_module);
 
 	if (m_compiler.config().verbose)
 	{
 		dump_state();
 	}
 
-	ExitOnError(
-		jit->addIRModule(llvm::orc::ThreadSafeModule(std::move(m_module), m_compiler.builder().extract_old_context())));
+	ExitOnError(m_compiler.jit().addIRModule(
+		llvm::orc::ThreadSafeModule(std::move(m_module), m_compiler.builder().extract_old_context())));
 
 	for (auto& pair : m_jit_functions)
 	{
-		auto entry   = ExitOnError(jit->lookup(pair.first + ".jitentry"));
+		auto entry   = ExitOnError(m_compiler.jit().lookup(pair.first + ".jitentry"));
 		*pair.second = reinterpret_cast<asJITFunction>(entry.getAddress());
 	}
-
-	// HACK: garbage
-	jit.release();
 }
 
 void ModuleBuilder::dump_state() const
