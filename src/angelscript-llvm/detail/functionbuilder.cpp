@@ -155,9 +155,9 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 
 	case asBC_ADDi64:
 	{
-		auto target = asBC_SWORDARG0(bytecode) / 2;
-		auto a      = asBC_SWORDARG1(bytecode) / 2;
-		auto b      = asBC_SWORDARG2(bytecode) / 2;
+		auto target = asBC_SWORDARG0(bytecode);
+		auto a      = asBC_SWORDARG1(bytecode);
+		auto b      = asBC_SWORDARG2(bytecode);
 
 		llvm::Type* type = llvm::IntegerType::getInt64Ty(context);
 
@@ -258,7 +258,7 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 	}
 }
 
-llvm::Value* FunctionBuilder::load_stack_value(short i, llvm::Type* type)
+llvm::Value* FunctionBuilder::load_stack_value(StackVariableIdentifier i, llvm::Type* type)
 {
 	if (i > 0)
 	{
@@ -271,7 +271,7 @@ llvm::Value* FunctionBuilder::load_stack_value(short i, llvm::Type* type)
 	}
 }
 
-void FunctionBuilder::store_stack_value(short i, llvm::Value* value)
+void FunctionBuilder::store_stack_value(StackVariableIdentifier i, llvm::Value* value)
 {
 	if (i <= 0)
 	{
@@ -284,7 +284,7 @@ void FunctionBuilder::store_stack_value(short i, llvm::Value* value)
 	}
 }
 
-llvm::Value* FunctionBuilder::get_stack_variable(short i, llvm::Type* type)
+llvm::Value* FunctionBuilder::get_stack_variable(StackVariableIdentifier i, llvm::Type* type)
 {
 	if (i < 0)
 	{
@@ -294,13 +294,7 @@ llvm::Value* FunctionBuilder::get_stack_variable(short i, llvm::Type* type)
 	return m_compiler.builder().ir_builder().CreateBitCast(m_allocated_variables.at(i - 1), type->getPointerTo());
 }
 
-llvm::AllocaInst* FunctionBuilder::allocate_stack_variable(short i)
-{
-	return m_allocated_variables.emplace_back(
-		m_compiler.builder().ir_builder().CreateAlloca(llvm::IntegerType::getInt64Ty(context)));
-}
-
-void FunctionBuilder::reserve_variable(short count)
+void FunctionBuilder::reserve_variable(StackVariableIdentifier count)
 {
 	if (count < 0)
 	{
@@ -309,7 +303,8 @@ void FunctionBuilder::reserve_variable(short count)
 
 	for (std::size_t i = m_allocated_variables.size(); i < count; ++i)
 	{
-		allocate_stack_variable(i);
+		m_allocated_variables.emplace_back(
+			m_compiler.builder().ir_builder().CreateAlloca(llvm::IntegerType::getInt64Ty(context)));
 	}
 }
 
