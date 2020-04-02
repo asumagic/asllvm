@@ -25,7 +25,8 @@ class FunctionBuilder
 	//! \note
 	//!		Since a stack slot is 32-bit in AngelScript, 64-bit values take up two slots.
 	//!		We do not really care for local variables, and just emit (at most) one extra stack value that may not get
-	//!		used. We, however, _do_ care for arguments.
+	//!		used - the optimizer will likely take care of it and it has no side effects.
+	//!		We, however, _do_ care for arguments, so we have to map this appropriately.
 	using StackVariableIdentifier = std::int16_t;
 
 	// TODO: exceptions should make more sense than just a std::runtime_error
