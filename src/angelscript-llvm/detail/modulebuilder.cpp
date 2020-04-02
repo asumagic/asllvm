@@ -86,6 +86,9 @@ void ModuleBuilder::build()
 		auto entry   = ExitOnErr(jit->lookup(pair.first + ".jitentry"));
 		*pair.second = reinterpret_cast<asJITFunction>(entry.getAddress());
 	}
+
+	// HACK: garbage
+	jit.release();
 }
 
 void ModuleBuilder::dump_state() const

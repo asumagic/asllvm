@@ -76,6 +76,12 @@ class FunctionBuilder
 	std::map<StackVariableIdentifier, llvm::Value*> m_variables;
 	std::map<std::size_t, StackVariableIdentifier>  m_parameter_offsets; // TODO: this could be a vector or even omitted
 	short                                           m_highest_allocated = 0;
+
+	//! \brief Pointer to the RET instruction.
+	//! \details
+	//!		Functions appear to only have one final RET, which is convenient for our JIT purposes: we only have one
+	//!		known exit point.
+	asDWORD* m_ret_pointer = nullptr;
 };
 
 } // namespace asllvm::detail

@@ -98,6 +98,13 @@ llvm::Function* FunctionBuilder::create_wrapper_function()
 	llvm::Argument* arg = &*(wrapper_function->arg_begin() + 1);
 	arg->setName("jitarg");
 
+	llvm::Value* pp = [&] {
+		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(llvm::Type::getInt64Ty(*context), 0),
+											llvm::ConstantInt::get(llvm::Type::getInt32Ty(*context), 0)};
+
+		return ir.CreateGEP(registers, indices);
+	}();
+
 	llvm::Value* fp = [&] {
 		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(llvm::Type::getInt64Ty(*context), 0),
 											llvm::ConstantInt::get(llvm::Type::getInt32Ty(*context), 1)};
@@ -123,7 +130,7 @@ llvm::Function* FunctionBuilder::create_wrapper_function()
 			throw std::runtime_error{"expected parameter to be mapped - did earlier read_bytecode() fail?"};
 		}
 
-		std::array<llvm::Value*, 1> indices{llvm::ConstantInt::get(llvm::Type::getInt64Ty(*context), it->second)};
+		std::array<llvm::Value*, 1> indices{llvm::ConstantInt::get(llvm::Type::getInt64Ty(*context), -it->second)};
 
 		llvm::Type* arg_type = (m_llvm_function->arg_begin() + i)->getType();
 
@@ -138,6 +145,14 @@ llvm::Function* FunctionBuilder::create_wrapper_function()
 	{
 		ir.CreateStore(ret, value_register);
 	}
+
+	// Set the program pointer to the RET instruction
+	auto* ret_ptr_value = ir.CreateBitCast(
+		llvm::ConstantInt::get(
+			llvm::IntegerType::getInt64Ty(*context), reinterpret_cast<std::uintptr_t>(m_ret_pointer)),
+		llvm::PointerType::getInt32PtrTy(*context),
+		"retaddr");
+	ir.CreateStore(ret_ptr_value, pp);
 
 	ir.CreateRetVoid();
 
@@ -328,6 +343,7 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 			m_compiler.builder().ir_builder().CreateRetVoid();
 		}
 
+		m_ret_pointer    = bytecode;
 		m_return_emitted = true;
 		break;
 	}
