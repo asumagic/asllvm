@@ -50,6 +50,8 @@ class JitCompiler
 
 	CompileStatus compile(asIScriptEngine& engine, asIScriptFunction& function, asJITFunction& output);
 
+	static void lazy_jit_compiler(asSVMRegisters* registers, asPWORD jit_arg);
+
 	void dump_state() const;
 
 	[[no_unique_address]] LibraryInitializer m_llvm_initializer;

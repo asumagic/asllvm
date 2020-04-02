@@ -50,6 +50,11 @@ int JitCompiler::jit_compile(asIScriptFunction* function, asJITFunction* output)
 			diagnostic(engine, "Function JITted successfully.\n", asMSGTYPE_INFORMATION);
 		}
 
+		if (*output == nullptr)
+		{
+			*output = lazy_jit_compiler;
+		}
+
 		m_debug_state = {};
 		return 0;
 	}
@@ -111,6 +116,12 @@ JitCompiler::compile(asIScriptEngine& engine, asIScriptFunction& function, asJIT
 	function_builder.create_wrapper_function();
 
 	return CompileStatus::SUCCESS;
+}
+
+void JitCompiler::lazy_jit_compiler([[maybe_unused]] asSVMRegisters* registers, [[maybe_unused]] asPWORD jit_arg)
+{
+	throw std::runtime_error{
+		"tried invoking JIT function, but module was not built. did you forget to call BuildModules()?"};
 }
 
 void JitCompiler::dump_state() const { m_module_map.dump_state(); }
