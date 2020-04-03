@@ -27,7 +27,10 @@ class ModuleBuilder
 	void            add_jit_function(std::string name, asJITFunction* function);
 	FunctionBuilder create_function_builder(asIScriptFunction& function, asJITFunction& jit_function_output);
 	llvm::Function* create_function(asIScriptFunction& function);
-	void            build();
+
+	llvm::Function* get_system_function(asIScriptFunction& system_function);
+
+	void build();
 
 	llvm::Module& module() { return *m_module; }
 
@@ -38,6 +41,7 @@ class ModuleBuilder
 	std::unique_ptr<llvm::Module>                       m_module;
 	std::vector<std::pair<std::string, asJITFunction*>> m_jit_functions;
 	std::map<int, llvm::Function*>                      m_script_functions;
+	std::map<int, llvm::Function*>                      m_system_functions;
 };
 
 } // namespace asllvm::detail

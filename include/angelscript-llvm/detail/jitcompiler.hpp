@@ -22,9 +22,10 @@ class JitCompiler
 	int  jit_compile(asIScriptFunction* function, asJITFunction* output);
 	void jit_free(asJITFunction function);
 
+	asIScriptEngine&  engine() { return *m_engine; }
 	llvm::orc::LLJIT& jit() { return *m_jit; }
-	Builder&          builder() { return m_builder; }
 	const JitConfig&  config() const { return m_config; }
+	Builder&          builder() { return m_builder; }
 
 	void diagnostic(
 		asIScriptEngine& engine, const std::string& message, asEMsgType message_type = asMSGTYPE_INFORMATION) const;
@@ -56,6 +57,7 @@ class JitCompiler
 	void dump_state() const;
 
 	[[no_unique_address]] LibraryInitializer m_llvm_initializer;
+	asIScriptEngine*                         m_engine = nullptr;
 	std::unique_ptr<llvm::orc::LLJIT>        m_jit;
 	JitConfig                                m_config;
 	Builder                                  m_builder;

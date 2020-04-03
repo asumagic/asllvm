@@ -54,6 +54,37 @@ llvm::Function* ModuleBuilder::create_function(asIScriptFunction& function)
 	return llvm_function;
 }
 
+llvm::Function* ModuleBuilder::get_system_function(asIScriptFunction& system_function)
+{
+	const int id = system_function.GetId();
+
+	if (auto it = m_system_functions.find(id); it != m_system_functions.end())
+	{
+		return it->second;
+	}
+
+	llvm::Type* return_type = m_compiler.builder().script_type_to_llvm_type(system_function.GetReturnTypeId());
+
+	const std::size_t        param_count = system_function.GetParamCount();
+	std::vector<llvm::Type*> types(param_count);
+
+	for (std::size_t i = 0; i < param_count; ++i)
+	{
+		int type_id;
+		system_function.GetParam(i, &type_id);
+		types[i] = m_compiler.builder().script_type_to_llvm_type(type_id);
+	}
+
+	llvm::FunctionType* function_type = llvm::FunctionType::get(return_type, types, false);
+
+	llvm::Function* function = llvm::Function::Create(
+		function_type, llvm::Function::ExternalLinkage, 0, make_system_function_name(system_function), m_module.get());
+
+	m_system_functions.emplace(id, function);
+
+	return function;
+}
+
 void ModuleBuilder::build()
 {
 	if (m_compiler.config().verbose)
@@ -62,6 +93,11 @@ void ModuleBuilder::build()
 	}
 
 	m_compiler.builder().optimizer().run(*m_module);
+
+	/*for (const auto& it : m_system_functions)
+	{
+		ExitOnError(m_compiler.jit().defineAbsolute(it.second->getName(), ));
+	}*/
 
 	ExitOnError(m_compiler.jit().addIRModule(
 		llvm::orc::ThreadSafeModule(std::move(m_module), m_compiler.builder().extract_old_context())));

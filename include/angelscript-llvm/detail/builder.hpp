@@ -1,11 +1,11 @@
 #pragma once
 
 #include <angelscript-llvm/detail/fwd.hpp>
+#include <angelscript.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Type.h>
-#include <map>
 
 namespace asllvm::detail
 {

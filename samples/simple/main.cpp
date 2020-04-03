@@ -57,6 +57,7 @@ void message_callback(const asSMessageInfo* info, [[maybe_unused]] void* param)
 }
 
 void print(const std::string& message) { std::cout << message << '\n'; }
+void print_int(int number) { std::cout << number << '\n'; }
 
 void setup_jit(asIScriptEngine* engine, asllvm::JitInterface& jit)
 {
@@ -70,6 +71,7 @@ void register_interface(asIScriptEngine* engine)
 	RegisterStdString(engine);
 
 	check(engine->RegisterGlobalFunction("void print(const string &in)", asFUNCTION(print), asCALL_CDECL));
+	check(engine->RegisterGlobalFunction("void print(int)", asFUNCTION(print_int), asCALL_CDECL));
 	check(engine->SetMessageCallback(asFUNCTION(message_callback), nullptr, asCALL_CDECL));
 }
 

@@ -24,7 +24,7 @@ void main()
 	print('' + add_i16(10, 20));
 	print('' + add_i32(100, 200));
 	print('' + add_i64(1000, 2000));*/
-	add_i8(10, 20);
+	print(add_i8(10, 20));
 }
 
 /*void main()

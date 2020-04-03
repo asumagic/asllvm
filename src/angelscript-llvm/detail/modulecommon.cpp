@@ -47,4 +47,10 @@ std::string make_jit_entry_name(std::string_view angelscript_function_name, std:
 {
 	return make_function_name(angelscript_function_name, namespace_name) + ".jitentry";
 }
+
+std::string make_system_function_name(asIScriptFunction& function)
+{
+	return fmt::format("asllvm.external.{}", function.GetName());
+}
+
 } // namespace asllvm::detail

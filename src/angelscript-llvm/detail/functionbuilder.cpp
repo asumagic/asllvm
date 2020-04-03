@@ -485,26 +485,31 @@ void FunctionBuilder::emit_system_call(asIScriptFunction& function)
 	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
 	llvm::LLVMContext& context = m_compiler.builder().context();
 
-	std::size_t parameter_count = function.GetParamCount();
+	llvm::Function* callee = m_module_builder.get_system_function(function);
 
-	llvm::Type*              return_type = m_compiler.builder().script_type_to_llvm_type(function.GetReturnTypeId());
-	std::vector<llvm::Type*> types(parameter_count);
+	const std::size_t         argument_count = callee->arg_size();
+	std::vector<llvm::Value*> args(callee->arg_size());
 
-	for (std::size_t i = 0; i < parameter_count; ++i)
 	{
-		int type_id;
-		function.GetParam(i, &type_id);
-		types.push_back(m_compiler.builder().script_type_to_llvm_type(type_id));
+		long current_parameter_offset = m_stack_pointer;
+		for (std::size_t i = 0; i < argument_count; ++i)
+		{
+			int type_id = 0;
+			if (function.GetParam(i, &type_id) < 0)
+			{
+				throw std::runtime_error{
+					"something went wrong during registering of system function: nth parameter does not appear to "
+					"exist in the script function"};
+			}
+
+			llvm::Argument* llvm_argument = &*(callee->arg_begin() + i);
+			args[i]                       = load_stack_value(current_parameter_offset, llvm_argument->getType());
+
+			current_parameter_offset -= m_compiler.builder().get_script_type_dword_size(type_id);
+		}
 	}
 
-	llvm::FunctionType* llvm_function_type = llvm::FunctionType::get(return_type, types, false);
-
-	llvm::Function* llvm_function = llvm::Function::Create(
-		llvm_function_type,
-		llvm::Function::ExternalLinkage,
-		make_function_name(function.GetName(), function.GetNamespace()));
-
-	llvm::Value* returned = ir.CreateCall(llvm_function_type, llvm_function);
+	llvm::Value* returned = ir.CreateCall(callee->getFunctionType(), callee, args);
 
 	// todo: store returned m_value
 }

@@ -26,6 +26,12 @@ JitCompiler::JitCompiler(JitConfig config) :
 
 int JitCompiler::jit_compile(asIScriptFunction* function, asJITFunction* output)
 {
+	if (m_engine != nullptr && function->GetEngine() != m_engine)
+	{
+		throw std::runtime_error{"JIT compiler expects to be only used against the same asIScriptEngine"};
+	}
+
+	m_engine                = function->GetEngine();
 	asIScriptEngine& engine = *function->GetEngine();
 
 	CompileStatus status = CompileStatus::ICE;

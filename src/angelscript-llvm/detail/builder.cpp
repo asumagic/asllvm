@@ -1,6 +1,7 @@
 #include <angelscript-llvm/detail/builder.hpp>
 
 #include <angelscript-llvm/detail/llvmglobals.hpp>
+#include <angelscript-llvm/detail/modulecommon.hpp>
 #include <angelscript.h>
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
