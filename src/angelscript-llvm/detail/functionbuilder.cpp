@@ -62,8 +62,7 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 				"locals");
 			m_value = ir.CreateAlloca(llvm::IntegerType::getInt64Ty(context), 0, "valuereg");
 
-			// TODO: this is highly fishy
-			m_stack_pointer = m_locals_size - AS_PTR_SIZE;
+			m_stack_pointer = m_locals_size + m_max_extra_stack_size;
 		}
 
 		walk_bytecode([this](auto* bytecode) { return read_instruction(bytecode); });
@@ -388,7 +387,7 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 
 	case asBC_PGA:
 	{
-		m_stack_pointer += AS_PTR_SIZE;
+		m_stack_pointer -= AS_PTR_SIZE;
 		store_stack_value(
 			m_stack_pointer, llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), asBC_PTRARG(bytecode)));
 		break;
@@ -396,7 +395,7 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 
 	case asBC_PSF:
 	{
-		m_stack_pointer += AS_PTR_SIZE;
+		m_stack_pointer -= AS_PTR_SIZE;
 		store_stack_value(
 			m_stack_pointer, load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt64Ty(context)));
 		break;
@@ -404,7 +403,7 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 
 	case asBC_PshV4:
 	{
-		++m_stack_pointer;
+		--m_stack_pointer;
 		store_stack_value(
 			m_stack_pointer, load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt32Ty(context)));
 		break;
@@ -412,7 +411,7 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 
 	case asBC_PshV8:
 	{
-		m_stack_pointer += 2;
+		m_stack_pointer -= 2;
 		store_stack_value(
 			m_stack_pointer, load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt64Ty(context)));
 		break;
@@ -420,7 +419,7 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 
 	case asBC_PshC4:
 	{
-		++m_stack_pointer;
+		--m_stack_pointer;
 		store_stack_value(
 			m_stack_pointer, llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(context), asBC_DWORDARG(bytecode)));
 		break;
@@ -428,7 +427,7 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 
 	case asBC_PshC8:
 	{
-		m_stack_pointer += 2;
+		m_stack_pointer -= 2;
 		store_stack_value(
 			m_stack_pointer, llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(context), asBC_QWORDARG(bytecode)));
 		break;
