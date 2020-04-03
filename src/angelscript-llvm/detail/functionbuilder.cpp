@@ -178,6 +178,7 @@ void FunctionBuilder::preprocess_instruction(asDWORD* bytecode)
 	case asBC_iTOb:
 	case asBC_iTOw:
 	case asBC_iTOi64:
+	case asBC_i64TOi:
 	case asBC_SetV1:
 	case asBC_SetV2:
 	case asBC_SetV4:
@@ -325,6 +326,16 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 		break;
 	}
 
+	case asBC_CpyRtoV8:
+	{
+		llvm::Value* value_i64_ptr = ir.CreateBitCast(m_value, llvm::Type::getInt64PtrTy(context));
+		llvm::Value* value_i64     = ir.CreateLoad(llvm::Type::getInt64Ty(context), value_i64_ptr);
+
+		store_stack_value(asBC_SWORDARG0(bytecode), value_i64);
+
+		break;
+	}
+
 	case asBC_sbTOi:
 	{
 		// TODO: sign extend should not be done on unsigned types
@@ -372,6 +383,15 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 		ir.CreateSExt(
 			load_stack_value(asBC_SWORDARG0(bytecode), llvm::Type::getInt32Ty(context)),
 			llvm::Type::getInt64Ty(context));
+		break;
+	}
+
+	case asBC_i64TOi:
+	{
+		ir.CreateTrunc(
+			load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt64Ty(context)),
+			llvm::IntegerType::getInt32Ty(context));
+
 		break;
 	}
 
