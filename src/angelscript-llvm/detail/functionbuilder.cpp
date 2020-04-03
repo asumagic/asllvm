@@ -21,11 +21,18 @@ FunctionBuilder::FunctionBuilder(
 	m_llvm_function{llvm_function},
 	m_entry_block{llvm::BasicBlock::Create(m_compiler.builder().context(), "entry", llvm_function)}
 {
-	m_compiler.builder().ir_builder().SetInsertPoint(m_entry_block);
+	m_compiler.builder().ir().SetInsertPoint(m_entry_block);
 }
 
 llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 {
+	if (m_script_function.GetParamCount() != 0)
+	{
+		int type_id;
+		m_script_function.GetParam(0, &type_id);
+		m_locals_offset = m_compiler.builder().get_script_type_dword_size(type_id);
+	}
+
 	const auto walk_bytecode = [&](auto&& func) {
 		asDWORD* bytecode_current = bytecode;
 		asDWORD* bytecode_end     = bytecode + length;
@@ -41,35 +48,21 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 		}
 	};
 
-	// TODO: move to create_function()
-	{
-		std::size_t parameter_count      = m_script_function.GetParamCount();
-		short       current_stack_offset = 0;
-		for (std::size_t i = 0; i < parameter_count; ++i)
-		{
-			int         type_id = 0;
-			const char* name    = nullptr;
-			m_script_function.GetParam(i, &type_id, nullptr, &name);
-
-			llvm::Type* type = m_compiler.builder().script_type_to_llvm_type(type_id);
-
-			llvm::Argument* llvm_argument = &*(m_llvm_function->arg_begin() + i);
-
-			if (name != nullptr)
-			{
-				llvm_argument->setName(name);
-			}
-
-			m_parameter_offsets.emplace(i, current_stack_offset);
-			m_variables.emplace(current_stack_offset, llvm_argument);
-
-			current_stack_offset -= m_compiler.builder().is_script_type_64(type_id) ? 2 : 1;
-		}
-	}
-
 	try
 	{
 		walk_bytecode([this](auto* bytecode) { return preprocess_instruction(bytecode); });
+
+		{
+			llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
+			llvm::LLVMContext& context = m_compiler.builder().context();
+
+			m_locals = ir.CreateAlloca(
+				llvm::ArrayType::get(llvm::IntegerType::getInt32Ty(context), m_locals_size), 0, "locals");
+			m_stack = ir.CreateAlloca(
+				llvm::ArrayType::get(llvm::IntegerType::getInt32Ty(context), m_stack_size), 0, "stack");
+			m_value = ir.CreateAlloca(llvm::IntegerType::getInt64Ty(context), 0, "valuereg");
+		}
+
 		walk_bytecode([this](auto* bytecode) { return read_instruction(bytecode); });
 	}
 	catch (std::exception& exception)
@@ -83,7 +76,7 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 
 llvm::Function* FunctionBuilder::create_wrapper_function()
 {
-	llvm::IRBuilder<>& ir      = m_compiler.builder().ir_builder();
+	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
 	llvm::LLVMContext& context = m_compiler.builder().context();
 	CommonDefinitions& defs    = m_compiler.builder().definitions();
 
@@ -113,7 +106,7 @@ llvm::Function* FunctionBuilder::create_wrapper_function()
 		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0),
 											llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0)};
 
-		return ir.CreateGEP(registers, indices);
+		return ir.CreateGEP(registers, indices, "programPointer");
 	}();
 
 	llvm::Value* fp = [&] {
@@ -131,37 +124,19 @@ llvm::Function* FunctionBuilder::create_wrapper_function()
 		return ir.CreateGEP(registers, indices, "valueRegister");
 	}();
 
-	std::vector<llvm::Value*> args(m_script_function.GetParamCount());
-
-	for (short i = 0; i < m_script_function.GetParamCount(); ++i)
-	{
-		auto it = m_parameter_offsets.find(i);
-		if (it == m_parameter_offsets.end())
-		{
-			throw std::runtime_error{"expected parameter to be mapped - did earlier read_bytecode() fail?"};
-		}
-
-		std::array<llvm::Value*, 1> indices{llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), -it->second)};
-
-		llvm::Type* arg_type = (m_llvm_function->arg_begin() + i)->getType();
-
-		llvm::Value* pointer = ir.CreateGEP(fp, indices);
-		pointer              = ir.CreateBitCast(pointer, arg_type->getPointerTo());
-		args[i]              = ir.CreateLoad(arg_type, pointer);
-	}
+	std::array<llvm::Value*, 1> args{{fp}};
 
 	auto* ret = ir.CreateCall(m_llvm_function, args, "ret");
 
 	if (m_llvm_function->getReturnType() != llvm::Type::getVoidTy(context))
 	{
-		ir.CreateStore(ret, value_register);
+		ir.CreateStore(ret, ir.CreateBitCast(value_register, ret->getType()->getPointerTo()));
 	}
 
 	// Set the program pointer to the RET instruction
-	auto* ret_ptr_value = ir.CreateBitCast(
+	auto* ret_ptr_value = ir.CreateIntToPtr(
 		llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(context), reinterpret_cast<std::uintptr_t>(m_ret_pointer)),
-		llvm::PointerType::getInt32PtrTy(context),
-		"retaddr");
+		llvm::IntegerType::getInt32PtrTy(context));
 	ir.CreateStore(ret_ptr_value, pp);
 
 	ir.CreateRetVoid();
@@ -197,8 +172,8 @@ void FunctionBuilder::preprocess_instruction(asDWORD* bytecode)
 	case asBC_iTOb:
 	case asBC_iTOw:
 	{
-		auto target = asBC_SWORDARG0(bytecode);
-		reserve_variable(target);
+		auto target   = asBC_SWORDARG0(bytecode);
+		m_locals_size = std::max(m_locals_size, long(target) + 2);
 		break;
 	}
 
@@ -212,6 +187,7 @@ void FunctionBuilder::preprocess_instruction(asDWORD* bytecode)
 void FunctionBuilder::read_instruction(asDWORD* bytecode)
 {
 	asIScriptEngine&   engine  = *m_script_function.GetEngine();
+	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
 	llvm::LLVMContext& context = m_compiler.builder().context();
 
 	const asSBCInfo info = asBCInfo[*reinterpret_cast<const asBYTE*>(bytecode)];
@@ -255,8 +231,7 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 
 		llvm::Type* type = llvm::IntegerType::getInt32Ty(context);
 
-		store_stack_value(
-			target, m_compiler.builder().ir_builder().CreateAdd(load_stack_value(a, type), load_stack_value(b, type)));
+		store_stack_value(target, ir.CreateAdd(load_stack_value(a, type), load_stack_value(b, type)));
 
 		break;
 	}
@@ -269,8 +244,7 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 
 		llvm::Type* type = llvm::IntegerType::getInt64Ty(context);
 
-		store_stack_value(
-			target, m_compiler.builder().ir_builder().CreateAdd(load_stack_value(a, type), load_stack_value(b, type)));
+		store_stack_value(target, ir.CreateAdd(load_stack_value(a, type), load_stack_value(b, type)));
 
 		break;
 	}
@@ -302,8 +276,7 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 	{
 		m_return_emitted = true;
 
-		m_compiler.builder().ir_builder().CreateRet(
-			load_stack_value(asBC_SWORDARG0(bytecode), m_llvm_function->getReturnType()));
+		ir.CreateRet(load_stack_value(asBC_SWORDARG0(bytecode), m_llvm_function->getReturnType()));
 
 		break;
 	}
@@ -312,7 +285,7 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 	{
 		// TODO: sign extend should not be done on unsigned types
 
-		m_compiler.builder().ir_builder().CreateSExt(
+		ir.CreateSExt(
 			load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt8Ty(context)),
 			llvm::IntegerType::getInt32Ty(context));
 
@@ -323,7 +296,7 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 	{
 		// TODO: sign extend should not be done on unsigned types
 
-		m_compiler.builder().ir_builder().CreateSExt(
+		ir.CreateSExt(
 			load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt16Ty(context)),
 			llvm::IntegerType::getInt32Ty(context));
 
@@ -332,7 +305,7 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 
 	case asBC_iTOb:
 	{
-		m_compiler.builder().ir_builder().CreateTrunc(
+		ir.CreateTrunc(
 			load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt32Ty(context)),
 			llvm::IntegerType::getInt8Ty(context));
 
@@ -341,7 +314,7 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 
 	case asBC_iTOw:
 	{
-		m_compiler.builder().ir_builder().CreateTrunc(
+		ir.CreateTrunc(
 			load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt32Ty(context)),
 			llvm::IntegerType::getInt16Ty(context));
 
@@ -352,7 +325,7 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 	{
 		if (!m_return_emitted)
 		{
-			m_compiler.builder().ir_builder().CreateRetVoid();
+			ir.CreateRetVoid();
 		}
 
 		m_ret_pointer    = bytecode;
@@ -369,61 +342,56 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 
 llvm::Value* FunctionBuilder::load_stack_value(StackVariableIdentifier i, llvm::Type* type)
 {
-	if (i > 0)
-	{
-		llvm::Value* variable = get_stack_variable(i, type);
-		return m_compiler.builder().ir_builder().CreateLoad(type, variable);
-	}
-
-	auto it = m_variables.find(i);
-	if (it == m_variables.end())
-	{
-		throw std::runtime_error{"parameter unexpectedly not found"};
-	}
-
-	return &*it->second;
+	return m_compiler.builder().ir().CreateLoad(type, get_stack_value_pointer(i, type));
 }
 
 void FunctionBuilder::store_stack_value(StackVariableIdentifier i, llvm::Value* value)
 {
-	if (i <= 0)
-	{
-		throw std::runtime_error{"storing to parameters unsupported for now"};
-	}
-	else
-	{
-		llvm::Value* variable = get_stack_variable(i, value->getType());
-		m_compiler.builder().ir_builder().CreateStore(value, variable);
-	}
+	m_compiler.builder().ir().CreateStore(value, get_stack_value_pointer(i, value->getType()));
 }
 
-llvm::Value* FunctionBuilder::get_stack_variable(StackVariableIdentifier i, llvm::Type* type)
+llvm::Value* FunctionBuilder::get_stack_value_pointer(FunctionBuilder::StackVariableIdentifier i, llvm::Type* type)
 {
-	auto it = m_variables.find(i);
-	if (it == m_variables.end())
-	{
-		throw std::runtime_error{"variable unexpectedly not allocated"};
-	}
+	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
 
-	return m_compiler.builder().ir_builder().CreateBitCast(it->second, type->getPointerTo());
+	llvm::Value* pointer = get_stack_value_pointer(i);
+	return ir.CreateBitCast(pointer, type->getPointerTo());
 }
 
-void FunctionBuilder::reserve_variable(StackVariableIdentifier id)
+llvm::Value* FunctionBuilder::get_stack_value_pointer(FunctionBuilder::StackVariableIdentifier i)
 {
-	if (id < 0)
+	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
+	llvm::LLVMContext& context = m_compiler.builder().context();
+
+	// Get a pointer to that value on the 'stack'
+	if (i >= m_stack_size + m_locals_offset)
 	{
-		return;
+		const std::size_t stack_offset = i - m_stack_size - m_locals_offset;
+
+		std::array<llvm::Value*, 2> indices{
+			{llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(context), 0),
+			 llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(context), stack_offset)}};
+
+		return ir.CreateGEP(m_stack, indices);
 	}
 
-	for (std::size_t i = m_highest_allocated + 1; i <= id; ++i)
+	// Get a pointer to that argument
+	if (i < m_locals_offset)
 	{
-		m_variables.emplace(
-			i,
-			m_compiler.builder().ir_builder().CreateAlloca(
-				llvm::IntegerType::getInt64Ty(m_compiler.builder().context())));
+		std::array<llvm::Value*, 1> indices{{llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(context), -i)}};
+
+		return ir.CreateGEP(&*(m_llvm_function->arg_begin() + 0), indices);
 	}
 
-	m_highest_allocated = id;
+	// Get a pointer to that value on the local stack
+	{
+		const std::size_t local_offset = i - m_locals_offset;
+
+		std::array<llvm::Value*, 2> indices{
+			{llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(context), 0),
+			 llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(context), local_offset)}};
+
+		return ir.CreateGEP(m_locals, indices);
+	}
 }
-
 } // namespace asllvm::detail

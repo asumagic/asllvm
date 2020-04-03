@@ -52,6 +52,8 @@ bool Builder::is_script_type_64(int type_id) const
 	}
 }
 
+std::size_t Builder::get_script_type_dword_size(int type_id) const { return is_script_type_64(type_id) ? 2 : 1; }
+
 llvm::legacy::PassManager& Builder::optimizer() { return m_pass_manager; }
 
 llvm::LLVMContext& Builder::context() { return *m_context; }

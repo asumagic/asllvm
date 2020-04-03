@@ -24,18 +24,8 @@ void ModuleBuilder::add_jit_function(std::string name, asJITFunction* function)
 
 FunctionBuilder ModuleBuilder::create_function(asIScriptFunction& function, asJITFunction& jit_function_output)
 {
-	std::vector<llvm::Type*> types;
-
-	std::size_t parameter_count = function.GetParamCount();
-	for (std::size_t i = 0; i < parameter_count; ++i)
-	{
-		int type_id = 0;
-		function.GetParam(i, &type_id);
-
-		types.push_back(m_compiler.builder().script_type_to_llvm_type(type_id));
-	}
-
-	llvm::Type* return_type = m_compiler.builder().script_type_to_llvm_type(function.GetReturnTypeId());
+	std::array<llvm::Type*, 1> types{llvm::PointerType::getInt32PtrTy(m_compiler.builder().context())};
+	llvm::Type*                return_type = m_compiler.builder().script_type_to_llvm_type(function.GetReturnTypeId());
 
 	llvm::FunctionType* function_type = llvm::FunctionType::get(return_type, types, false);
 
@@ -43,6 +33,8 @@ FunctionBuilder ModuleBuilder::create_function(asIScriptFunction& function, asJI
 
 	llvm::Function* llvm_function
 		= llvm::Function::Create(function_type, llvm::Function::InternalLinkage, name, *m_module.get());
+
+	(llvm_function->arg_begin() + 0)->setName("params");
 
 	// TODO: fix this, but how to CreateCall with this convention?! in functionbuilder.cpp
 	// llvm_function->setCallingConv(llvm::CallingConv::Fast);
@@ -52,12 +44,12 @@ FunctionBuilder ModuleBuilder::create_function(asIScriptFunction& function, asJI
 
 void ModuleBuilder::build()
 {
-	m_compiler.builder().optimizer().run(*m_module);
-
 	if (m_compiler.config().verbose)
 	{
 		dump_state();
 	}
+
+	m_compiler.builder().optimizer().run(*m_module);
 
 	ExitOnError(m_compiler.jit().addIRModule(
 		llvm::orc::ThreadSafeModule(std::move(m_module), m_compiler.builder().extract_old_context())));

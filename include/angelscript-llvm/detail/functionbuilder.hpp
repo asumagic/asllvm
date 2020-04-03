@@ -44,42 +44,32 @@ class FunctionBuilder
 	void preprocess_instruction(asDWORD* bytecode);
 	void read_instruction(asDWORD* bytecode);
 
-	//! \brief Load a LLVM value of type \p type from a local variable or parameter of identifier \p! i.
+	//! \brief Load a LLVM value of type \p type from a stack variable of identifier \p! i.
 	llvm::Value* load_stack_value(StackVariableIdentifier i, llvm::Type* type);
 
-	//! \brief Store a LLVM value to a local variable of identifier \p i.
+	//! \brief Store a LLVM value to a stack variable of identifier \p i.
 	void store_stack_value(StackVariableIdentifier i, llvm::Value* value);
 
-	//! \brief Get the value of a local variable or parameter of type \p type and identifier \p i.
-	llvm::Value* get_stack_variable(StackVariableIdentifier i, llvm::Type* type);
+	//! \brief Get a pointer to a stack value of type \p type and identifier \p i.
+	llvm::Value* get_stack_value_pointer(StackVariableIdentifier i, llvm::Type* type);
 
-	//! \brief Allocate enough stack variables so that the stack variable identifier \p count becomes valid.
-	//! \details
-	//!		When `count < 0`, no operation occurs.
-	//!
-	//!		For each stack variable that requires to be allocated, an `alloca` of type `i64` is performed in the LLVM
-	//!		IR. The reason is that stack variables can get reused with different types, and `i64` is as large as stack
-	//!		values can go in the AngelScript bytecode.
-	//!		A bit cast is performed on the allocated pointer by load_stack_value() and store_stack_value().
-	//!
-	//! \warning
-	//!		This should be called before emitting any other instructions, i.e. this should be called by
-	//!		preprocess_instruction().
-	//!		The reason being that if the assignment to a stack value occurs within a branch, the `alloca` will
-	//!		incorrectly be performed within the branch. This is a problem if the same stack slot is reused elsewhere.
-	void reserve_variable(StackVariableIdentifier count);
+	//! \brief Get a pointer to a stack value of type i32* and identifier \p i.
+	llvm::Value* get_stack_value_pointer(StackVariableIdentifier i);
 
 	JitCompiler&   m_compiler;
 	ModuleBuilder& m_module_builder;
 
 	asIScriptFunction& m_script_function;
 
-	llvm::Function*                                 m_llvm_function;
-	llvm::BasicBlock*                               m_entry_block;
-	bool                                            m_return_emitted = false;
-	std::map<StackVariableIdentifier, llvm::Value*> m_variables;
-	std::map<std::size_t, StackVariableIdentifier>  m_parameter_offsets; // TODO: this could be a vector or even omitted
-	short                                           m_highest_allocated = 0;
+	llvm::Function*   m_llvm_function;
+	llvm::BasicBlock* m_entry_block;
+	bool              m_return_emitted = false;
+
+	long m_locals_offset = 0, m_locals_size = 0, m_stack_size = 0;
+
+	llvm::AllocaInst* m_locals;
+	llvm::AllocaInst* m_stack;
+	llvm::AllocaInst* m_value;
 
 	//! \brief Pointer to the RET instruction.
 	//! \details
