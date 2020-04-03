@@ -3,6 +3,7 @@
 #include <angelscript-llvm/detail/llvmglobals.hpp>
 #include <angelscript-llvm/detail/modulecommon.hpp>
 #include <angelscript.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
 
@@ -109,7 +110,9 @@ llvm::legacy::PassManager Builder::setup_pass_manager()
 	pmb.SLPVectorize       = true;
 
 	llvm::legacy::PassManager pm;
+	pm.add(llvm::createVerifierPass());
 	pmb.populateModulePassManager(pm);
+	pm.add(llvm::createVerifierPass());
 
 	return pm;
 }
