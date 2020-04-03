@@ -455,7 +455,14 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 
 		llvm::Function* callee = m_module_builder.create_function(*function);
 
-		ir.CreateCall(callee->getFunctionType(), callee, args);
+		llvm::Value* ret = ir.CreateCall(callee->getFunctionType(), callee, args);
+
+		if (callee->getReturnType() != llvm::Type::getVoidTy(context))
+		{
+			// Store to the value register
+			llvm::Value* typed_value_register = ir.CreateBitCast(ret, ret->getType()->getPointerTo());
+			ir.CreateStore(ret, typed_value_register);
+		}
 
 		break;
 	}
