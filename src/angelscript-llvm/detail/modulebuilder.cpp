@@ -10,6 +10,13 @@
 #include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
 #include <llvm/Support/TargetSelect.h>
 
+// Include order matters apparently (probably an AS bug: as_memory.h seems to be required by as_array.h)
+// clang-format off
+#include <as_memory.h>
+#include <as_callfunc.h>
+#include <as_scriptfunction.h>
+// clang-format on
+
 namespace asllvm::detail
 {
 ModuleBuilder::ModuleBuilder(JitCompiler& compiler, std::string_view angelscript_module_name) :
@@ -94,10 +101,18 @@ void ModuleBuilder::build()
 
 	m_compiler.builder().optimizer().run(*m_module);
 
-	/*for (const auto& it : m_system_functions)
+	for (const auto& it : m_system_functions)
 	{
-		ExitOnError(m_compiler.jit().defineAbsolute(it.second->getName(), ));
-	}*/
+		auto& script_func = static_cast<asCScriptFunction&>(*m_compiler.engine().GetFunctionById(it.first));
+
+		const auto& func_name = it.second->getName();
+
+		llvm::JITTargetAddress address = {};
+		std::memcpy(&address, &script_func.sysFuncIntf->func, sizeof(asFUNCTION_t));
+		llvm::JITEvaluatedSymbol symbol(address, llvm::JITSymbolFlags::Callable);
+
+		ExitOnError(m_compiler.jit().defineAbsolute(it.second->getName(), symbol));
+	}
 
 	ExitOnError(m_compiler.jit().addIRModule(
 		llvm::orc::ThreadSafeModule(std::move(m_module), m_compiler.builder().extract_old_context())));
