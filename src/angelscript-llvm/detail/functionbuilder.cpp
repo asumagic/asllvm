@@ -57,9 +57,9 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 			llvm::LLVMContext& context = m_compiler.builder().context();
 
 			m_locals = ir.CreateAlloca(
-				llvm::ArrayType::get(llvm::IntegerType::getInt32Ty(context), m_locals_size), 0, "locals");
-			m_stack = ir.CreateAlloca(
-				llvm::ArrayType::get(llvm::IntegerType::getInt32Ty(context), m_stack_size), 0, "stack");
+				llvm::ArrayType::get(llvm::IntegerType::getInt32Ty(context), m_locals_size + m_max_extra_stack_size),
+				0,
+				"locals");
 			m_value = ir.CreateAlloca(llvm::IntegerType::getInt64Ty(context), 0, "valuereg");
 		}
 
@@ -362,18 +362,6 @@ llvm::Value* FunctionBuilder::get_stack_value_pointer(FunctionBuilder::StackVari
 {
 	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
 	llvm::LLVMContext& context = m_compiler.builder().context();
-
-	// Get a pointer to that value on the 'stack'
-	if (i >= m_stack_size + m_locals_offset)
-	{
-		const std::size_t stack_offset = i - m_stack_size - m_locals_offset;
-
-		std::array<llvm::Value*, 2> indices{
-			{llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(context), 0),
-			 llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(context), stack_offset)}};
-
-		return ir.CreateGEP(m_stack, indices);
-	}
 
 	// Get a pointer to that argument
 	if (i < m_locals_offset)

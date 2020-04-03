@@ -65,10 +65,9 @@ class FunctionBuilder
 	llvm::BasicBlock* m_entry_block;
 	bool              m_return_emitted = false;
 
-	long m_locals_offset = 0, m_locals_size = 0, m_stack_size = 0;
+	long m_locals_offset = 0, m_locals_size = 0, m_max_extra_stack_size = 0;
 
 	llvm::AllocaInst* m_locals;
-	llvm::AllocaInst* m_stack;
 	llvm::AllocaInst* m_value;
 
 	//! \brief Pointer to the RET instruction.
