@@ -8,6 +8,13 @@
 #include <array>
 #include <fmt/core.h>
 
+// Include order matters apparently (probably an AS bug: as_memory.h seems to be required by as_array.h)
+// clang-format off
+#include <as_memory.h>
+#include <as_callfunc.h>
+#include <as_scriptfunction.h>
+// clang-format on
+
 namespace asllvm::detail
 {
 FunctionBuilder::FunctionBuilder(
@@ -221,7 +228,7 @@ void FunctionBuilder::preprocess_instruction(asDWORD* bytecode)
 
 void FunctionBuilder::read_instruction(asDWORD* bytecode)
 {
-	asIScriptEngine&   engine  = *m_script_function.GetEngine();
+	asIScriptEngine&   engine  = m_compiler.engine();
 	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
 	llvm::LLVMContext& context = m_compiler.builder().context();
 
@@ -340,9 +347,11 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 	{
 		// TODO: sign extend should not be done on unsigned types
 
-		ir.CreateSExt(
-			load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt8Ty(context)),
-			llvm::IntegerType::getInt32Ty(context));
+		store_stack_value(
+			asBC_SWORDARG0(bytecode),
+			ir.CreateSExt(
+				load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt8Ty(context)),
+				llvm::IntegerType::getInt32Ty(context)));
 
 		break;
 	}
@@ -351,27 +360,33 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 	{
 		// TODO: sign extend should not be done on unsigned types
 
-		ir.CreateSExt(
-			load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt16Ty(context)),
-			llvm::IntegerType::getInt32Ty(context));
+		store_stack_value(
+			asBC_SWORDARG0(bytecode),
+			ir.CreateSExt(
+				load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt16Ty(context)),
+				llvm::IntegerType::getInt32Ty(context)));
 
 		break;
 	}
 
 	case asBC_iTOb:
 	{
-		ir.CreateTrunc(
-			load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt32Ty(context)),
-			llvm::IntegerType::getInt8Ty(context));
+		store_stack_value(
+			asBC_SWORDARG0(bytecode),
+			ir.CreateTrunc(
+				load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt32Ty(context)),
+				llvm::IntegerType::getInt8Ty(context)));
 
 		break;
 	}
 
 	case asBC_iTOw:
 	{
-		ir.CreateTrunc(
-			load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt32Ty(context)),
-			llvm::IntegerType::getInt16Ty(context));
+		store_stack_value(
+			asBC_SWORDARG0(bytecode),
+			ir.CreateTrunc(
+				load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt32Ty(context)),
+				llvm::IntegerType::getInt16Ty(context)));
 
 		break;
 	}
@@ -380,17 +395,21 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 	{
 		// TODO: sign extend should not be done on unsigned types
 
-		ir.CreateSExt(
-			load_stack_value(asBC_SWORDARG0(bytecode), llvm::Type::getInt32Ty(context)),
-			llvm::Type::getInt64Ty(context));
+		store_stack_value(
+			asBC_SWORDARG0(bytecode),
+			ir.CreateSExt(
+				load_stack_value(asBC_SWORDARG1(bytecode), llvm::Type::getInt32Ty(context)),
+				llvm::Type::getInt64Ty(context)));
 		break;
 	}
 
 	case asBC_i64TOi:
 	{
-		ir.CreateTrunc(
-			load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt64Ty(context)),
-			llvm::IntegerType::getInt32Ty(context));
+		store_stack_value(
+			asBC_SWORDARG0(bytecode),
+			ir.CreateTrunc(
+				load_stack_value(asBC_SWORDARG1(bytecode), llvm::IntegerType::getInt64Ty(context)),
+				llvm::IntegerType::getInt32Ty(context)));
 
 		break;
 	}
@@ -482,6 +501,10 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 			// Store to the value register
 			llvm::Value* typed_value_register = ir.CreateBitCast(m_value, ret->getType()->getPointerTo());
 			ir.CreateStore(ret, typed_value_register);
+		}
+
+		{
+			m_stack_pointer += static_cast<asCScriptFunction&>(*function).GetSpaceNeededForArguments();
 		}
 
 		break;
