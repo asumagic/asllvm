@@ -11,6 +11,7 @@
 
 #include <llvm/IR/PassManager.h>
 
+#include <map>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -24,7 +25,8 @@ class ModuleBuilder
 	ModuleBuilder(JitCompiler& compiler, std::string_view angelscript_module_name);
 
 	void            add_jit_function(std::string name, asJITFunction* function);
-	FunctionBuilder create_function(asIScriptFunction& function, asJITFunction& jit_function_output);
+	FunctionBuilder create_function_builder(asIScriptFunction& function, asJITFunction& jit_function_output);
+	llvm::Function* create_function(asIScriptFunction& function);
 	void            build();
 
 	llvm::Module& module() { return *m_module; }
@@ -35,6 +37,7 @@ class ModuleBuilder
 	JitCompiler&                                        m_compiler;
 	std::unique_ptr<llvm::Module>                       m_module;
 	std::vector<std::pair<std::string, asJITFunction*>> m_jit_functions;
+	std::map<int, llvm::Function*>                      m_script_functions;
 };
 
 } // namespace asllvm::detail

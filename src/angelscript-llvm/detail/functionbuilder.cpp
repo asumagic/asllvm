@@ -451,16 +451,12 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 	{
 		asIScriptFunction* function = engine.GetFunctionById(asBC_INTARG(bytecode));
 
-		llvm::Type* return_type = m_compiler.builder().script_type_to_llvm_type(function->GetReturnTypeId());
-		std::array<llvm::Type*, 1> types{{llvm::Type::getInt32PtrTy(context)}};
-
 		llvm::Value* new_frame_pointer = get_stack_value_pointer(m_stack_pointer, llvm::Type::getInt32Ty(context));
 		std::array<llvm::Value*, 1> args{{new_frame_pointer}};
 
-		llvm::FunctionType* callee_type = llvm::FunctionType::get(return_type, types, false);
-		llvm::Function*     callee      = llvm::Function::Create(callee_type, llvm::Function::InternalLinkage, 0, "");
+		llvm::Function* callee = m_module_builder.create_function(*function);
 
-		ir.CreateCall(callee_type, callee, args);
+		ir.CreateCall(callee->getFunctionType(), callee, args);
 
 		break;
 	}

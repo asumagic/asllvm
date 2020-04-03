@@ -107,7 +107,7 @@ JitCompiler::compile(asIScriptEngine& engine, asIScriptFunction& function, asJIT
 
 	detail::ModuleBuilder& module_builder = m_module_map[function.GetModuleName()];
 
-	detail::FunctionBuilder function_builder = module_builder.create_function(function, output);
+	detail::FunctionBuilder function_builder = module_builder.create_function_builder(function, output);
 
 	function_builder.read_bytecode(bytecode, length);
 	function_builder.create_wrapper_function();

@@ -22,8 +22,18 @@ void ModuleBuilder::add_jit_function(std::string name, asJITFunction* function)
 	m_jit_functions.emplace_back(std::move(name), function);
 }
 
-FunctionBuilder ModuleBuilder::create_function(asIScriptFunction& function, asJITFunction& jit_function_output)
+FunctionBuilder ModuleBuilder::create_function_builder(asIScriptFunction& function, asJITFunction& jit_function_output)
 {
+	return {m_compiler, *this, function, create_function(function)};
+}
+
+llvm::Function* ModuleBuilder::create_function(asIScriptFunction& function)
+{
+	if (auto it = m_script_functions.find(function.GetId()); it != m_script_functions.end())
+	{
+		return it->second;
+	}
+
 	std::array<llvm::Type*, 1> types{llvm::PointerType::getInt32PtrTy(m_compiler.builder().context())};
 	llvm::Type*                return_type = m_compiler.builder().script_type_to_llvm_type(function.GetReturnTypeId());
 
@@ -39,7 +49,9 @@ FunctionBuilder ModuleBuilder::create_function(asIScriptFunction& function, asJI
 	// TODO: fix this, but how to CreateCall with this convention?! in functionbuilder.cpp
 	// llvm_function->setCallingConv(llvm::CallingConv::Fast);
 
-	return {m_compiler, *this, function, llvm_function};
+	m_script_functions.emplace(function.GetId(), llvm_function);
+
+	return llvm_function;
 }
 
 void ModuleBuilder::build()
