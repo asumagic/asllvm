@@ -111,13 +111,6 @@ llvm::Function* FunctionBuilder::create_wrapper_function()
 	llvm::Argument* arg = &*(wrapper_function->arg_begin() + 1);
 	arg->setName("jitarg");
 
-	llvm::Value* pp = [&] {
-		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0),
-											llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0)};
-
-		return ir.CreateGEP(registers, indices, "programPointer");
-	}();
-
 	llvm::Value* fp = [&] {
 		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0),
 											llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 1)};
@@ -126,21 +119,28 @@ llvm::Function* FunctionBuilder::create_wrapper_function()
 		return ir.CreateLoad(llvm::Type::getInt32Ty(context)->getPointerTo(), pointer, "stackFramePointer");
 	}();
 
-	llvm::Value* value_register = [&] {
-		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0),
-											llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 3)};
-
-		return ir.CreateGEP(registers, indices, "valueRegister");
-	}();
-
 	std::array<llvm::Value*, 1> args{{fp}};
 
 	llvm::Value* ret = ir.CreateCall(m_llvm_function, args);
 
 	if (m_llvm_function->getReturnType() != llvm::Type::getVoidTy(context))
 	{
+		llvm::Value* value_register = [&] {
+			std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0),
+												llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 3)};
+
+			return ir.CreateGEP(registers, indices, "valueRegister");
+		}();
+
 		ir.CreateStore(ret, ir.CreateBitCast(value_register, ret->getType()->getPointerTo()));
 	}
+
+	llvm::Value* pp = [&] {
+		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0),
+											llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0)};
+
+		return ir.CreateGEP(registers, indices, "programPointer");
+	}();
 
 	// Set the program pointer to the RET instruction
 	auto* ret_ptr_value = ir.CreateIntToPtr(
