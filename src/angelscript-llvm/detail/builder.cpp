@@ -25,7 +25,10 @@ llvm::Type* Builder::script_type_to_llvm_type(int type_id) const
 	case asTYPEID_INT16: return llvm::Type::getInt16Ty(*m_context);
 	case asTYPEID_INT32: return llvm::Type::getInt32Ty(*m_context);
 	case asTYPEID_INT64: return llvm::Type::getInt64Ty(*m_context);
-	default: throw std::runtime_error{"type not implemented"};
+	default:
+	{
+		throw std::runtime_error{"type not implemented"};
+	}
 	}
 }
 

@@ -41,6 +41,8 @@ class FunctionBuilder
 	void preprocess_instruction(asDWORD* bytecode);
 	void read_instruction(asDWORD* bytecode);
 
+	void emit_system_call(asIScriptFunction& function);
+
 	//! \brief Load a LLVM value of type \p type from a stack variable of identifier \p! i.
 	llvm::Value* load_stack_value(StackVariableIdentifier i, llvm::Type* type);
 
@@ -62,7 +64,7 @@ class FunctionBuilder
 	llvm::BasicBlock* m_entry_block;
 	bool              m_return_emitted = false;
 
-	long m_locals_offset = 0, m_locals_size = 0, m_max_extra_stack_size = 0;
+	long m_locals_offset = 0, m_locals_size = 0, m_max_extra_stack_size = 0, m_stack_pointer = 0;
 
 	llvm::AllocaInst* m_locals;
 	llvm::AllocaInst* m_value;

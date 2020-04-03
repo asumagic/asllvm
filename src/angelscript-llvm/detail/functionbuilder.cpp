@@ -61,6 +61,9 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 				0,
 				"locals");
 			m_value = ir.CreateAlloca(llvm::IntegerType::getInt64Ty(context), 0, "valuereg");
+
+			// TODO: this is highly fishy
+			m_stack_pointer = m_locals_size - AS_PTR_SIZE;
 		}
 
 		walk_bytecode([this](auto* bytecode) { return read_instruction(bytecode); });
@@ -126,7 +129,7 @@ llvm::Function* FunctionBuilder::create_wrapper_function()
 
 	std::array<llvm::Value*, 1> args{{fp}};
 
-	auto* ret = ir.CreateCall(m_llvm_function, args, "ret");
+	llvm::Value* ret = ir.CreateCall(m_llvm_function, args);
 
 	if (m_llvm_function->getReturnType() != llvm::Type::getVoidTy(context))
 	{
@@ -158,6 +161,8 @@ void FunctionBuilder::preprocess_instruction(asDWORD* bytecode)
 	case asBC_CpyVtoR4:
 	case asBC_CpyVtoR8:
 	case asBC_RET:
+	case asBC_CALLSYS:
+	case asBC_CALL:
 	{
 		break;
 	}
@@ -167,13 +172,43 @@ void FunctionBuilder::preprocess_instruction(asDWORD* bytecode)
 	case asBC_ADDi64:
 	case asBC_CpyVtoV4:
 	case asBC_CpyVtoV8:
+	case asBC_CpyRtoV4:
+	case asBC_CpyRtoV8:
 	case asBC_sbTOi:
 	case asBC_swTOi:
 	case asBC_iTOb:
 	case asBC_iTOw:
+	case asBC_iTOi64:
+	case asBC_SetV1:
+	case asBC_SetV2:
+	case asBC_SetV4:
 	{
 		auto target   = asBC_SWORDARG0(bytecode);
 		m_locals_size = std::max(m_locals_size, long(target) + 2);
+		break;
+	}
+
+	// These instructions always write a pointer to the stack
+	case asBC_PGA:
+	case asBC_PSF:
+	{
+		m_max_extra_stack_size += AS_PTR_SIZE;
+		break;
+	}
+
+	// These instructions always write a 32-bit value to the stack
+	case asBC_PshV4:
+	case asBC_PshC4:
+	{
+		++m_max_extra_stack_size;
+		break;
+	}
+
+	// These instructions always write a 64-bit value to the stack
+	case asBC_PshV8:
+	case asBC_PshC8:
+	{
+		m_max_extra_stack_size += 2;
 		break;
 	}
 
@@ -281,6 +316,16 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 		break;
 	}
 
+	case asBC_CpyRtoV4:
+	{
+		llvm::Value* value_i32_ptr = ir.CreateBitCast(m_value, llvm::Type::getInt32PtrTy(context));
+		llvm::Value* value_i32     = ir.CreateLoad(llvm::Type::getInt32Ty(context), value_i32_ptr);
+
+		store_stack_value(asBC_SWORDARG0(bytecode), value_i32);
+
+		break;
+	}
+
 	case asBC_sbTOi:
 	{
 		// TODO: sign extend should not be done on unsigned types
@@ -321,6 +366,105 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 		break;
 	}
 
+	case asBC_iTOi64:
+	{
+		// TODO: sign extend should not be done on unsigned types
+
+		ir.CreateSExt(
+			load_stack_value(asBC_SWORDARG0(bytecode), llvm::Type::getInt32Ty(context)),
+			llvm::Type::getInt64Ty(context));
+		break;
+	}
+
+	case asBC_SetV1:
+	case asBC_SetV2:
+	case asBC_SetV4:
+	{
+		store_stack_value(
+			asBC_SWORDARG0(bytecode), llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), asBC_DWORDARG(bytecode)));
+
+		break;
+	}
+
+	case asBC_PGA:
+	{
+		m_stack_pointer += AS_PTR_SIZE;
+		store_stack_value(
+			m_stack_pointer, llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), asBC_PTRARG(bytecode)));
+		break;
+	}
+
+	case asBC_PSF:
+	{
+		m_stack_pointer += AS_PTR_SIZE;
+		store_stack_value(
+			m_stack_pointer, load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt64Ty(context)));
+		break;
+	}
+
+	case asBC_PshV4:
+	{
+		++m_stack_pointer;
+		store_stack_value(
+			m_stack_pointer, load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt32Ty(context)));
+		break;
+	}
+
+	case asBC_PshV8:
+	{
+		m_stack_pointer += 2;
+		store_stack_value(
+			m_stack_pointer, load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt64Ty(context)));
+		break;
+	}
+
+	case asBC_PshC4:
+	{
+		++m_stack_pointer;
+		store_stack_value(
+			m_stack_pointer, llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(context), asBC_DWORDARG(bytecode)));
+		break;
+	}
+
+	case asBC_PshC8:
+	{
+		m_stack_pointer += 2;
+		store_stack_value(
+			m_stack_pointer, llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(context), asBC_QWORDARG(bytecode)));
+		break;
+	}
+
+	case asBC_CALLSYS:
+	{
+		asIScriptFunction* function = engine.GetFunctionById(asBC_INTARG(bytecode));
+
+		if (function == nullptr)
+		{
+			throw std::runtime_error{"function referenced in CALLSYS unexpectedly null"};
+		}
+
+		emit_system_call(*function);
+		break;
+	}
+
+	case asBC_CALL:
+	{
+		asIScriptFunction* function = engine.GetFunctionById(asBC_INTARG(bytecode));
+
+		llvm::Type* return_type = m_compiler.builder().script_type_to_llvm_type(function->GetReturnTypeId());
+		std::array<llvm::Type*, 1> types{{llvm::Type::getInt32PtrTy(context)}};
+
+		llvm::Value* new_frame_pointer = get_stack_value_pointer(m_stack_pointer, llvm::Type::getInt32Ty(context));
+		std::array<llvm::Value*, 1> args{{new_frame_pointer}};
+
+		llvm::FunctionType* callee_type = llvm::FunctionType::get(return_type, types, false);
+		llvm::Function*     callee      = llvm::Function::Create(callee_type, llvm::Function::InternalLinkage, 0, "");
+
+		ir.CreateCall(callee_type, callee, args);
+
+		break;
+	}
+
 	case asBC_RET:
 	{
 		if (!m_return_emitted)
@@ -338,6 +482,35 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 		throw std::runtime_error{fmt::format("could not recognize bytecode instruction '{}'", info.name)};
 	}
 	}
+}
+
+void FunctionBuilder::emit_system_call(asIScriptFunction& function)
+{
+	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
+	llvm::LLVMContext& context = m_compiler.builder().context();
+
+	std::size_t parameter_count = function.GetParamCount();
+
+	llvm::Type*              return_type = m_compiler.builder().script_type_to_llvm_type(function.GetReturnTypeId());
+	std::vector<llvm::Type*> types(parameter_count);
+
+	for (std::size_t i = 0; i < parameter_count; ++i)
+	{
+		int type_id;
+		function.GetParam(i, &type_id);
+		types.push_back(m_compiler.builder().script_type_to_llvm_type(type_id));
+	}
+
+	llvm::FunctionType* llvm_function_type = llvm::FunctionType::get(return_type, types, false);
+
+	llvm::Function* llvm_function = llvm::Function::Create(
+		llvm_function_type,
+		llvm::Function::ExternalLinkage,
+		make_function_name(function.GetName(), function.GetNamespace()));
+
+	llvm::Value* returned = ir.CreateCall(llvm_function_type, llvm_function);
+
+	// todo: store returned m_value
 }
 
 llvm::Value* FunctionBuilder::load_stack_value(StackVariableIdentifier i, llvm::Type* type)

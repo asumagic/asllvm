@@ -20,10 +20,11 @@ int64 add_i64(int64 a, int64 b)
 
 void main()
 {
-	print('' + add_i8(1, 2));
+	/*print('' + add_i8(1, 2));
 	print('' + add_i16(10, 20));
 	print('' + add_i32(100, 200));
-	print('' + add_i64(1000, 2000));
+	print('' + add_i64(1000, 2000));*/
+	add_i8(10, 20);
 }
 
 /*void main()
