@@ -23,10 +23,7 @@ class FunctionBuilder
 	//!		- When <= 0, refers to a function parameter. 0 refers to the 1st parameter, -1 to the 2nd, and so on.
 	//!		- When >1, refers to a local variable or temporary stack slot.
 	//! \note
-	//!		Since a stack slot is 32-bit in AngelScript, 64-bit values take up two slots.
-	//!		We do not really care for local variables, and just emit (at most) one extra stack value that may not get
-	//!		used - the optimizer will likely take care of it and it has no side effects.
-	//!		We, however, _do_ care for arguments, so we have to map this appropriately.
+	//!		Depending on the size of the first parameter, the offset of the first local value might be higher than 1.
 	using StackVariableIdentifier = std::int16_t;
 
 	// TODO: exceptions should make more sense than just a std::runtime_error
