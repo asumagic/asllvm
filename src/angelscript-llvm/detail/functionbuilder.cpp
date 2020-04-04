@@ -371,7 +371,11 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 	case asBC_PSF:
 	{
 		m_stack_pointer -= AS_PTR_SIZE;
-		store_stack_value(m_stack_pointer, load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i64));
+		llvm::Value* fp          = get_stack_value_pointer(0, defs.i64);
+		llvm::Value* integral_fp = ir.CreatePtrToInt(fp, defs.i64);
+		llvm::Value* value
+			= ir.CreateAdd(integral_fp, llvm::ConstantInt::get(defs.i64, asBC_SWORDARG0(instruction.pointer)));
+		store_stack_value(m_stack_pointer, value);
 		break;
 	}
 
@@ -446,6 +450,7 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 		}
 
 		emit_system_call(*function);
+
 		break;
 	}
 
@@ -652,23 +657,57 @@ void FunctionBuilder::emit_integral_compare(llvm::Value* lhs, llvm::Value* rhs)
 
 void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 {
-	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
-	CommonDefinitions& defs = m_compiler.builder().definitions();
+	llvm::IRBuilder<>&          ir   = m_compiler.builder().ir();
+	CommonDefinitions&          defs = m_compiler.builder().definitions();
+	asSSystemFunctionInterface& intf = *function.sysFuncIntf;
 
 	llvm::Function* callee = m_module_builder.get_system_function(function);
 
 	const std::size_t         argument_count = callee->arg_size();
 	std::vector<llvm::Value*> args(callee->arg_size());
 
-	{
-		long current_parameter_offset = m_stack_pointer;
-		for (std::size_t i = 0; i < argument_count; ++i)
+	long current_parameter_offset = m_stack_pointer;
+
+	const auto read_params = [&](std::size_t first_param, std::size_t count) {
+		for (std::size_t i = first_param; i < count - first_param; ++i)
 		{
 			llvm::Argument* llvm_argument = &*(callee->arg_begin() + i);
 			args[i]                       = load_stack_value(current_parameter_offset, llvm_argument->getType());
 
-			current_parameter_offset -= m_compiler.builder().get_script_type_dword_size(function.parameterTypes[i]);
+			current_parameter_offset
+				+= m_compiler.builder().get_script_type_dword_size(function.parameterTypes[i - first_param]);
 		}
+	};
+
+	switch (intf.callConv)
+	{
+	// thiscall: add this as first parameter
+	// HACK: this is probably not very crossplatform to do
+	case ICC_THISCALL:
+	case ICC_CDECL_OBJFIRST:
+	{
+		args.front() = load_stack_value(current_parameter_offset, defs.pvoid);
+		current_parameter_offset += AS_PTR_SIZE;
+		read_params(1, argument_count - 1);
+		break;
+	}
+
+	case ICC_CDECL_OBJLAST:
+	{
+		args.back() = load_stack_value(current_parameter_offset, defs.pvoid);
+		current_parameter_offset += AS_PTR_SIZE;
+		read_params(0, argument_count - 1);
+		break;
+	}
+
+	// C calling convention: nothing special to do
+	case ICC_CDECL:
+	{
+		read_params(0, argument_count - 1);
+		break;
+	}
+
+	default: throw std::runtime_error{"unhandled calling convention"};
 	}
 
 	llvm::Value* result = ir.CreateCall(callee->getFunctionType(), callee, args);
@@ -677,6 +716,8 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 	{
 		store_return_register_value(result);
 	}
+
+	m_stack_pointer = current_parameter_offset;
 }
 
 llvm::Value* FunctionBuilder::load_stack_value(StackVariableIdentifier i, llvm::Type* type)

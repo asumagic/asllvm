@@ -56,6 +56,9 @@ llvm::Function* ModuleBuilder::create_function(asCScriptFunction& function)
 
 llvm::Function* ModuleBuilder::get_system_function(asCScriptFunction& system_function)
 {
+	CommonDefinitions&          defs = m_compiler.builder().definitions();
+	asSSystemFunctionInterface& intf = *system_function.sysFuncIntf;
+
 	const int id = system_function.GetId();
 
 	if (auto it = m_system_functions.find(id); it != m_system_functions.end())
@@ -71,6 +74,29 @@ llvm::Function* ModuleBuilder::get_system_function(asCScriptFunction& system_fun
 	for (std::size_t i = 0; i < param_count; ++i)
 	{
 		types[i] = m_compiler.builder().to_llvm_type(system_function.parameterTypes[i]);
+	}
+
+	switch (intf.callConv)
+	{
+	// thiscall: add this as first parameter
+	// HACK: this is probably not very crossplatform to do
+	case ICC_THISCALL:
+	case ICC_CDECL_OBJFIRST:
+	{
+		types.insert(types.begin(), defs.pvoid);
+		break;
+	}
+
+	case ICC_CDECL_OBJLAST:
+	{
+		types.push_back(defs.pvoid);
+		break;
+	}
+
+	// C calling convention: nothing special to do
+	case ICC_CDECL: break;
+
+	default: throw std::runtime_error{"unhandled calling convention"};
 	}
 
 	llvm::FunctionType* function_type = llvm::FunctionType::get(return_type, types, false);
