@@ -13,9 +13,6 @@ add_library(angelscript-llvm
     src/angelscript-llvm/detail/modulemap.cpp
 )
 
-# TODO: on GNUC, -fno-strict-aliasing should be passed
-#       this is because the asBC_* macros rely on UB.
-
 if(NOT DEFINED ANGELSCRIPT_SDK_DIRECTORY)
     message(
         FATAL_ERROR
@@ -36,6 +33,13 @@ target_link_libraries(angelscript-llvm
     angelscript pthread
     fmt
     LLVM
+)
+
+# TODO: enable only on gcc AND clang
+target_compile_options(angelscript-llvm PUBLIC
+    "-fno-strict-aliasing"
+    "-Wall"
+    "-Wextra"
 )
 
 add_subdirectory(3rd)
