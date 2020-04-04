@@ -38,7 +38,7 @@ int JitCompiler::jit_compile(asIScriptFunction* function, asJITFunction* output)
 
 	try
 	{
-		status = compile(engine, *function, *output);
+		status = compile(engine, static_cast<asCScriptFunction&>(*function), *output);
 	}
 	catch (std::runtime_error& error)
 	{
@@ -94,7 +94,7 @@ void JitCompiler::diagnostic(asIScriptEngine& engine, const std::string& text, a
 void JitCompiler::build_modules() { m_module_map.build_modules(); }
 
 JitCompiler::CompileStatus
-JitCompiler::compile(asIScriptEngine& engine, asIScriptFunction& function, asJITFunction& output)
+JitCompiler::compile(asIScriptEngine& engine, asCScriptFunction& function, asJITFunction& output)
 {
 	m_debug_state.compiling_function = &function;
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <angelscript-llvm/detail/asinternalheaders.hpp>
 #include <angelscript-llvm/detail/fwd.hpp>
 #include <angelscript.h>
 #include <llvm/IR/IRBuilder.h>
@@ -25,9 +26,9 @@ class Builder
 	llvm::IRBuilder<>& ir() { return m_ir_builder; }
 	CommonDefinitions& definitions() { return m_common_definitions; }
 
-	llvm::Type* script_type_to_llvm_type(int type_id) const;
-	bool        is_script_type_64(int type_id) const;
-	std::size_t get_script_type_dword_size(int type_id) const;
+	llvm::Type* to_llvm_type(asCDataType& type) const;
+	bool        is_script_type_64(asCDataType& type) const;
+	std::size_t get_script_type_dword_size(asCDataType& type) const;
 
 	llvm::legacy::PassManager&         optimizer();
 	llvm::LLVMContext&                 context();

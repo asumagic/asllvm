@@ -19,47 +19,41 @@ Builder::Builder(JitCompiler& compiler) :
 	m_common_definitions{setup_common_definitions()}
 {}
 
-llvm::Type* Builder::script_type_to_llvm_type(int type_id) const
+llvm::Type* Builder::to_llvm_type(asCDataType& type) const
 {
-	switch (type_id)
+	if (type.IsPrimitive())
 	{
-	case asTYPEID_VOID: return llvm::Type::getVoidTy(*m_context);
-	case asTYPEID_BOOL: return llvm::Type::getInt1Ty(*m_context);
-	case asTYPEID_INT8: return llvm::Type::getInt8Ty(*m_context);
-	case asTYPEID_INT16: return llvm::Type::getInt16Ty(*m_context);
-	case asTYPEID_INT32: return llvm::Type::getInt32Ty(*m_context);
-	case asTYPEID_INT64: return llvm::Type::getInt64Ty(*m_context);
-	default:
+		switch (type.GetTokenType())
+		{
+		case ttVoid: return llvm::Type::getVoidTy(*m_context);
+		case ttBool: return llvm::Type::getInt1Ty(*m_context);
+		case ttInt8: return llvm::Type::getInt8Ty(*m_context);
+		case ttInt16: return llvm::Type::getInt16Ty(*m_context);
+		case ttInt: return llvm::Type::getInt32Ty(*m_context);
+		case ttInt64: return llvm::Type::getInt64Ty(*m_context);
+		default: throw std::runtime_error{"primitive type not recognized"};
+		}
+	}
+
+	if (type.IsReference())
 	{
-		throw std::runtime_error{"type not implemented"};
+		return llvm::Type::getInt8PtrTy(*m_context);
 	}
-	}
+
+	throw std::runtime_error{"type not supported"};
 }
 
-bool Builder::is_script_type_64(int type_id) const
+bool Builder::is_script_type_64(asCDataType& type) const
 {
-	switch (type_id)
+	if (type.GetSizeOnStackDWords() > 2)
 	{
-	case asTYPEID_INT64:
-	case asTYPEID_DOUBLE:
-	{
-		return true;
+		throw std::runtime_error{"type is >64-bit, why the hell did you call is_script_type_64 with this"};
 	}
 
-	case asTYPEID_VOID:
-	case asTYPEID_BOOL:
-	case asTYPEID_INT8:
-	case asTYPEID_INT16:
-	case asTYPEID_INT32:
-	{
-		return false;
-	}
-
-	default: throw std::runtime_error{"type not implemented"};
-	}
+	return type.GetSizeOnStackDWords() == 2;
 }
 
-std::size_t Builder::get_script_type_dword_size(int type_id) const { return is_script_type_64(type_id) ? 2 : 1; }
+std::size_t Builder::get_script_type_dword_size(asCDataType& type) const { return is_script_type_64(type) ? 2 : 1; }
 
 llvm::legacy::PassManager& Builder::optimizer() { return m_pass_manager; }
 

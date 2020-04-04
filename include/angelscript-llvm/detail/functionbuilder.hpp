@@ -1,5 +1,6 @@
 #pragma once
 
+#include <angelscript-llvm/detail/asinternalheaders.hpp>
 #include <angelscript-llvm/detail/fwd.hpp>
 #include <angelscript.h>
 #include <llvm/IR/BasicBlock.h>
@@ -22,7 +23,7 @@ class FunctionBuilder
 	FunctionBuilder(
 		JitCompiler&       compiler,
 		ModuleBuilder&     module_builder,
-		asIScriptFunction& script_function,
+		asCScriptFunction& script_function,
 		llvm::Function*    llvm_function);
 
 	//! \brief Type used by AngelScript for local variable identifiers.
@@ -54,7 +55,7 @@ class FunctionBuilder
 	void emit_stack_arithmetic(InstructionContext instruction, llvm::Instruction::BinaryOps op, llvm::Type* type);
 	void emit_stack_arithmetic_imm(InstructionContext instruction, llvm::Instruction::BinaryOps op, llvm::Type* type);
 	void emit_integral_compare(llvm::Value* lhs, llvm::Value* rhs);
-	void emit_system_call(asIScriptFunction& function);
+	void emit_system_call(asCScriptFunction& function);
 
 	//! \brief Load a LLVM value of type \p type from a stack variable of identifier \p! i.
 	llvm::Value* load_stack_value(StackVariableIdentifier i, llvm::Type* type);
@@ -84,7 +85,7 @@ class FunctionBuilder
 	JitCompiler&   m_compiler;
 	ModuleBuilder& m_module_builder;
 
-	asIScriptFunction& m_script_function;
+	asCScriptFunction& m_script_function;
 
 	llvm::Function*   m_llvm_function;
 	llvm::BasicBlock* m_entry_block;

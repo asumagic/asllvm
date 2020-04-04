@@ -44,6 +44,7 @@ void main()
 	print(add_i64(1000, 2000));
 	print(fib(10));
 	foo();
+	print("hello");
 }
 
 /*void main()

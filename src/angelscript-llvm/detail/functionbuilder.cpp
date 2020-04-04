@@ -13,7 +13,7 @@ namespace asllvm::detail
 FunctionBuilder::FunctionBuilder(
 	JitCompiler&       compiler,
 	ModuleBuilder&     module_builder,
-	asIScriptFunction& script_function,
+	asCScriptFunction& script_function,
 	llvm::Function*    llvm_function) :
 	m_compiler{compiler},
 	m_module_builder{module_builder},
@@ -28,9 +28,7 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 {
 	if (m_script_function.GetParamCount() != 0)
 	{
-		int type_id;
-		m_script_function.GetParam(0, &type_id);
-		m_locals_offset = m_compiler.builder().get_script_type_dword_size(type_id);
+		m_locals_offset = m_compiler.builder().get_script_type_dword_size(m_script_function.parameterTypes[0]);
 	}
 
 	const auto walk_bytecode = [&](auto&& func) {
@@ -439,7 +437,8 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 
 	case asBC_CALLSYS:
 	{
-		asIScriptFunction* function = engine.GetFunctionById(asBC_INTARG(instruction.pointer));
+		asCScriptFunction* function
+			= static_cast<asCScriptFunction*>(engine.GetFunctionById(asBC_INTARG(instruction.pointer)));
 
 		if (function == nullptr)
 		{
@@ -452,12 +451,12 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 
 	case asBC_CALL:
 	{
-		asIScriptFunction* function = engine.GetFunctionById(asBC_INTARG(instruction.pointer));
+		auto& function = static_cast<asCScriptFunction&>(*engine.GetFunctionById(asBC_INTARG(instruction.pointer)));
 
 		llvm::Value*                new_frame_pointer = get_stack_value_pointer(m_stack_pointer, defs.i32);
 		std::array<llvm::Value*, 1> args{{new_frame_pointer}};
 
-		llvm::Function* callee = m_module_builder.create_function(*function);
+		llvm::Function* callee = m_module_builder.create_function(function);
 
 		llvm::Value* ret = ir.CreateCall(callee->getFunctionType(), callee, args);
 
@@ -468,7 +467,7 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 			ir.CreateStore(ret, typed_value_register);
 		}
 
-		m_stack_pointer += static_cast<asCScriptFunction&>(*function).GetSpaceNeededForArguments();
+		m_stack_pointer += function.GetSpaceNeededForArguments();
 
 		break;
 	}
@@ -651,7 +650,7 @@ void FunctionBuilder::emit_integral_compare(llvm::Value* lhs, llvm::Value* rhs)
 	store_return_register_value(cmp);
 }
 
-void FunctionBuilder::emit_system_call(asIScriptFunction& function)
+void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 {
 	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
 	CommonDefinitions& defs = m_compiler.builder().definitions();
@@ -665,18 +664,10 @@ void FunctionBuilder::emit_system_call(asIScriptFunction& function)
 		long current_parameter_offset = m_stack_pointer;
 		for (std::size_t i = 0; i < argument_count; ++i)
 		{
-			int type_id = 0;
-			if (function.GetParam(i, &type_id) < 0)
-			{
-				throw std::runtime_error{
-					"something went wrong during registering of system function: nth parameter does not appear to "
-					"exist in the script function"};
-			}
-
 			llvm::Argument* llvm_argument = &*(callee->arg_begin() + i);
 			args[i]                       = load_stack_value(current_parameter_offset, llvm_argument->getType());
 
-			current_parameter_offset -= m_compiler.builder().get_script_type_dword_size(type_id);
+			current_parameter_offset -= m_compiler.builder().get_script_type_dword_size(function.parameterTypes[i]);
 		}
 	}
 

@@ -5,4 +5,5 @@
 #include <as_memory.h>
 #include <as_callfunc.h>
 #include <as_scriptfunction.h>
+#include <as_typeinfo.h>
 // clang-format on

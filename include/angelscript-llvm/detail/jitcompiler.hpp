@@ -49,7 +49,7 @@ class JitCompiler
 		ICE
 	};
 
-	CompileStatus compile(asIScriptEngine& engine, asIScriptFunction& function, asJITFunction& output);
+	CompileStatus compile(asIScriptEngine& engine, asCScriptFunction& function, asJITFunction& output);
 
 	static void late_jit_compile(asSVMRegisters* registers, asPWORD jit_arg);
 	static void invalid_late_jit_compile(asSVMRegisters* registers, asPWORD jit_arg);

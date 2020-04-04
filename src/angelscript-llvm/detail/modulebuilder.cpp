@@ -1,6 +1,5 @@
 #include <angelscript-llvm/detail/modulebuilder.hpp>
 
-#include <angelscript-llvm/detail/asinternalheaders.hpp>
 #include <angelscript-llvm/detail/functionbuilder.hpp>
 #include <angelscript-llvm/detail/jitcompiler.hpp>
 #include <angelscript-llvm/detail/llvmglobals.hpp>
@@ -23,12 +22,12 @@ void ModuleBuilder::add_jit_function(std::string name, asJITFunction* function)
 	m_jit_functions.emplace_back(std::move(name), function);
 }
 
-FunctionBuilder ModuleBuilder::create_function_builder(asIScriptFunction& function)
+FunctionBuilder ModuleBuilder::create_function_builder(asCScriptFunction& function)
 {
 	return {m_compiler, *this, function, create_function(function)};
 }
 
-llvm::Function* ModuleBuilder::create_function(asIScriptFunction& function)
+llvm::Function* ModuleBuilder::create_function(asCScriptFunction& function)
 {
 	if (auto it = m_script_functions.find(function.GetId()); it != m_script_functions.end())
 	{
@@ -36,7 +35,7 @@ llvm::Function* ModuleBuilder::create_function(asIScriptFunction& function)
 	}
 
 	std::array<llvm::Type*, 1> types{llvm::PointerType::getInt32PtrTy(m_compiler.builder().context())};
-	llvm::Type*                return_type = m_compiler.builder().script_type_to_llvm_type(function.GetReturnTypeId());
+	llvm::Type*                return_type = m_compiler.builder().to_llvm_type(function.returnType);
 
 	llvm::FunctionType* function_type = llvm::FunctionType::get(return_type, types, false);
 
@@ -55,7 +54,7 @@ llvm::Function* ModuleBuilder::create_function(asIScriptFunction& function)
 	return llvm_function;
 }
 
-llvm::Function* ModuleBuilder::get_system_function(asIScriptFunction& system_function)
+llvm::Function* ModuleBuilder::get_system_function(asCScriptFunction& system_function)
 {
 	const int id = system_function.GetId();
 
@@ -64,16 +63,14 @@ llvm::Function* ModuleBuilder::get_system_function(asIScriptFunction& system_fun
 		return it->second;
 	}
 
-	llvm::Type* return_type = m_compiler.builder().script_type_to_llvm_type(system_function.GetReturnTypeId());
+	llvm::Type* return_type = m_compiler.builder().to_llvm_type(system_function.returnType);
 
 	const std::size_t        param_count = system_function.GetParamCount();
 	std::vector<llvm::Type*> types(param_count);
 
 	for (std::size_t i = 0; i < param_count; ++i)
 	{
-		int type_id;
-		system_function.GetParam(i, &type_id);
-		types[i] = m_compiler.builder().script_type_to_llvm_type(type_id);
+		types[i] = m_compiler.builder().to_llvm_type(system_function.parameterTypes[i]);
 	}
 
 	llvm::FunctionType* function_type = llvm::FunctionType::get(return_type, types, false);
