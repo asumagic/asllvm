@@ -63,7 +63,8 @@ int JitCompiler::jit_compile(asIScriptFunction* function, asJITFunction* output)
 
 	diagnostic(
 		engine,
-		"Function was not JITted. This may cause problems when other function reference this one.\n",
+		"Function was not JITted. This will likely cause issues if any successfully JIT'd function references this "
+		"one.\n",
 		asMSGTYPE_WARNING);
 
 	m_debug_state = {};
