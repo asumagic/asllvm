@@ -660,7 +660,8 @@ void FunctionBuilder::emit_integral_compare(llvm::Value* lhs, llvm::Value* rhs)
 
 void FunctionBuilder::emit_system_call(asIScriptFunction& function)
 {
-	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
+	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
+	CommonDefinitions& defs = m_compiler.builder().definitions();
 
 	llvm::Function* callee = m_module_builder.get_system_function(function);
 
@@ -686,9 +687,12 @@ void FunctionBuilder::emit_system_call(asIScriptFunction& function)
 		}
 	}
 
-	llvm::Value* returned = ir.CreateCall(callee->getFunctionType(), callee, args);
+	llvm::Value* result = ir.CreateCall(callee->getFunctionType(), callee, args);
 
-	// todo: store returned m_value
+	if (callee->getReturnType() != defs.tvoid)
+	{
+		store_return_register_value(result);
+	}
 }
 
 llvm::Value* FunctionBuilder::load_stack_value(StackVariableIdentifier i, llvm::Type* type)
