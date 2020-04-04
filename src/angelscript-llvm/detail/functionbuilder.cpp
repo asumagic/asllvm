@@ -524,7 +524,7 @@ void FunctionBuilder::emit_stack_integer_sign_extend(
 	auto stack_offset = (source == defs.i64 || destination == defs.i64) ? asBC_SWORDARG1(instruction.pointer)
 																		: asBC_SWORDARG0(instruction.pointer);
 
-	llvm::Value* original  = load_stack_value(asBC_SWORDARG0(instruction.pointer), source);
+	llvm::Value* original  = load_stack_value(stack_offset, source);
 	llvm::Value* truncated = ir.CreateSExt(original, destination);
 
 	store_stack_value(asBC_SWORDARG0(instruction.pointer), truncated);
@@ -539,7 +539,7 @@ void FunctionBuilder::emit_stack_integer_zero_extend(
 	auto stack_offset = (source == defs.i64 || destination == defs.i64) ? asBC_SWORDARG1(instruction.pointer)
 																		: asBC_SWORDARG0(instruction.pointer);
 
-	llvm::Value* original  = load_stack_value(asBC_SWORDARG0(instruction.pointer), source);
+	llvm::Value* original  = load_stack_value(stack_offset, source);
 	llvm::Value* truncated = ir.CreateZExt(original, destination);
 
 	store_stack_value(asBC_SWORDARG0(instruction.pointer), truncated);
