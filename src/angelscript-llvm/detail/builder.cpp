@@ -75,27 +75,36 @@ std::unique_ptr<llvm::LLVMContext> Builder::extract_old_context()
 
 CommonDefinitions Builder::setup_common_definitions()
 {
-	CommonDefinitions definitions;
+	CommonDefinitions defs;
 
-	auto* boolt = llvm::Type::getInt1Ty(*m_context);
-	auto* voidp = llvm::Type::getInt8Ty(*m_context)->getPointerTo();
-	auto* dword = llvm::Type::getInt32Ty(*m_context);
-	auto* qword = llvm::Type::getInt64Ty(*m_context);
+	defs.i1  = llvm::Type::getInt1Ty(*m_context);
+	defs.i8  = llvm::Type::getInt8Ty(*m_context);
+	defs.i16 = llvm::Type::getInt16Ty(*m_context);
+	defs.i32 = llvm::Type::getInt32Ty(*m_context);
+	defs.i64 = llvm::Type::getInt64Ty(*m_context);
 
-	std::array<llvm::Type*, 8> types{{
-		dword->getPointerTo(), // programPointer
-		dword->getPointerTo(), // stackFramePointer
-		dword->getPointerTo(), // stackPointer
-		qword,                 // valueRegister
-		voidp,                 // objectRegister
-		voidp,                 // objectType - todo asITypeInfo
-		boolt,                 // doProcessSuspend
-		voidp,                 // ctx - todo asIScriptContext
-	}};
+	defs.pvoid = llvm::Type::getInt8PtrTy(*m_context);
+	defs.pi8   = llvm::Type::getInt8PtrTy(*m_context);
+	defs.pi16  = llvm::Type::getInt16PtrTy(*m_context);
+	defs.pi32  = llvm::Type::getInt32PtrTy(*m_context);
+	defs.pi64  = llvm::Type::getInt64PtrTy(*m_context);
 
-	definitions.vm_registers = llvm::StructType::create(types, "asSVMRegisters");
+	{
+		std::array<llvm::Type*, 8> types{{
+			defs.pi32,  // programPointer
+			defs.pi32,  // stackFramePointer
+			defs.pi32,  // stackPointer
+			defs.i64,   // valueRegister
+			defs.pvoid, // objectRegister
+			defs.pvoid, // objectType - todo asITypeInfo
+			defs.i1,    // doProcessSuspend
+			defs.pvoid, // ctx - todo asIScriptContext
+		}};
 
-	return definitions;
+		defs.vm_registers = llvm::StructType::create(types, "asSVMRegisters");
+	}
+
+	return defs;
 }
 
 std::unique_ptr<llvm::LLVMContext> Builder::setup_context() { return std::make_unique<llvm::LLVMContext>(); }
