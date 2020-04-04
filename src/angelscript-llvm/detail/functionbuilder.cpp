@@ -501,10 +501,60 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 		break;
 	}
 
+	case asBC_JZ:
+	{
+		llvm::Value* condition = ir.CreateICmp(
+			llvm::CmpInst::ICMP_EQ, load_return_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
+
+		ir.CreateCondBr(condition, get_branch_target(instruction), get_conditional_fail_branch_target(instruction));
+
+		break;
+	}
+
+	case asBC_JNZ:
+	{
+		llvm::Value* condition = ir.CreateICmp(
+			llvm::CmpInst::ICMP_NE, load_return_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
+
+		ir.CreateCondBr(condition, get_branch_target(instruction), get_conditional_fail_branch_target(instruction));
+
+		break;
+	}
+
+	case asBC_JS:
+	{
+		llvm::Value* condition = ir.CreateICmp(
+			llvm::CmpInst::ICMP_SLT, load_return_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
+
+		ir.CreateCondBr(condition, get_branch_target(instruction), get_conditional_fail_branch_target(instruction));
+
+		break;
+	}
+
 	case asBC_JNS:
 	{
 		llvm::Value* condition = ir.CreateICmp(
 			llvm::CmpInst::ICMP_SGE, load_return_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
+
+		ir.CreateCondBr(condition, get_branch_target(instruction), get_conditional_fail_branch_target(instruction));
+
+		break;
+	}
+
+	case asBC_JP:
+	{
+		llvm::Value* condition = ir.CreateICmp(
+			llvm::CmpInst::ICMP_SGT, load_return_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
+
+		ir.CreateCondBr(condition, get_branch_target(instruction), get_conditional_fail_branch_target(instruction));
+
+		break;
+	}
+
+	case asBC_JNP:
+	{
+		llvm::Value* condition = ir.CreateICmp(
+			llvm::CmpInst::ICMP_SLE, load_return_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
 
 		ir.CreateCondBr(condition, get_branch_target(instruction), get_conditional_fail_branch_target(instruction));
 
