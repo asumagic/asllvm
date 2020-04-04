@@ -52,6 +52,7 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 			InstructionContext context;
 			context.pointer = bytecode_current;
 			context.info    = &info;
+			context.offset  = std::distance(bytecode, bytecode_current);
 
 			func(context);
 
@@ -152,11 +153,12 @@ llvm::Function* FunctionBuilder::create_wrapper_function()
 	return wrapper_function;
 }
 
-void FunctionBuilder::preprocess_instruction(InstructionContext bytecode)
+void FunctionBuilder::preprocess_instruction(InstructionContext instruction)
 {
-	asIScriptEngine& engine = *m_script_function.GetEngine();
+	asIScriptEngine&   engine  = *m_script_function.GetEngine();
+	llvm::LLVMContext& context = m_compiler.builder().context();
 
-	switch (bytecode.info->bc)
+	switch (instruction.info->bc)
 	{
 	// These instructions do not write to the stack
 	case asBC_JitEntry:
@@ -175,6 +177,7 @@ void FunctionBuilder::preprocess_instruction(InstructionContext bytecode)
 	// These instructions write to the stack, always at the first sword
 	case asBC_ADDi:
 	case asBC_ADDi64:
+	case asBC_SUBIi:
 	case asBC_CpyVtoV4:
 	case asBC_CpyVtoV8:
 	case asBC_CpyRtoV4:
@@ -192,7 +195,7 @@ void FunctionBuilder::preprocess_instruction(InstructionContext bytecode)
 	case asBC_SetV2:
 	case asBC_SetV4:
 	{
-		auto target   = asBC_SWORDARG0(bytecode.pointer);
+		auto target   = asBC_SWORDARG0(instruction.pointer);
 		m_locals_size = std::max(m_locals_size, long(target) + 2); // TODO: pretty dodgy
 		break;
 	}
@@ -221,9 +224,29 @@ void FunctionBuilder::preprocess_instruction(InstructionContext bytecode)
 		break;
 	}
 
+	// Inconditional jump
+	case asBC_JMP:
+	{
+		preprocess_unconditional_branch(instruction);
+		break;
+	}
+
+	// Conditional jump instructions
+	case asBC_JZ:
+	case asBC_JNZ:
+	case asBC_JS:
+	case asBC_JNS:
+	case asBC_JP:
+	case asBC_JNP:
+	{
+		preprocess_conditional_branch(instruction);
+		break;
+	}
+
 	default:
 	{
-		throw std::runtime_error{fmt::format("cannot preprocess unrecognized instruction '{}'", bytecode.info->name)};
+		throw std::runtime_error{
+			fmt::format("cannot preprocess unrecognized instruction '{}'", instruction.info->name)};
 	}
 	}
 }
@@ -235,9 +258,9 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 	llvm::LLVMContext& context = m_compiler.builder().context();
 	CommonDefinitions& defs    = m_compiler.builder().definitions();
 
-	if (instruction.info->bc != asBC_RET && m_return_emitted)
+	if (auto it = m_jump_map.find(instruction.offset); it != m_jump_map.end())
 	{
-		throw std::runtime_error{"ir ret was emitted already - we expect RET immediatelly after CpyVToR"};
+		emit_branch_if_missing(it->second);
 	}
 
 	switch (instruction.info->bc)
@@ -278,6 +301,12 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 		break;
 	}
 
+	case asBC_SUBIi:
+	{
+		emit_stack_arithmetic_imm(instruction, llvm::Instruction::Sub, defs.i32);
+		break;
+	}
+
 	case asBC_CpyVtoV4:
 	{
 		auto target = asBC_SWORDARG0(instruction.pointer);
@@ -299,11 +328,14 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 	}
 
 	case asBC_CpyVtoR4:
+	{
+		store_return_register_value(load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32));
+		break;
+	}
+
 	case asBC_CpyVtoR8:
 	{
-		m_return_emitted = true;
-		ir.CreateRet(load_stack_value(asBC_SWORDARG0(instruction.pointer), m_llvm_function->getReturnType()));
-
+		store_return_register_value(load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i64));
 		break;
 	}
 
@@ -435,13 +467,32 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 
 	case asBC_RET:
 	{
-		if (!m_return_emitted)
+		if (m_llvm_function->getReturnType() == defs.tvoid)
 		{
 			ir.CreateRetVoid();
 		}
+		else
+		{
+			ir.CreateRet(load_return_register_value(m_llvm_function->getReturnType()));
+		}
 
-		m_ret_pointer    = instruction.pointer;
-		m_return_emitted = true;
+		m_ret_pointer = instruction.pointer;
+		break;
+	}
+
+	case asBC_JMP:
+	{
+		ir.CreateBr(get_branch_target(instruction));
+		break;
+	}
+
+	case asBC_JNS:
+	{
+		llvm::Value* condition = ir.CreateICmp(
+			llvm::CmpInst::ICMP_SGE, load_return_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
+
+		ir.CreateCondBr(condition, get_branch_target(instruction), get_conditional_fail_branch_target(instruction));
+
 		break;
 	}
 
@@ -508,6 +559,18 @@ void FunctionBuilder::emit_stack_arithmetic(
 	store_stack_value(asBC_SWORDARG0(instruction.pointer), result);
 }
 
+void FunctionBuilder::emit_stack_arithmetic_imm(
+	FunctionBuilder::InstructionContext instruction, llvm::Instruction::BinaryOps op, llvm::Type* type)
+{
+	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
+	CommonDefinitions& defs = m_compiler.builder().definitions();
+
+	llvm::Value* lhs    = load_stack_value(asBC_SWORDARG1(instruction.pointer), type);
+	llvm::Value* rhs    = llvm::ConstantInt::get(defs.i32, asBC_INTARG(instruction.pointer + 1));
+	llvm::Value* result = ir.CreateBinOp(op, lhs, rhs);
+	store_stack_value(asBC_SWORDARG0(instruction.pointer), result);
+}
+
 void FunctionBuilder::emit_integral_compare(
 	FunctionBuilder::InstructionContext context, llvm::Value* lhs, llvm::Value* rhs)
 {
@@ -526,7 +589,7 @@ void FunctionBuilder::emit_integral_compare(
 
 	// cmp = lhs > rhs ? 1 : lt_or_eq
 	// cmp = lhs > rhs ? 1 : (lhs < rhs ? -1 : 0)
-	llvm::Value* cmp = ir.CreateSelect(lower_than, constant_gt, lt_or_eq);
+	llvm::Value* cmp = ir.CreateSelect(greater_than, constant_gt, lt_or_eq);
 
 	store_return_register_value(cmp);
 }
@@ -628,5 +691,62 @@ llvm::Value* FunctionBuilder::get_return_register_pointer(llvm::Type* type)
 	CommonDefinitions& defs = m_compiler.builder().definitions();
 
 	return ir.CreateBitCast(m_value, type->getPointerTo());
+}
+
+void FunctionBuilder::insert_label(long offset)
+{
+	llvm::LLVMContext& context = m_compiler.builder().context();
+
+	auto       emplace_result = m_jump_map.emplace(offset, nullptr);
+	const bool success        = emplace_result.second;
+
+	if (!success)
+	{
+		// there was a label here already; no need to recreate one
+		return;
+	}
+
+	auto it    = emplace_result.first;
+	it->second = llvm::BasicBlock::Create(context, fmt::format("branch_to_{:04x}", offset), m_llvm_function);
+}
+
+void FunctionBuilder::preprocess_conditional_branch(FunctionBuilder::InstructionContext instruction)
+{
+	insert_label(instruction.offset + 2);
+	preprocess_unconditional_branch(instruction);
+}
+
+void FunctionBuilder::preprocess_unconditional_branch(FunctionBuilder::InstructionContext instruction)
+{
+	insert_label(instruction.offset + 2 + asBC_INTARG(instruction.pointer));
+}
+
+llvm::BasicBlock* FunctionBuilder::get_branch_target(FunctionBuilder::InstructionContext instruction)
+{
+	auto it = m_jump_map.find(instruction.offset + 2 + asBC_INTARG(instruction.pointer));
+	if (it == m_jump_map.end())
+	{
+		throw std::runtime_error{"something went wrong when getting branch target: mismatch with preprocess"};
+	}
+
+	return it->second;
+}
+
+llvm::BasicBlock* FunctionBuilder::get_conditional_fail_branch_target(FunctionBuilder::InstructionContext instruction)
+{
+	return m_jump_map.find(instruction.offset + 2)->second;
+}
+
+void FunctionBuilder::emit_branch_if_missing(llvm::BasicBlock* block)
+{
+	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
+
+	if (auto* current_terminator = ir.GetInsertBlock()->getTerminator(); current_terminator == nullptr)
+	{
+		// The current block has no terminator: insert a branch to the current one, which immediately follows it.
+		ir.CreateBr(block);
+	}
+
+	ir.SetInsertPoint(block);
 }
 } // namespace asllvm::detail

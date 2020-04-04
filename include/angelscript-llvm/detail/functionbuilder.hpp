@@ -15,6 +15,7 @@ class FunctionBuilder
 	{
 		asDWORD*         pointer;
 		const asSBCInfo* info;
+		std::size_t      offset;
 	};
 
 	public:
@@ -50,8 +51,9 @@ class FunctionBuilder
 	void emit_stack_integer_trunc(InstructionContext instruction, llvm::Type* source, llvm::Type* destination);
 	void emit_stack_integer_sign_extend(InstructionContext instruction, llvm::Type* source, llvm::Type* destination);
 	void emit_stack_integer_zero_extend(InstructionContext instruction, llvm::Type* source, llvm::Type* destination);
-	void emit_stack_arithmetic(InstructionContext context, llvm::Instruction::BinaryOps op, llvm::Type* type);
-	void emit_integral_compare(InstructionContext context, llvm::Value* lhs, llvm::Value* rhs);
+	void emit_stack_arithmetic(InstructionContext instruction, llvm::Instruction::BinaryOps op, llvm::Type* type);
+	void emit_stack_arithmetic_imm(InstructionContext instruction, llvm::Instruction::BinaryOps op, llvm::Type* type);
+	void emit_integral_compare(InstructionContext instruction, llvm::Value* lhs, llvm::Value* rhs);
 	void emit_system_call(asIScriptFunction& function);
 
 	//! \brief Load a LLVM value of type \p type from a stack variable of identifier \p! i.
@@ -70,6 +72,15 @@ class FunctionBuilder
 	llvm::Value* load_return_register_value(llvm::Type* type);
 	llvm::Value* get_return_register_pointer(llvm::Type* type);
 
+	void insert_label(long offset);
+	void preprocess_conditional_branch(InstructionContext instruction);
+	void preprocess_unconditional_branch(InstructionContext instruction);
+
+	llvm::BasicBlock* get_branch_target(InstructionContext instruction);
+	llvm::BasicBlock* get_conditional_fail_branch_target(InstructionContext instruction);
+
+	void emit_branch_if_missing(llvm::BasicBlock* block);
+
 	JitCompiler&   m_compiler;
 	ModuleBuilder& m_module_builder;
 
@@ -77,12 +88,13 @@ class FunctionBuilder
 
 	llvm::Function*   m_llvm_function;
 	llvm::BasicBlock* m_entry_block;
-	bool              m_return_emitted = false;
 
 	long m_locals_offset = 0, m_locals_size = 0, m_max_extra_stack_size = 0, m_stack_pointer = 0;
 
 	llvm::AllocaInst* m_locals;
 	llvm::AllocaInst* m_value;
+
+	std::map<long, llvm::BasicBlock*> m_jump_map;
 
 	//! \brief Pointer to the RET instruction.
 	//! \details
