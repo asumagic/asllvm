@@ -1,5 +1,7 @@
 #include <angelscript-llvm/detail/builder.hpp>
 
+#include <angelscript-llvm/detail/asinternalheaders.hpp>
+#include <angelscript-llvm/detail/jitcompiler.hpp>
 #include <angelscript-llvm/detail/llvmglobals.hpp>
 #include <angelscript-llvm/detail/modulecommon.hpp>
 #include <angelscript.h>

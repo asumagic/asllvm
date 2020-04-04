@@ -1,19 +1,12 @@
 #include <angelscript-llvm/detail/functionbuilder.hpp>
 
+#include <angelscript-llvm/detail/asinternalheaders.hpp>
 #include <angelscript-llvm/detail/jitcompiler.hpp>
 #include <angelscript-llvm/detail/llvmglobals.hpp>
 #include <angelscript-llvm/detail/modulebuilder.hpp>
 #include <angelscript-llvm/detail/modulecommon.hpp>
-
 #include <array>
 #include <fmt/core.h>
-
-// Include order matters apparently (probably an AS bug: as_memory.h seems to be required by as_array.h)
-// clang-format off
-#include <as_memory.h>
-#include <as_callfunc.h>
-#include <as_scriptfunction.h>
-// clang-format on
 
 namespace asllvm::detail
 {

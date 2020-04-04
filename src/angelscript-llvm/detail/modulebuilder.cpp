@@ -1,5 +1,6 @@
 #include <angelscript-llvm/detail/modulebuilder.hpp>
 
+#include <angelscript-llvm/detail/asinternalheaders.hpp>
 #include <angelscript-llvm/detail/functionbuilder.hpp>
 #include <angelscript-llvm/detail/jitcompiler.hpp>
 #include <angelscript-llvm/detail/llvmglobals.hpp>
@@ -9,13 +10,6 @@
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
 #include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
 #include <llvm/Support/TargetSelect.h>
-
-// Include order matters apparently (probably an AS bug: as_memory.h seems to be required by as_array.h)
-// clang-format off
-#include <as_memory.h>
-#include <as_callfunc.h>
-#include <as_scriptfunction.h>
-// clang-format on
 
 namespace asllvm::detail
 {
