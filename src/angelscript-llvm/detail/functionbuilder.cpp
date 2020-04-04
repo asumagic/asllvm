@@ -46,10 +46,14 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 
 		while (bytecode_current < bytecode_end)
 		{
-			const asSBCInfo   info             = asBCInfo[*reinterpret_cast<const asBYTE*>(bytecode_current)];
+			const asSBCInfo&  info             = asBCInfo[*reinterpret_cast<const asBYTE*>(bytecode_current)];
 			const std::size_t instruction_size = asBCTypeSize[info.type];
 
-			func(bytecode_current);
+			InstructionContext context;
+			context.pointer = bytecode_current;
+			context.info    = &info;
+
+			func(context);
 
 			bytecode_current += instruction_size;
 		}
@@ -57,7 +61,7 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 
 	try
 	{
-		walk_bytecode([this](auto* bytecode) { return preprocess_instruction(bytecode); });
+		walk_bytecode([this](InstructionContext instruction) { return preprocess_instruction(instruction); });
 
 		{
 			llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
@@ -72,7 +76,7 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 			m_stack_pointer = m_locals_size + m_max_extra_stack_size;
 		}
 
-		walk_bytecode([this](auto* bytecode) { return read_instruction(bytecode); });
+		walk_bytecode([this](InstructionContext instruction) { return read_instruction(instruction); });
 	}
 	catch (std::exception& exception)
 	{
@@ -153,13 +157,11 @@ llvm::Function* FunctionBuilder::create_wrapper_function()
 	return wrapper_function;
 }
 
-void FunctionBuilder::preprocess_instruction(asDWORD* bytecode)
+void FunctionBuilder::preprocess_instruction(InstructionContext bytecode)
 {
 	asIScriptEngine& engine = *m_script_function.GetEngine();
 
-	const asSBCInfo info = asBCInfo[*reinterpret_cast<const asBYTE*>(bytecode)];
-
-	switch (info.bc)
+	switch (bytecode.info->bc)
 	{
 	// These instructions do not write to the stack
 	case asBC_JitEntry:
@@ -190,7 +192,7 @@ void FunctionBuilder::preprocess_instruction(asDWORD* bytecode)
 	case asBC_SetV2:
 	case asBC_SetV4:
 	{
-		auto target   = asBC_SWORDARG0(bytecode);
+		auto target   = asBC_SWORDARG0(bytecode.pointer);
 		m_locals_size = std::max(m_locals_size, long(target) + 2);
 		break;
 	}
@@ -221,25 +223,23 @@ void FunctionBuilder::preprocess_instruction(asDWORD* bytecode)
 
 	default:
 	{
-		throw std::runtime_error{fmt::format("cannot preprocess unrecognized instruction '{}'", info.name)};
+		throw std::runtime_error{fmt::format("cannot preprocess unrecognized instruction '{}'", bytecode.info->name)};
 	}
 	}
 }
 
-void FunctionBuilder::read_instruction(asDWORD* bytecode)
+void FunctionBuilder::read_instruction(InstructionContext instruction)
 {
 	asIScriptEngine&   engine  = m_compiler.engine();
 	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
 	llvm::LLVMContext& context = m_compiler.builder().context();
 
-	const asSBCInfo info = asBCInfo[*reinterpret_cast<const asBYTE*>(bytecode)];
-
-	if (info.bc != asBC_RET && m_return_emitted)
+	if (instruction.info->bc != asBC_RET && m_return_emitted)
 	{
 		throw std::runtime_error{"ir ret was emitted already - we expect RET immediatelly after CpyVToR"};
 	}
 
-	switch (info.bc)
+	switch (instruction.info->bc)
 	{
 	case asBC_JitEntry:
 	{
@@ -250,7 +250,7 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 
 		// Pass the JitCompiler as the jitArg value, which can be used by lazy_jit_compiler().
 		// TODO: this is probably UB
-		asBC_PTRARG(bytecode) = reinterpret_cast<asPWORD>(&m_compiler);
+		asBC_PTRARG(instruction.pointer) = reinterpret_cast<asPWORD>(&m_compiler);
 
 		break;
 	}
@@ -267,20 +267,20 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 
 	case asBC_ADDi:
 	{
-		emit_stack_arithmetic(bytecode, llvm::Instruction::Add, llvm::IntegerType::getInt32Ty(context));
+		emit_stack_arithmetic(instruction, llvm::Instruction::Add, llvm::IntegerType::getInt32Ty(context));
 		break;
 	}
 
 	case asBC_ADDi64:
 	{
-		emit_stack_arithmetic(bytecode, llvm::Instruction::Add, llvm::IntegerType::getInt64Ty(context));
+		emit_stack_arithmetic(instruction, llvm::Instruction::Add, llvm::IntegerType::getInt64Ty(context));
 		break;
 	}
 
 	case asBC_CpyVtoV4:
 	{
-		auto target = asBC_SWORDARG0(bytecode);
-		auto source = asBC_SWORDARG1(bytecode);
+		auto target = asBC_SWORDARG0(instruction.pointer);
+		auto source = asBC_SWORDARG1(instruction.pointer);
 
 		llvm::Type* type = llvm::IntegerType::getInt32Ty(context);
 		store_stack_value(target, load_stack_value(source, type));
@@ -290,8 +290,8 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 
 	case asBC_CpyVtoV8:
 	{
-		auto target = asBC_SWORDARG0(bytecode);
-		auto source = asBC_SWORDARG1(bytecode);
+		auto target = asBC_SWORDARG0(instruction.pointer);
+		auto source = asBC_SWORDARG1(instruction.pointer);
 
 		llvm::Type* type = llvm::IntegerType::getInt64Ty(context);
 		store_stack_value(target, load_stack_value(source, type));
@@ -304,7 +304,7 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 	{
 		m_return_emitted = true;
 
-		ir.CreateRet(load_stack_value(asBC_SWORDARG0(bytecode), m_llvm_function->getReturnType()));
+		ir.CreateRet(load_stack_value(asBC_SWORDARG0(instruction.pointer), m_llvm_function->getReturnType()));
 
 		break;
 	}
@@ -314,7 +314,7 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 		llvm::Value* value_i32_ptr = ir.CreateBitCast(m_value, llvm::Type::getInt32PtrTy(context));
 		llvm::Value* value_i32     = ir.CreateLoad(llvm::Type::getInt32Ty(context), value_i32_ptr);
 
-		store_stack_value(asBC_SWORDARG0(bytecode), value_i32);
+		store_stack_value(asBC_SWORDARG0(instruction.pointer), value_i32);
 
 		break;
 	}
@@ -324,7 +324,7 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 		llvm::Value* value_i64_ptr = ir.CreateBitCast(m_value, llvm::Type::getInt64PtrTy(context));
 		llvm::Value* value_i64     = ir.CreateLoad(llvm::Type::getInt64Ty(context), value_i64_ptr);
 
-		store_stack_value(asBC_SWORDARG0(bytecode), value_i64);
+		store_stack_value(asBC_SWORDARG0(instruction.pointer), value_i64);
 
 		break;
 	}
@@ -334,9 +334,9 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 		// TODO: sign extend should not be done on unsigned types
 
 		store_stack_value(
-			asBC_SWORDARG0(bytecode),
+			asBC_SWORDARG0(instruction.pointer),
 			ir.CreateSExt(
-				load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt8Ty(context)),
+				load_stack_value(asBC_SWORDARG0(instruction.pointer), llvm::IntegerType::getInt8Ty(context)),
 				llvm::IntegerType::getInt32Ty(context)));
 
 		break;
@@ -347,9 +347,9 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 		// TODO: sign extend should not be done on unsigned types
 
 		store_stack_value(
-			asBC_SWORDARG0(bytecode),
+			asBC_SWORDARG0(instruction.pointer),
 			ir.CreateSExt(
-				load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt16Ty(context)),
+				load_stack_value(asBC_SWORDARG0(instruction.pointer), llvm::IntegerType::getInt16Ty(context)),
 				llvm::IntegerType::getInt32Ty(context)));
 
 		break;
@@ -358,9 +358,9 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 	case asBC_iTOb:
 	{
 		store_stack_value(
-			asBC_SWORDARG0(bytecode),
+			asBC_SWORDARG0(instruction.pointer),
 			ir.CreateTrunc(
-				load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt32Ty(context)),
+				load_stack_value(asBC_SWORDARG0(instruction.pointer), llvm::IntegerType::getInt32Ty(context)),
 				llvm::IntegerType::getInt8Ty(context)));
 
 		break;
@@ -369,9 +369,9 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 	case asBC_iTOw:
 	{
 		store_stack_value(
-			asBC_SWORDARG0(bytecode),
+			asBC_SWORDARG0(instruction.pointer),
 			ir.CreateTrunc(
-				load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt32Ty(context)),
+				load_stack_value(asBC_SWORDARG0(instruction.pointer), llvm::IntegerType::getInt32Ty(context)),
 				llvm::IntegerType::getInt16Ty(context)));
 
 		break;
@@ -382,9 +382,9 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 		// TODO: sign extend should not be done on unsigned types
 
 		store_stack_value(
-			asBC_SWORDARG0(bytecode),
+			asBC_SWORDARG0(instruction.pointer),
 			ir.CreateSExt(
-				load_stack_value(asBC_SWORDARG1(bytecode), llvm::Type::getInt32Ty(context)),
+				load_stack_value(asBC_SWORDARG1(instruction.pointer), llvm::Type::getInt32Ty(context)),
 				llvm::Type::getInt64Ty(context)));
 		break;
 	}
@@ -392,9 +392,9 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 	case asBC_i64TOi:
 	{
 		store_stack_value(
-			asBC_SWORDARG0(bytecode),
+			asBC_SWORDARG0(instruction.pointer),
 			ir.CreateTrunc(
-				load_stack_value(asBC_SWORDARG1(bytecode), llvm::IntegerType::getInt64Ty(context)),
+				load_stack_value(asBC_SWORDARG1(instruction.pointer), llvm::IntegerType::getInt64Ty(context)),
 				llvm::IntegerType::getInt32Ty(context)));
 
 		break;
@@ -405,7 +405,8 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 	case asBC_SetV4:
 	{
 		store_stack_value(
-			asBC_SWORDARG0(bytecode), llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), asBC_DWORDARG(bytecode)));
+			asBC_SWORDARG0(instruction.pointer),
+			llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), asBC_DWORDARG(instruction.pointer)));
 
 		break;
 	}
@@ -414,7 +415,7 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 	{
 		m_stack_pointer -= AS_PTR_SIZE;
 		store_stack_value(
-			m_stack_pointer, llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), asBC_PTRARG(bytecode)));
+			m_stack_pointer, llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), asBC_PTRARG(instruction.pointer)));
 		break;
 	}
 
@@ -422,7 +423,8 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 	{
 		m_stack_pointer -= AS_PTR_SIZE;
 		store_stack_value(
-			m_stack_pointer, load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt64Ty(context)));
+			m_stack_pointer,
+			load_stack_value(asBC_SWORDARG0(instruction.pointer), llvm::IntegerType::getInt64Ty(context)));
 		break;
 	}
 
@@ -430,7 +432,8 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 	{
 		--m_stack_pointer;
 		store_stack_value(
-			m_stack_pointer, load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt32Ty(context)));
+			m_stack_pointer,
+			load_stack_value(asBC_SWORDARG0(instruction.pointer), llvm::IntegerType::getInt32Ty(context)));
 		break;
 	}
 
@@ -438,7 +441,8 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 	{
 		m_stack_pointer -= 2;
 		store_stack_value(
-			m_stack_pointer, load_stack_value(asBC_SWORDARG0(bytecode), llvm::IntegerType::getInt64Ty(context)));
+			m_stack_pointer,
+			load_stack_value(asBC_SWORDARG0(instruction.pointer), llvm::IntegerType::getInt64Ty(context)));
 		break;
 	}
 
@@ -446,7 +450,8 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 	{
 		--m_stack_pointer;
 		store_stack_value(
-			m_stack_pointer, llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(context), asBC_DWORDARG(bytecode)));
+			m_stack_pointer,
+			llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(context), asBC_DWORDARG(instruction.pointer)));
 		break;
 	}
 
@@ -454,13 +459,14 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 	{
 		m_stack_pointer -= 2;
 		store_stack_value(
-			m_stack_pointer, llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(context), asBC_QWORDARG(bytecode)));
+			m_stack_pointer,
+			llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(context), asBC_QWORDARG(instruction.pointer)));
 		break;
 	}
 
 	case asBC_CALLSYS:
 	{
-		asIScriptFunction* function = engine.GetFunctionById(asBC_INTARG(bytecode));
+		asIScriptFunction* function = engine.GetFunctionById(asBC_INTARG(instruction.pointer));
 
 		if (function == nullptr)
 		{
@@ -473,7 +479,7 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 
 	case asBC_CALL:
 	{
-		asIScriptFunction* function = engine.GetFunctionById(asBC_INTARG(bytecode));
+		asIScriptFunction* function = engine.GetFunctionById(asBC_INTARG(instruction.pointer));
 
 		llvm::Value* new_frame_pointer = get_stack_value_pointer(m_stack_pointer, llvm::Type::getInt32Ty(context));
 		std::array<llvm::Value*, 1> args{{new_frame_pointer}};
@@ -503,24 +509,25 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 			ir.CreateRetVoid();
 		}
 
-		m_ret_pointer    = bytecode;
+		m_ret_pointer    = instruction.pointer;
 		m_return_emitted = true;
 		break;
 	}
 
 	default:
 	{
-		throw std::runtime_error{fmt::format("could not recognize bytecode instruction '{}'", info.name)};
+		throw std::runtime_error{fmt::format("could not recognize bytecode instruction '{}'", instruction.info->name)};
 	}
 	}
 }
 
-void FunctionBuilder::emit_stack_arithmetic(asDWORD* bytecode, llvm::Instruction::BinaryOps op, llvm::Type* type)
+void FunctionBuilder::emit_stack_arithmetic(
+	InstructionContext instruction, llvm::Instruction::BinaryOps op, llvm::Type* type)
 {
-	llvm::Value* lhs    = load_stack_value(asBC_SWORDARG1(bytecode), type);
-	llvm::Value* rhs    = load_stack_value(asBC_SWORDARG2(bytecode), type);
+	llvm::Value* lhs    = load_stack_value(asBC_SWORDARG1(instruction.pointer), type);
+	llvm::Value* rhs    = load_stack_value(asBC_SWORDARG2(instruction.pointer), type);
 	llvm::Value* result = m_compiler.builder().ir().CreateBinOp(op, lhs, rhs);
-	store_stack_value(asBC_SWORDARG0(bytecode), result);
+	store_stack_value(asBC_SWORDARG0(instruction.pointer), result);
 }
 
 void FunctionBuilder::emit_system_call(asIScriptFunction& function)
