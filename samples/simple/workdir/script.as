@@ -18,12 +18,23 @@ int64 add_i64(int64 a, int64 b)
 	return a + b;
 }
 
+int fib(int n)
+{
+	if (n < 2)
+	{
+		return n;
+	}
+
+	return fib(n-1) + fib(n-2);
+}
+
 void main()
 {
 	print(add_i8(1, 2));
 	print(add_i16(10, 20));
 	print(add_i32(100, 200));
 	print(add_i64(1000, 2000));
+	print(fib(10));
 }
 
 /*void main()

@@ -51,6 +51,7 @@ class FunctionBuilder
 	void emit_stack_integer_sign_extend(InstructionContext instruction, llvm::Type* source, llvm::Type* destination);
 	void emit_stack_integer_zero_extend(InstructionContext instruction, llvm::Type* source, llvm::Type* destination);
 	void emit_stack_arithmetic(InstructionContext context, llvm::Instruction::BinaryOps op, llvm::Type* type);
+	void emit_integral_compare(InstructionContext context, llvm::Value* lhs, llvm::Value* rhs);
 	void emit_system_call(asIScriptFunction& function);
 
 	//! \brief Load a LLVM value of type \p type from a stack variable of identifier \p! i.
@@ -65,6 +66,7 @@ class FunctionBuilder
 	//! \brief Get a pointer to a stack value of type i32* and identifier \p i.
 	llvm::Value* get_stack_value_pointer(StackVariableIdentifier i);
 
+	void         store_return_register_value(llvm::Value* value);
 	llvm::Value* load_return_register_value(llvm::Type* type);
 	llvm::Value* get_return_register_pointer(llvm::Type* type);
 

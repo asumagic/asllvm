@@ -166,6 +166,8 @@ void FunctionBuilder::preprocess_instruction(InstructionContext bytecode)
 	case asBC_RET:
 	case asBC_CALLSYS:
 	case asBC_CALL:
+	case asBC_CMPi:
+	case asBC_CMPIi:
 	{
 		break;
 	}
@@ -379,6 +381,22 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 		break;
 	}
 
+	case asBC_CMPi:
+	{
+		llvm::Value* lhs = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32);
+		llvm::Value* rhs = load_stack_value(asBC_SWORDARG1(instruction.pointer), defs.i32);
+		emit_integral_compare(instruction, lhs, rhs);
+		break;
+	}
+
+	case asBC_CMPIi:
+	{
+		llvm::Value* lhs = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32);
+		llvm::Value* rhs = llvm::ConstantInt::get(defs.i32, asBC_INTARG(instruction.pointer));
+		emit_integral_compare(instruction, lhs, rhs);
+		break;
+	}
+
 	case asBC_CALLSYS:
 	{
 		asIScriptFunction* function = engine.GetFunctionById(asBC_INTARG(instruction.pointer));
@@ -490,6 +508,29 @@ void FunctionBuilder::emit_stack_arithmetic(
 	store_stack_value(asBC_SWORDARG0(instruction.pointer), result);
 }
 
+void FunctionBuilder::emit_integral_compare(
+	FunctionBuilder::InstructionContext context, llvm::Value* lhs, llvm::Value* rhs)
+{
+	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
+	CommonDefinitions& defs = m_compiler.builder().definitions();
+
+	llvm::Value* constant_lt = llvm::ConstantInt::get(defs.i32, -1);
+	llvm::Value* constant_eq = llvm::ConstantInt::get(defs.i32, 0);
+	llvm::Value* constant_gt = llvm::ConstantInt::get(defs.i32, 1);
+
+	llvm::Value* lower_than   = ir.CreateICmp(llvm::CmpInst::ICMP_SLT, lhs, rhs);
+	llvm::Value* greater_than = ir.CreateICmp(llvm::CmpInst::ICMP_SGT, lhs, rhs);
+
+	// lt_or_eq = lhs < rhs ? -1 : 0;
+	llvm::Value* lt_or_eq = ir.CreateSelect(lower_than, constant_lt, constant_eq);
+
+	// cmp = lhs > rhs ? 1 : lt_or_eq
+	// cmp = lhs > rhs ? 1 : (lhs < rhs ? -1 : 0)
+	llvm::Value* cmp = ir.CreateSelect(lower_than, constant_gt, lt_or_eq);
+
+	store_return_register_value(cmp);
+}
+
 void FunctionBuilder::emit_system_call(asIScriptFunction& function)
 {
 	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
@@ -567,10 +608,16 @@ llvm::Value* FunctionBuilder::get_stack_value_pointer(FunctionBuilder::StackVari
 	}
 }
 
+void FunctionBuilder::store_return_register_value(llvm::Value* value)
+{
+	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
+
+	ir.CreateStore(value, get_return_register_pointer(value->getType()));
+}
+
 llvm::Value* FunctionBuilder::load_return_register_value(llvm::Type* type)
 {
-	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
-	CommonDefinitions& defs = m_compiler.builder().definitions();
+	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
 
 	return ir.CreateLoad(type, get_return_register_pointer(type));
 }
