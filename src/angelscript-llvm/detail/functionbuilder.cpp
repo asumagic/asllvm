@@ -191,6 +191,8 @@ void FunctionBuilder::preprocess_instruction(InstructionContext instruction)
 	case asBC_SetV1:
 	case asBC_SetV2:
 	case asBC_SetV4:
+	case asBC_IncVi:
+	case asBC_DecVi:
 	{
 		auto target   = asBC_SWORDARG0(instruction.pointer);
 		m_locals_size = std::max(m_locals_size, long(target) + 2); // TODO: pretty dodgy
@@ -407,6 +409,22 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 	{
 		m_stack_pointer -= 2;
 		store_stack_value(m_stack_pointer, llvm::ConstantInt::get(defs.i64, asBC_QWORDARG(instruction.pointer)));
+		break;
+	}
+
+	case asBC_IncVi:
+	{
+		llvm::Value* value  = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32);
+		llvm::Value* result = ir.CreateAdd(value, llvm::ConstantInt::get(defs.i32, 1));
+		store_stack_value(asBC_SWORDARG0(instruction.pointer), result);
+		break;
+	}
+
+	case asBC_DecVi:
+	{
+		llvm::Value* value  = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32);
+		llvm::Value* result = ir.CreateSub(value, llvm::ConstantInt::get(defs.i32, 1));
+		store_stack_value(asBC_SWORDARG0(instruction.pointer), result);
 		break;
 	}
 
