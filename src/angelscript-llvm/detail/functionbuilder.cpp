@@ -267,27 +267,13 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 
 	case asBC_ADDi:
 	{
-		auto target = asBC_SWORDARG0(bytecode);
-		auto a      = asBC_SWORDARG1(bytecode);
-		auto b      = asBC_SWORDARG2(bytecode);
-
-		llvm::Type* type = llvm::IntegerType::getInt32Ty(context);
-
-		store_stack_value(target, ir.CreateAdd(load_stack_value(a, type), load_stack_value(b, type)));
-
+		emit_stack_arithmetic(bytecode, llvm::Instruction::Add, llvm::IntegerType::getInt32Ty(context));
 		break;
 	}
 
 	case asBC_ADDi64:
 	{
-		auto target = asBC_SWORDARG0(bytecode);
-		auto a      = asBC_SWORDARG1(bytecode);
-		auto b      = asBC_SWORDARG2(bytecode);
-
-		llvm::Type* type = llvm::IntegerType::getInt64Ty(context);
-
-		store_stack_value(target, ir.CreateAdd(load_stack_value(a, type), load_stack_value(b, type)));
-
+		emit_stack_arithmetic(bytecode, llvm::Instruction::Add, llvm::IntegerType::getInt64Ty(context));
 		break;
 	}
 
@@ -527,6 +513,14 @@ void FunctionBuilder::read_instruction(asDWORD* bytecode)
 		throw std::runtime_error{fmt::format("could not recognize bytecode instruction '{}'", info.name)};
 	}
 	}
+}
+
+void FunctionBuilder::emit_stack_arithmetic(asDWORD* bytecode, llvm::Instruction::BinaryOps op, llvm::Type* type)
+{
+	llvm::Value* lhs    = load_stack_value(asBC_SWORDARG1(bytecode), type);
+	llvm::Value* rhs    = load_stack_value(asBC_SWORDARG2(bytecode), type);
+	llvm::Value* result = m_compiler.builder().ir().CreateBinOp(op, lhs, rhs);
+	store_stack_value(asBC_SWORDARG0(bytecode), result);
 }
 
 void FunctionBuilder::emit_system_call(asIScriptFunction& function)

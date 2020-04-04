@@ -41,6 +41,7 @@ class FunctionBuilder
 	void preprocess_instruction(asDWORD* bytecode);
 	void read_instruction(asDWORD* bytecode);
 
+	void emit_stack_arithmetic(asDWORD* bytecode, llvm::Instruction::BinaryOps op, llvm::Type* type);
 	void emit_system_call(asIScriptFunction& function);
 
 	//! \brief Load a LLVM value of type \p type from a stack variable of identifier \p! i.
