@@ -77,11 +77,12 @@ CommonDefinitions Builder::setup_common_definitions()
 {
 	CommonDefinitions defs;
 
-	defs.i1  = llvm::Type::getInt1Ty(*m_context);
-	defs.i8  = llvm::Type::getInt8Ty(*m_context);
-	defs.i16 = llvm::Type::getInt16Ty(*m_context);
-	defs.i32 = llvm::Type::getInt32Ty(*m_context);
-	defs.i64 = llvm::Type::getInt64Ty(*m_context);
+	defs.tvoid = llvm::Type::getVoidTy(*m_context);
+	defs.i1    = llvm::Type::getInt1Ty(*m_context);
+	defs.i8    = llvm::Type::getInt8Ty(*m_context);
+	defs.i16   = llvm::Type::getInt16Ty(*m_context);
+	defs.i32   = llvm::Type::getInt32Ty(*m_context);
+	defs.i64   = llvm::Type::getInt64Ty(*m_context);
 
 	defs.pvoid = llvm::Type::getInt8PtrTy(*m_context);
 	defs.pi8   = llvm::Type::getInt8PtrTy(*m_context);

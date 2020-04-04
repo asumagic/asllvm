@@ -93,17 +93,15 @@ llvm::Function* FunctionBuilder::create_wrapper_function()
 	llvm::LLVMContext& context = m_compiler.builder().context();
 	CommonDefinitions& defs    = m_compiler.builder().definitions();
 
-	const std::array<llvm::Type*, 2> types{defs.vm_registers->getPointerTo(), llvm::IntegerType::getInt64Ty(context)};
+	const std::array<llvm::Type*, 2> types{defs.vm_registers->getPointerTo(), defs.i64};
 
-	llvm::Type* return_type = llvm::Type::getVoidTy(context);
+	llvm::Type* return_type = defs.tvoid;
 
 	llvm::Function* wrapper_function = llvm::Function::Create(
 		llvm::FunctionType::get(return_type, types, false),
 		llvm::Function::ExternalLinkage,
 		make_function_name(m_script_function.GetName(), m_script_function.GetNamespace()) + ".jitentry",
 		m_module_builder.module());
-
-	wrapper_function->setCallingConv(llvm::CallingConv::C);
 
 	llvm::BasicBlock* block = llvm::BasicBlock::Create(context, "entry", wrapper_function);
 
@@ -116,8 +114,7 @@ llvm::Function* FunctionBuilder::create_wrapper_function()
 	arg->setName("jitarg");
 
 	llvm::Value* fp = [&] {
-		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0),
-											llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 1)};
+		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(defs.i64, 0), llvm::ConstantInt::get(defs.i32, 1)};
 
 		auto* pointer = ir.CreateGEP(registers, indices);
 		return ir.CreateLoad(llvm::Type::getInt32Ty(context)->getPointerTo(), pointer, "stackFramePointer");
@@ -130,8 +127,8 @@ llvm::Function* FunctionBuilder::create_wrapper_function()
 	if (m_llvm_function->getReturnType() != llvm::Type::getVoidTy(context))
 	{
 		llvm::Value* value_register = [&] {
-			std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0),
-												llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 3)};
+			std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(defs.i64, 0),
+												llvm::ConstantInt::get(defs.i32, 3)};
 
 			return ir.CreateGEP(registers, indices, "valueRegister");
 		}();
@@ -140,16 +137,14 @@ llvm::Function* FunctionBuilder::create_wrapper_function()
 	}
 
 	llvm::Value* pp = [&] {
-		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0),
-											llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0)};
+		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(defs.i64, 0), llvm::ConstantInt::get(defs.i32, 0)};
 
 		return ir.CreateGEP(registers, indices, "programPointer");
 	}();
 
 	// Set the program pointer to the RET instruction
 	auto* ret_ptr_value = ir.CreateIntToPtr(
-		llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(context), reinterpret_cast<std::uintptr_t>(m_ret_pointer)),
-		llvm::IntegerType::getInt32PtrTy(context));
+		llvm::ConstantInt::get(defs.pi64, reinterpret_cast<std::uintptr_t>(m_ret_pointer)), defs.pi32);
 	ir.CreateStore(ret_ptr_value, pp);
 
 	ir.CreateRetVoid();
@@ -184,16 +179,19 @@ void FunctionBuilder::preprocess_instruction(InstructionContext bytecode)
 	case asBC_CpyRtoV8:
 	case asBC_sbTOi:
 	case asBC_swTOi:
+	case asBC_ubTOi:
+	case asBC_uwTOi:
 	case asBC_iTOb:
 	case asBC_iTOw:
-	case asBC_iTOi64:
 	case asBC_i64TOi:
+	case asBC_uTOi64:
+	case asBC_iTOi64:
 	case asBC_SetV1:
 	case asBC_SetV2:
 	case asBC_SetV4:
 	{
 		auto target   = asBC_SWORDARG0(bytecode.pointer);
-		m_locals_size = std::max(m_locals_size, long(target) + 2);
+		m_locals_size = std::max(m_locals_size, long(target) + 2); // TODO: pretty dodgy
 		break;
 	}
 
@@ -233,6 +231,7 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 	asIScriptEngine&   engine  = m_compiler.engine();
 	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
 	llvm::LLVMContext& context = m_compiler.builder().context();
+	CommonDefinitions& defs    = m_compiler.builder().definitions();
 
 	if (instruction.info->bc != asBC_RET && m_return_emitted)
 	{
@@ -267,13 +266,13 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 
 	case asBC_ADDi:
 	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::Add, llvm::IntegerType::getInt32Ty(context));
+		emit_stack_arithmetic(instruction, llvm::Instruction::Add, defs.i32);
 		break;
 	}
 
 	case asBC_ADDi64:
 	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::Add, llvm::IntegerType::getInt64Ty(context));
+		emit_stack_arithmetic(instruction, llvm::Instruction::Add, defs.i64);
 		break;
 	}
 
@@ -282,8 +281,7 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 		auto target = asBC_SWORDARG0(instruction.pointer);
 		auto source = asBC_SWORDARG1(instruction.pointer);
 
-		llvm::Type* type = llvm::IntegerType::getInt32Ty(context);
-		store_stack_value(target, load_stack_value(source, type));
+		store_stack_value(target, load_stack_value(source, defs.i32));
 
 		break;
 	}
@@ -293,8 +291,7 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 		auto target = asBC_SWORDARG0(instruction.pointer);
 		auto source = asBC_SWORDARG1(instruction.pointer);
 
-		llvm::Type* type = llvm::IntegerType::getInt64Ty(context);
-		store_stack_value(target, load_stack_value(source, type));
+		store_stack_value(target, load_stack_value(source, defs.i64));
 
 		break;
 	}
@@ -303,7 +300,6 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 	case asBC_CpyVtoR8:
 	{
 		m_return_emitted = true;
-
 		ir.CreateRet(load_stack_value(asBC_SWORDARG0(instruction.pointer), m_llvm_function->getReturnType()));
 
 		break;
@@ -311,102 +307,32 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 
 	case asBC_CpyRtoV4:
 	{
-		llvm::Value* value_i32_ptr = ir.CreateBitCast(m_value, llvm::Type::getInt32PtrTy(context));
-		llvm::Value* value_i32     = ir.CreateLoad(llvm::Type::getInt32Ty(context), value_i32_ptr);
-
-		store_stack_value(asBC_SWORDARG0(instruction.pointer), value_i32);
-
+		store_stack_value(asBC_SWORDARG0(instruction.pointer), load_return_register_value(defs.i32));
 		break;
 	}
 
 	case asBC_CpyRtoV8:
 	{
-		llvm::Value* value_i64_ptr = ir.CreateBitCast(m_value, llvm::Type::getInt64PtrTy(context));
-		llvm::Value* value_i64     = ir.CreateLoad(llvm::Type::getInt64Ty(context), value_i64_ptr);
-
-		store_stack_value(asBC_SWORDARG0(instruction.pointer), value_i64);
-
+		store_stack_value(asBC_SWORDARG0(instruction.pointer), load_return_register_value(defs.i64));
 		break;
 	}
 
-	case asBC_sbTOi:
-	{
-		// TODO: sign extend should not be done on unsigned types
-
-		store_stack_value(
-			asBC_SWORDARG0(instruction.pointer),
-			ir.CreateSExt(
-				load_stack_value(asBC_SWORDARG0(instruction.pointer), llvm::IntegerType::getInt8Ty(context)),
-				llvm::IntegerType::getInt32Ty(context)));
-
-		break;
-	}
-
-	case asBC_swTOi:
-	{
-		// TODO: sign extend should not be done on unsigned types
-
-		store_stack_value(
-			asBC_SWORDARG0(instruction.pointer),
-			ir.CreateSExt(
-				load_stack_value(asBC_SWORDARG0(instruction.pointer), llvm::IntegerType::getInt16Ty(context)),
-				llvm::IntegerType::getInt32Ty(context)));
-
-		break;
-	}
-
-	case asBC_iTOb:
-	{
-		store_stack_value(
-			asBC_SWORDARG0(instruction.pointer),
-			ir.CreateTrunc(
-				load_stack_value(asBC_SWORDARG0(instruction.pointer), llvm::IntegerType::getInt32Ty(context)),
-				llvm::IntegerType::getInt8Ty(context)));
-
-		break;
-	}
-
-	case asBC_iTOw:
-	{
-		store_stack_value(
-			asBC_SWORDARG0(instruction.pointer),
-			ir.CreateTrunc(
-				load_stack_value(asBC_SWORDARG0(instruction.pointer), llvm::IntegerType::getInt32Ty(context)),
-				llvm::IntegerType::getInt16Ty(context)));
-
-		break;
-	}
-
-	case asBC_iTOi64:
-	{
-		// TODO: sign extend should not be done on unsigned types
-
-		store_stack_value(
-			asBC_SWORDARG0(instruction.pointer),
-			ir.CreateSExt(
-				load_stack_value(asBC_SWORDARG1(instruction.pointer), llvm::Type::getInt32Ty(context)),
-				llvm::Type::getInt64Ty(context)));
-		break;
-	}
-
-	case asBC_i64TOi:
-	{
-		store_stack_value(
-			asBC_SWORDARG0(instruction.pointer),
-			ir.CreateTrunc(
-				load_stack_value(asBC_SWORDARG1(instruction.pointer), llvm::IntegerType::getInt64Ty(context)),
-				llvm::IntegerType::getInt32Ty(context)));
-
-		break;
-	}
+	case asBC_sbTOi: emit_stack_integer_sign_extend(instruction, defs.i8, defs.i32); break;
+	case asBC_swTOi: emit_stack_integer_sign_extend(instruction, defs.i16, defs.i32); break;
+	case asBC_ubTOi: emit_stack_integer_zero_extend(instruction, defs.i8, defs.i32); break;
+	case asBC_uwTOi: emit_stack_integer_zero_extend(instruction, defs.i16, defs.i32); break;
+	case asBC_iTOb: emit_stack_integer_trunc(instruction, defs.i32, defs.i8); break;
+	case asBC_iTOw: emit_stack_integer_trunc(instruction, defs.i32, defs.i16); break;
+	case asBC_i64TOi: emit_stack_integer_trunc(instruction, defs.i64, defs.i32); break;
+	case asBC_uTOi64: emit_stack_integer_zero_extend(instruction, defs.i32, defs.i64); break;
+	case asBC_iTOi64: emit_stack_integer_sign_extend(instruction, defs.i32, defs.i64); break;
 
 	case asBC_SetV1:
 	case asBC_SetV2:
 	case asBC_SetV4:
 	{
 		store_stack_value(
-			asBC_SWORDARG0(instruction.pointer),
-			llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), asBC_DWORDARG(instruction.pointer)));
+			asBC_SWORDARG0(instruction.pointer), llvm::ConstantInt::get(defs.i32, asBC_DWORDARG(instruction.pointer)));
 
 		break;
 	}
@@ -414,53 +340,42 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 	case asBC_PGA:
 	{
 		m_stack_pointer -= AS_PTR_SIZE;
-		store_stack_value(
-			m_stack_pointer, llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), asBC_PTRARG(instruction.pointer)));
+		store_stack_value(m_stack_pointer, llvm::ConstantInt::get(defs.i64, asBC_PTRARG(instruction.pointer)));
 		break;
 	}
 
 	case asBC_PSF:
 	{
 		m_stack_pointer -= AS_PTR_SIZE;
-		store_stack_value(
-			m_stack_pointer,
-			load_stack_value(asBC_SWORDARG0(instruction.pointer), llvm::IntegerType::getInt64Ty(context)));
+		store_stack_value(m_stack_pointer, load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i64));
 		break;
 	}
 
 	case asBC_PshV4:
 	{
 		--m_stack_pointer;
-		store_stack_value(
-			m_stack_pointer,
-			load_stack_value(asBC_SWORDARG0(instruction.pointer), llvm::IntegerType::getInt32Ty(context)));
+		store_stack_value(m_stack_pointer, load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32));
 		break;
 	}
 
 	case asBC_PshV8:
 	{
 		m_stack_pointer -= 2;
-		store_stack_value(
-			m_stack_pointer,
-			load_stack_value(asBC_SWORDARG0(instruction.pointer), llvm::IntegerType::getInt64Ty(context)));
+		store_stack_value(m_stack_pointer, load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i64));
 		break;
 	}
 
 	case asBC_PshC4:
 	{
 		--m_stack_pointer;
-		store_stack_value(
-			m_stack_pointer,
-			llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(context), asBC_DWORDARG(instruction.pointer)));
+		store_stack_value(m_stack_pointer, llvm::ConstantInt::get(defs.i32, asBC_DWORDARG(instruction.pointer)));
 		break;
 	}
 
 	case asBC_PshC8:
 	{
 		m_stack_pointer -= 2;
-		store_stack_value(
-			m_stack_pointer,
-			llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(context), asBC_QWORDARG(instruction.pointer)));
+		store_stack_value(m_stack_pointer, llvm::ConstantInt::get(defs.i64, asBC_QWORDARG(instruction.pointer)));
 		break;
 	}
 
@@ -481,7 +396,7 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 	{
 		asIScriptFunction* function = engine.GetFunctionById(asBC_INTARG(instruction.pointer));
 
-		llvm::Value* new_frame_pointer = get_stack_value_pointer(m_stack_pointer, llvm::Type::getInt32Ty(context));
+		llvm::Value*                new_frame_pointer = get_stack_value_pointer(m_stack_pointer, defs.i32);
 		std::array<llvm::Value*, 1> args{{new_frame_pointer}};
 
 		llvm::Function* callee = m_module_builder.create_function(*function);
@@ -495,9 +410,7 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 			ir.CreateStore(ret, typed_value_register);
 		}
 
-		{
-			m_stack_pointer += static_cast<asCScriptFunction&>(*function).GetSpaceNeededForArguments();
-		}
+		m_stack_pointer += static_cast<asCScriptFunction&>(*function).GetSpaceNeededForArguments();
 
 		break;
 	}
@@ -521,12 +434,59 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 	}
 }
 
+void FunctionBuilder::emit_stack_integer_trunc(
+	FunctionBuilder::InstructionContext instruction, llvm::Type* source, llvm::Type* destination)
+{
+	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
+	CommonDefinitions& defs = m_compiler.builder().definitions();
+
+	auto stack_offset = (source == defs.i64 || destination == defs.i64) ? asBC_SWORDARG1(instruction.pointer)
+																		: asBC_SWORDARG0(instruction.pointer);
+
+	llvm::Value* original  = load_stack_value(stack_offset, source);
+	llvm::Value* truncated = ir.CreateTrunc(original, destination);
+
+	store_stack_value(asBC_SWORDARG0(instruction.pointer), truncated);
+}
+
+void FunctionBuilder::emit_stack_integer_sign_extend(
+	FunctionBuilder::InstructionContext instruction, llvm::Type* source, llvm::Type* destination)
+{
+	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
+	CommonDefinitions& defs = m_compiler.builder().definitions();
+
+	auto stack_offset = (source == defs.i64 || destination == defs.i64) ? asBC_SWORDARG1(instruction.pointer)
+																		: asBC_SWORDARG0(instruction.pointer);
+
+	llvm::Value* original  = load_stack_value(asBC_SWORDARG0(instruction.pointer), source);
+	llvm::Value* truncated = ir.CreateSExt(original, destination);
+
+	store_stack_value(asBC_SWORDARG0(instruction.pointer), truncated);
+}
+
+void FunctionBuilder::emit_stack_integer_zero_extend(
+	FunctionBuilder::InstructionContext instruction, llvm::Type* source, llvm::Type* destination)
+{
+	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
+	CommonDefinitions& defs = m_compiler.builder().definitions();
+
+	auto stack_offset = (source == defs.i64 || destination == defs.i64) ? asBC_SWORDARG1(instruction.pointer)
+																		: asBC_SWORDARG0(instruction.pointer);
+
+	llvm::Value* original  = load_stack_value(asBC_SWORDARG0(instruction.pointer), source);
+	llvm::Value* truncated = ir.CreateZExt(original, destination);
+
+	store_stack_value(asBC_SWORDARG0(instruction.pointer), truncated);
+}
+
 void FunctionBuilder::emit_stack_arithmetic(
 	InstructionContext instruction, llvm::Instruction::BinaryOps op, llvm::Type* type)
 {
+	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
+
 	llvm::Value* lhs    = load_stack_value(asBC_SWORDARG1(instruction.pointer), type);
 	llvm::Value* rhs    = load_stack_value(asBC_SWORDARG2(instruction.pointer), type);
-	llvm::Value* result = m_compiler.builder().ir().CreateBinOp(op, lhs, rhs);
+	llvm::Value* result = ir.CreateBinOp(op, lhs, rhs);
 	store_stack_value(asBC_SWORDARG0(instruction.pointer), result);
 }
 
@@ -605,5 +565,21 @@ llvm::Value* FunctionBuilder::get_stack_value_pointer(FunctionBuilder::StackVari
 
 		return ir.CreateGEP(m_locals, indices);
 	}
+}
+
+llvm::Value* FunctionBuilder::load_return_register_value(llvm::Type* type)
+{
+	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
+	CommonDefinitions& defs = m_compiler.builder().definitions();
+
+	return ir.CreateLoad(type, get_return_register_pointer(type));
+}
+
+llvm::Value* FunctionBuilder::get_return_register_pointer(llvm::Type* type)
+{
+	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
+	CommonDefinitions& defs = m_compiler.builder().definitions();
+
+	return ir.CreateBitCast(m_value, type->getPointerTo());
 }
 } // namespace asllvm::detail

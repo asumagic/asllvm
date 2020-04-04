@@ -47,6 +47,9 @@ class FunctionBuilder
 	void preprocess_instruction(InstructionContext bytecode);
 	void read_instruction(InstructionContext bytecode);
 
+	void emit_stack_integer_trunc(InstructionContext instruction, llvm::Type* source, llvm::Type* destination);
+	void emit_stack_integer_sign_extend(InstructionContext instruction, llvm::Type* source, llvm::Type* destination);
+	void emit_stack_integer_zero_extend(InstructionContext instruction, llvm::Type* source, llvm::Type* destination);
 	void emit_stack_arithmetic(InstructionContext context, llvm::Instruction::BinaryOps op, llvm::Type* type);
 	void emit_system_call(asIScriptFunction& function);
 
@@ -61,6 +64,9 @@ class FunctionBuilder
 
 	//! \brief Get a pointer to a stack value of type i32* and identifier \p i.
 	llvm::Value* get_stack_value_pointer(StackVariableIdentifier i);
+
+	llvm::Value* load_return_register_value(llvm::Type* type);
+	llvm::Value* get_return_register_pointer(llvm::Type* type);
 
 	JitCompiler&   m_compiler;
 	ModuleBuilder& m_module_builder;
