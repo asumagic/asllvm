@@ -28,6 +28,14 @@ int fib(int n)
 	return fib(n-1) + fib(n-2);
 }
 
+void foo()
+{
+	for (int i = 0; i < 10; ++i)
+	{
+		print(i);
+	}
+}
+
 void main()
 {
 	print(add_i8(1, 2));
@@ -35,6 +43,7 @@ void main()
 	print(add_i32(100, 200));
 	print(add_i64(1000, 2000));
 	print(fib(10));
+	foo();
 }
 
 /*void main()
