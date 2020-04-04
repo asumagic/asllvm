@@ -25,7 +25,7 @@ class ModuleBuilder
 	ModuleBuilder(JitCompiler& compiler, std::string_view angelscript_module_name);
 
 	void            add_jit_function(std::string name, asJITFunction* function);
-	FunctionBuilder create_function_builder(asIScriptFunction& function, asJITFunction& jit_function_output);
+	FunctionBuilder create_function_builder(asIScriptFunction& function);
 	llvm::Function* create_function(asIScriptFunction& function);
 
 	llvm::Function* get_system_function(asIScriptFunction& system_function);

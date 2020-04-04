@@ -113,7 +113,7 @@ JitCompiler::compile(asIScriptEngine& engine, asIScriptFunction& function, asJIT
 
 	detail::ModuleBuilder& module_builder = m_module_map[function.GetModuleName()];
 
-	detail::FunctionBuilder function_builder = module_builder.create_function_builder(function, output);
+	detail::FunctionBuilder function_builder = module_builder.create_function_builder(function);
 
 	function_builder.read_bytecode(bytecode, length);
 	function_builder.create_wrapper_function();
@@ -123,7 +123,7 @@ JitCompiler::compile(asIScriptEngine& engine, asIScriptFunction& function, asJIT
 	return CompileStatus::SUCCESS;
 }
 
-void JitCompiler::invalid_late_jit_compile(asSVMRegisters* registers, asPWORD jit_arg)
+void JitCompiler::invalid_late_jit_compile([[maybe_unused]] asSVMRegisters* registers, [[maybe_unused]] asPWORD jit_arg)
 {
 	throw std::runtime_error{
 		"JIT module was not built and late JIT compiles were disabled. application forgot a call to BuildModule()."};

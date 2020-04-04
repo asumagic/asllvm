@@ -155,9 +155,6 @@ llvm::Function* FunctionBuilder::create_wrapper_function()
 
 void FunctionBuilder::preprocess_instruction(InstructionContext instruction)
 {
-	asIScriptEngine&   engine  = *m_script_function.GetEngine();
-	llvm::LLVMContext& context = m_compiler.builder().context();
-
 	switch (instruction.info->bc)
 	{
 	// These instructions do not write to the stack
@@ -571,8 +568,7 @@ void FunctionBuilder::emit_stack_arithmetic_imm(
 	store_stack_value(asBC_SWORDARG0(instruction.pointer), result);
 }
 
-void FunctionBuilder::emit_integral_compare(
-	FunctionBuilder::InstructionContext context, llvm::Value* lhs, llvm::Value* rhs)
+void FunctionBuilder::emit_integral_compare(llvm::Value* lhs, llvm::Value* rhs)
 {
 	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
 	CommonDefinitions& defs = m_compiler.builder().definitions();
@@ -596,8 +592,7 @@ void FunctionBuilder::emit_integral_compare(
 
 void FunctionBuilder::emit_system_call(asIScriptFunction& function)
 {
-	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
-	llvm::LLVMContext& context = m_compiler.builder().context();
+	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
 
 	llvm::Function* callee = m_module_builder.get_system_function(function);
 
@@ -687,8 +682,7 @@ llvm::Value* FunctionBuilder::load_return_register_value(llvm::Type* type)
 
 llvm::Value* FunctionBuilder::get_return_register_pointer(llvm::Type* type)
 {
-	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
-	CommonDefinitions& defs = m_compiler.builder().definitions();
+	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
 
 	return ir.CreateBitCast(m_value, type->getPointerTo());
 }

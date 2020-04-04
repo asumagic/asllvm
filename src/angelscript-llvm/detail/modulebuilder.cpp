@@ -29,7 +29,7 @@ void ModuleBuilder::add_jit_function(std::string name, asJITFunction* function)
 	m_jit_functions.emplace_back(std::move(name), function);
 }
 
-FunctionBuilder ModuleBuilder::create_function_builder(asIScriptFunction& function, asJITFunction& jit_function_output)
+FunctionBuilder ModuleBuilder::create_function_builder(asIScriptFunction& function)
 {
 	return {m_compiler, *this, function, create_function(function)};
 }
@@ -104,8 +104,6 @@ void ModuleBuilder::build()
 	for (const auto& it : m_system_functions)
 	{
 		auto& script_func = static_cast<asCScriptFunction&>(*m_compiler.engine().GetFunctionById(it.first));
-
-		const auto& func_name = it.second->getName();
 
 		llvm::JITTargetAddress address = {};
 		std::memcpy(&address, &script_func.sysFuncIntf->func, sizeof(asFUNCTION_t));
