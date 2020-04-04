@@ -414,7 +414,7 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 	{
 		llvm::Value* lhs = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32);
 		llvm::Value* rhs = load_stack_value(asBC_SWORDARG1(instruction.pointer), defs.i32);
-		emit_integral_compare(instruction, lhs, rhs);
+		emit_integral_compare(lhs, rhs);
 		break;
 	}
 
@@ -422,7 +422,7 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 	{
 		llvm::Value* lhs = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32);
 		llvm::Value* rhs = llvm::ConstantInt::get(defs.i32, asBC_INTARG(instruction.pointer));
-		emit_integral_compare(instruction, lhs, rhs);
+		emit_integral_compare(lhs, rhs);
 		break;
 	}
 
