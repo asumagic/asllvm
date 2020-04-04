@@ -144,7 +144,7 @@ llvm::Function* FunctionBuilder::create_wrapper_function()
 
 	// Set the program pointer to the RET instruction
 	auto* ret_ptr_value = ir.CreateIntToPtr(
-		llvm::ConstantInt::get(defs.pi64, reinterpret_cast<std::uintptr_t>(m_ret_pointer)), defs.pi32);
+		llvm::ConstantInt::get(defs.i64, reinterpret_cast<std::uintptr_t>(m_ret_pointer)), defs.pi32);
 	ir.CreateStore(ret_ptr_value, pp);
 
 	ir.CreateRetVoid();
