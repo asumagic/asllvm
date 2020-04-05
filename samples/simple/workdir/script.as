@@ -45,12 +45,19 @@ void main()
 	print(fib(10));
 	foo();
 	print("hello");
+
+	string s = "hello, ";
+	string s2 = "world";
+	s += s2;
+	print(s);
 }
 
-/*void main()
+/*
+void main()
 {
-	print("Hello, world!");
-}*/
+	string a = "hello", b = "world";
+}
+*/
 /*
 void no_op() {}
 

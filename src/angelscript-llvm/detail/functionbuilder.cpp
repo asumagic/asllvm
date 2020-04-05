@@ -26,11 +26,6 @@ FunctionBuilder::FunctionBuilder(
 
 llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 {
-	if (m_script_function.GetParamCount() != 0)
-	{
-		m_locals_offset = m_compiler.builder().get_script_type_dword_size(m_script_function.parameterTypes[0]);
-	}
-
 	const auto walk_bytecode = [&](auto&& func) {
 		asDWORD* bytecode_current = bytecode;
 		asDWORD* bytecode_end     = bytecode + length;
@@ -56,16 +51,18 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 		walk_bytecode([this](InstructionContext instruction) { return preprocess_instruction(instruction); });
 
 		{
-			llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
-			llvm::LLVMContext& context = m_compiler.builder().context();
+			llvm::IRBuilder<>& ir          = m_compiler.builder().ir();
+			llvm::LLVMContext& context     = m_compiler.builder().context();
+			auto&              script_data = *m_script_function.scriptData;
+
+			m_locals_size          = script_data.variableSpace;
+			m_max_extra_stack_size = script_data.stackNeeded - m_locals_size;
 
 			m_locals = ir.CreateAlloca(
-				llvm::ArrayType::get(llvm::IntegerType::getInt32Ty(context), m_locals_size + m_max_extra_stack_size),
-				0,
-				"locals");
+				llvm::ArrayType::get(llvm::IntegerType::getInt32Ty(context), script_data.stackNeeded), 0, "locals");
 			m_value = ir.CreateAlloca(llvm::IntegerType::getInt64Ty(context), 0, "valuereg");
 
-			m_stack_pointer = m_locals_size + m_max_extra_stack_size;
+			m_stack_pointer = m_locals_size;
 		}
 
 		walk_bytecode([this](InstructionContext instruction) { return read_instruction(instruction); });
@@ -363,46 +360,43 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 
 	case asBC_PGA:
 	{
-		m_stack_pointer -= AS_PTR_SIZE;
+		m_stack_pointer += AS_PTR_SIZE;
 		store_stack_value(m_stack_pointer, llvm::ConstantInt::get(defs.i64, asBC_PTRARG(instruction.pointer)));
 		break;
 	}
 
 	case asBC_PSF:
 	{
-		m_stack_pointer -= AS_PTR_SIZE;
-		llvm::Value* fp          = get_stack_value_pointer(0, defs.i64);
-		llvm::Value* integral_fp = ir.CreatePtrToInt(fp, defs.i64);
-		llvm::Value* value
-			= ir.CreateAdd(integral_fp, llvm::ConstantInt::get(defs.i64, asBC_SWORDARG0(instruction.pointer)));
-		store_stack_value(m_stack_pointer, value);
+		m_stack_pointer += AS_PTR_SIZE;
+		llvm::Value* ptr = get_stack_value_pointer(asBC_SWORDARG0(instruction.pointer), defs.i64);
+		store_stack_value(m_stack_pointer, ptr);
 		break;
 	}
 
 	case asBC_PshV4:
 	{
-		--m_stack_pointer;
+		++m_stack_pointer;
 		store_stack_value(m_stack_pointer, load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32));
 		break;
 	}
 
 	case asBC_PshV8:
 	{
-		m_stack_pointer -= 2;
+		m_stack_pointer += 2;
 		store_stack_value(m_stack_pointer, load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i64));
 		break;
 	}
 
 	case asBC_PshC4:
 	{
-		--m_stack_pointer;
+		++m_stack_pointer;
 		store_stack_value(m_stack_pointer, llvm::ConstantInt::get(defs.i32, asBC_DWORDARG(instruction.pointer)));
 		break;
 	}
 
 	case asBC_PshC8:
 	{
-		m_stack_pointer -= 2;
+		m_stack_pointer += 2;
 		store_stack_value(m_stack_pointer, llvm::ConstantInt::get(defs.i64, asBC_QWORDARG(instruction.pointer)));
 		break;
 	}
@@ -472,7 +466,7 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 			ir.CreateStore(ret, typed_value_register);
 		}
 
-		m_stack_pointer += function.GetSpaceNeededForArguments();
+		m_stack_pointer -= function.GetSpaceNeededForArguments();
 
 		break;
 	}
@@ -669,13 +663,12 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 	long current_parameter_offset = m_stack_pointer;
 
 	const auto read_params = [&](std::size_t first_param, std::size_t count) {
-		for (std::size_t i = first_param; i < count - first_param; ++i)
+		for (std::size_t i = 0; i < count; ++i)
 		{
-			llvm::Argument* llvm_argument = &*(callee->arg_begin() + i);
-			args[i]                       = load_stack_value(current_parameter_offset, llvm_argument->getType());
+			llvm::Argument* llvm_argument = &*(callee->arg_begin() + i + first_param);
+			args[i + first_param]         = load_stack_value(current_parameter_offset, llvm_argument->getType());
 
-			current_parameter_offset
-				+= m_compiler.builder().get_script_type_dword_size(function.parameterTypes[i - first_param]);
+			current_parameter_offset -= m_compiler.builder().get_script_type_dword_size(function.parameterTypes[i]);
 		}
 	};
 
@@ -687,7 +680,7 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 	case ICC_CDECL_OBJFIRST:
 	{
 		args.front() = load_stack_value(current_parameter_offset, defs.pvoid);
-		current_parameter_offset += AS_PTR_SIZE;
+		current_parameter_offset -= AS_PTR_SIZE;
 		read_params(1, argument_count - 1);
 		break;
 	}
@@ -695,7 +688,7 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 	case ICC_CDECL_OBJLAST:
 	{
 		args.back() = load_stack_value(current_parameter_offset, defs.pvoid);
-		current_parameter_offset += AS_PTR_SIZE;
+		current_parameter_offset -= AS_PTR_SIZE;
 		read_params(0, argument_count - 1);
 		break;
 	}
@@ -703,7 +696,7 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 	// C calling convention: nothing special to do
 	case ICC_CDECL:
 	{
-		read_params(0, argument_count - 1);
+		read_params(0, argument_count);
 		break;
 	}
 
@@ -744,7 +737,7 @@ llvm::Value* FunctionBuilder::get_stack_value_pointer(FunctionBuilder::StackVari
 	llvm::LLVMContext& context = m_compiler.builder().context();
 
 	// Get a pointer to that argument
-	if (i < m_locals_offset)
+	if (i <= 0)
 	{
 		std::array<llvm::Value*, 1> indices{{llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(context), -i)}};
 
@@ -753,7 +746,7 @@ llvm::Value* FunctionBuilder::get_stack_value_pointer(FunctionBuilder::StackVari
 
 	// Get a pointer to that value on the local stack
 	{
-		const std::size_t local_offset = i - m_locals_offset;
+		const std::size_t local_offset = m_locals_size + m_max_extra_stack_size - i;
 
 		std::array<llvm::Value*, 2> indices{
 			{llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(context), 0),

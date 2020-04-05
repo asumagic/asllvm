@@ -90,7 +90,7 @@ class FunctionBuilder
 	llvm::Function*   m_llvm_function;
 	llvm::BasicBlock* m_entry_block;
 
-	long m_locals_offset = 0, m_locals_size = 0, m_max_extra_stack_size = 0, m_stack_pointer = 0;
+	long m_locals_size = 0, m_max_extra_stack_size = 0, m_stack_pointer = 0;
 
 	llvm::AllocaInst* m_locals;
 	llvm::AllocaInst* m_value;
