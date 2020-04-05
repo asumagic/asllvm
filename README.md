@@ -10,6 +10,9 @@ is currently very limited.
 Right now, only x86-64 on Linux is tested and supported, but when complete, pretty much every LLVM-supported platform
 should be able to work.
 
+The [sample script.as](samples/simple/workdir/script.as) (which, at this point, is just a file to test and mess around)
+should roughly show what is currently working.
+
 ## Requirements
 
 You will need:
