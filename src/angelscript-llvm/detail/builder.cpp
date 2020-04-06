@@ -17,7 +17,7 @@ Builder::Builder(JitCompiler& compiler) :
 	m_compiler{compiler},
 	m_pass_manager{setup_pass_manager()},
 	m_ir_builder{*m_context},
-	m_common_definitions{setup_common_definitions()}
+	m_defs{setup_common_definitions()}
 {}
 
 llvm::Type* Builder::to_llvm_type(asCDataType& type) const
@@ -26,24 +26,24 @@ llvm::Type* Builder::to_llvm_type(asCDataType& type) const
 	{
 		switch (type.GetTokenType())
 		{
-		case ttVoid: return llvm::Type::getVoidTy(*m_context);
-		case ttBool: return llvm::Type::getInt1Ty(*m_context);
-		case ttInt8: return llvm::Type::getInt8Ty(*m_context);
-		case ttInt16: return llvm::Type::getInt16Ty(*m_context);
-		case ttInt: return llvm::Type::getInt32Ty(*m_context);
-		case ttInt64: return llvm::Type::getInt64Ty(*m_context);
+		case ttVoid: return m_defs.tvoid;
+		case ttBool: return m_defs.i1;
+		case ttInt8: return m_defs.i8;
+		case ttInt16: return m_defs.i16;
+		case ttInt: return m_defs.i32;
+		case ttInt64: return m_defs.i64;
 		default: asllvm_assert(false && "provided primitive type not supported");
 		}
 	}
 
 	if (type.IsReference())
 	{
-		return llvm::Type::getInt8PtrTy(*m_context);
+		return m_defs.pvoid;
 	}
 
 	if (type.IsObject())
 	{
-		return llvm::ArrayType::get(m_common_definitions.i32, get_script_type_dword_size(type));
+		return llvm::ArrayType::get(m_defs.i32, get_script_type_dword_size(type));
 	}
 
 	asllvm_assert(false && "type not supported");
@@ -65,8 +65,8 @@ std::unique_ptr<llvm::LLVMContext> Builder::extract_old_context()
 {
 	auto old_context = std::move(m_context);
 
-	m_context            = setup_context();
-	m_common_definitions = setup_common_definitions();
+	m_context = setup_context();
+	m_defs    = setup_common_definitions();
 
 	return old_context;
 }
@@ -81,6 +81,7 @@ CommonDefinitions Builder::setup_common_definitions()
 	defs.i16   = llvm::Type::getInt16Ty(*m_context);
 	defs.i32   = llvm::Type::getInt32Ty(*m_context);
 	defs.i64   = llvm::Type::getInt64Ty(*m_context);
+	defs.iptr  = llvm::Type::getInt64Ty(*m_context); // TODO: determine pointer type from target machine
 
 	defs.pvoid = llvm::Type::getInt8PtrTy(*m_context);
 	defs.pi8   = llvm::Type::getInt8PtrTy(*m_context);
@@ -93,7 +94,7 @@ CommonDefinitions Builder::setup_common_definitions()
 			defs.pi32,  // programPointer
 			defs.pi32,  // stackFramePointer
 			defs.pi32,  // stackPointer
-			defs.i64,   // valueRegister
+			defs.iptr,  // valueRegister
 			defs.pvoid, // objectRegister
 			defs.pvoid, // objectType - todo asITypeInfo
 			defs.i1,    // doProcessSuspend

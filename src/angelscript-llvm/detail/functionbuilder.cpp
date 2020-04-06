@@ -90,7 +90,7 @@ llvm::Function* FunctionBuilder::create_wrapper_function()
 	llvm::Function* wrapper_function = llvm::Function::Create(
 		llvm::FunctionType::get(return_type, types, false),
 		llvm::Function::ExternalLinkage,
-		make_function_name(m_script_function.GetName(), m_script_function.GetNamespace()) + ".jitentry",
+		make_jit_entry_name(m_script_function.GetName(), m_script_function.GetNamespace()),
 		m_module_builder.module());
 
 	llvm::BasicBlock* block = llvm::BasicBlock::Create(context, "entry", wrapper_function);

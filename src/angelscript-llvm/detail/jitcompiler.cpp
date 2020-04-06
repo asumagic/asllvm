@@ -31,25 +31,24 @@ int JitCompiler::jit_compile(asIScriptFunction* function, asJITFunction* output)
 		!(m_engine != nullptr && function->GetEngine() != m_engine)
 		&& "JIT compiler expects to be used against the same asIScriptEngine during its lifetime");
 
-	m_engine                = function->GetEngine();
-	asIScriptEngine& engine = *function->GetEngine();
+	m_engine = function->GetEngine();
 
 	CompileStatus status = CompileStatus::ICE;
 
 	try
 	{
-		status = compile(engine, static_cast<asCScriptFunction&>(*function), *output);
+		status = compile(*m_engine, static_cast<asCScriptFunction&>(*function), *output);
 	}
 	catch (std::runtime_error& error)
 	{
-		diagnostic(engine, fmt::format("Failed to compile module: {}\n", error.what()), asMSGTYPE_ERROR);
+		diagnostic(*m_engine, fmt::format("Failed to compile module: {}\n", error.what()), asMSGTYPE_ERROR);
 	}
 
 	if (status == CompileStatus::SUCCESS)
 	{
 		if (m_config.verbose)
 		{
-			diagnostic(engine, "Function JITted successfully.\n", asMSGTYPE_INFORMATION);
+			diagnostic(*m_engine, "Function JITted successfully.\n", asMSGTYPE_INFORMATION);
 		}
 
 		if (*output == nullptr)
@@ -62,7 +61,7 @@ int JitCompiler::jit_compile(asIScriptFunction* function, asJITFunction* output)
 	}
 
 	diagnostic(
-		engine,
+		*m_engine,
 		"Function was not JITted. This will likely cause issues if any successfully JIT'd function references this "
 		"one.\n",
 		asMSGTYPE_WARNING);

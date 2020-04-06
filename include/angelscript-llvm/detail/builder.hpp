@@ -14,7 +14,7 @@ struct CommonDefinitions
 {
 	llvm::Type* vm_registers;
 
-	llvm::Type *tvoid, *i1, *i8, *i16, *i32, *i64;
+	llvm::Type *tvoid, *i1, *i8, *i16, *i32, *i64, *iptr;
 	llvm::Type *pvoid, *pi8, *pi16, *pi32, *pi64;
 };
 
@@ -24,7 +24,7 @@ class Builder
 	Builder(JitCompiler& compiler);
 
 	llvm::IRBuilder<>& ir() { return m_ir_builder; }
-	CommonDefinitions& definitions() { return m_common_definitions; }
+	CommonDefinitions& definitions() { return m_defs; }
 
 	llvm::Type* to_llvm_type(asCDataType& type) const;
 	bool        is_script_type_64(asCDataType& type) const;
@@ -44,7 +44,7 @@ class Builder
 	JitCompiler&                       m_compiler;
 	llvm::legacy::PassManager          m_pass_manager;
 	llvm::IRBuilder<>                  m_ir_builder;
-	CommonDefinitions                  m_common_definitions;
+	CommonDefinitions                  m_defs;
 };
 
 } // namespace asllvm::detail
