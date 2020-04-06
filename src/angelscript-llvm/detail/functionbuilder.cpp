@@ -1,6 +1,7 @@
 #include <angelscript-llvm/detail/functionbuilder.hpp>
 
 #include <angelscript-llvm/detail/asinternalheaders.hpp>
+#include <angelscript-llvm/detail/assert.hpp>
 #include <angelscript-llvm/detail/jitcompiler.hpp>
 #include <angelscript-llvm/detail/llvmglobals.hpp>
 #include <angelscript-llvm/detail/modulebuilder.hpp>
@@ -234,8 +235,7 @@ void FunctionBuilder::preprocess_instruction(InstructionContext instruction)
 
 	default:
 	{
-		throw std::runtime_error{
-			fmt::format("cannot preprocess unrecognized instruction '{}'", instruction.info->name)};
+		asllvm_assert(false && "unrecognized instruction while preprocessing");
 	}
 	}
 }
@@ -249,6 +249,7 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 
 	if (auto it = m_jump_map.find(instruction.offset); it != m_jump_map.end())
 	{
+		asllvm_assert(m_stack_pointer == m_locals_size);
 		emit_branch_if_missing(it->second);
 	}
 
@@ -454,10 +455,7 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 		asCScriptFunction* function
 			= static_cast<asCScriptFunction*>(engine.GetFunctionById(asBC_INTARG(instruction.pointer)));
 
-		if (function == nullptr)
-		{
-			throw std::runtime_error{"function referenced in CALLSYS unexpectedly null"};
-		}
+		asllvm_assert(function != nullptr);
 
 		emit_system_call(*function);
 
@@ -570,7 +568,7 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 
 	default:
 	{
-		throw std::runtime_error{fmt::format("could not recognize bytecode instruction '{}'", instruction.info->name)};
+		asllvm_assert(false && "unrecognized instruction while translating bytecode");
 	}
 	}
 }
@@ -716,7 +714,7 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 		break;
 	}
 
-	default: throw std::runtime_error{"unhandled calling convention"};
+	default: asllvm_assert(false && "unsupported calling convention");
 	}
 
 	llvm::Value* result = ir.CreateCall(callee->getFunctionType(), callee, args);
@@ -823,18 +821,12 @@ void FunctionBuilder::preprocess_unconditional_branch(FunctionBuilder::Instructi
 
 llvm::BasicBlock* FunctionBuilder::get_branch_target(FunctionBuilder::InstructionContext instruction)
 {
-	auto it = m_jump_map.find(instruction.offset + 2 + asBC_INTARG(instruction.pointer));
-	if (it == m_jump_map.end())
-	{
-		throw std::runtime_error{"something went wrong when getting branch target: mismatch with preprocess"};
-	}
-
-	return it->second;
+	return m_jump_map.at(instruction.offset + 2 + asBC_INTARG(instruction.pointer));
 }
 
 llvm::BasicBlock* FunctionBuilder::get_conditional_fail_branch_target(FunctionBuilder::InstructionContext instruction)
 {
-	return m_jump_map.find(instruction.offset + 2)->second;
+	return m_jump_map.at(instruction.offset + 2);
 }
 
 void FunctionBuilder::emit_branch_if_missing(llvm::BasicBlock* block)

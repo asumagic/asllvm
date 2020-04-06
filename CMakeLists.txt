@@ -4,6 +4,7 @@ project(angelscript-llvm LANGUAGES CXX)
 
 add_library(angelscript-llvm
     src/angelscript-llvm/jit.cpp
+    src/angelscript-llvm/detail/assert.cpp
     src/angelscript-llvm/detail/builder.cpp
     src/angelscript-llvm/detail/functionbuilder.cpp
     src/angelscript-llvm/detail/jitcompiler.cpp

@@ -1,6 +1,7 @@
 #include <angelscript-llvm/detail/builder.hpp>
 
 #include <angelscript-llvm/detail/asinternalheaders.hpp>
+#include <angelscript-llvm/detail/assert.hpp>
 #include <angelscript-llvm/detail/jitcompiler.hpp>
 #include <angelscript-llvm/detail/llvmglobals.hpp>
 #include <angelscript-llvm/detail/modulecommon.hpp>
@@ -31,7 +32,7 @@ llvm::Type* Builder::to_llvm_type(asCDataType& type) const
 		case ttInt16: return llvm::Type::getInt16Ty(*m_context);
 		case ttInt: return llvm::Type::getInt32Ty(*m_context);
 		case ttInt64: return llvm::Type::getInt64Ty(*m_context);
-		default: throw std::runtime_error{"primitive type not recognized"};
+		default: asllvm_assert(false && "provided primitive type not supported");
 		}
 	}
 
@@ -45,16 +46,12 @@ llvm::Type* Builder::to_llvm_type(asCDataType& type) const
 		return llvm::ArrayType::get(m_common_definitions.i32, get_script_type_dword_size(type));
 	}
 
-	throw std::runtime_error{"type not supported"};
+	asllvm_assert(false && "type not supported");
 }
 
 bool Builder::is_script_type_64(asCDataType& type) const
 {
-	if (type.GetSizeOnStackDWords() > 2)
-	{
-		throw std::runtime_error{"type is >64-bit, why the hell did you call is_script_type_64 with this"};
-	}
-
+	asllvm_assert(type.GetSizeOnStackDWords() <= 2);
 	return type.GetSizeOnStackDWords() == 2;
 }
 

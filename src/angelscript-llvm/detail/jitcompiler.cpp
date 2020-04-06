@@ -1,5 +1,6 @@
 #include <angelscript-llvm/detail/jitcompiler.hpp>
 
+#include <angelscript-llvm/detail/assert.hpp>
 #include <angelscript-llvm/detail/builder.hpp>
 #include <angelscript-llvm/detail/functionbuilder.hpp>
 #include <angelscript-llvm/detail/llvmglobals.hpp>
@@ -26,10 +27,9 @@ JitCompiler::JitCompiler(JitConfig config) :
 
 int JitCompiler::jit_compile(asIScriptFunction* function, asJITFunction* output)
 {
-	if (m_engine != nullptr && function->GetEngine() != m_engine)
-	{
-		throw std::runtime_error{"JIT compiler expects to be only used against the same asIScriptEngine"};
-	}
+	asllvm_assert(
+		!(m_engine != nullptr && function->GetEngine() != m_engine)
+		&& "JIT compiler expects to be used against the same asIScriptEngine during its lifetime");
 
 	m_engine                = function->GetEngine();
 	asIScriptEngine& engine = *function->GetEngine();
@@ -126,8 +126,9 @@ JitCompiler::compile(asIScriptEngine& engine, asCScriptFunction& function, asJIT
 
 void JitCompiler::invalid_late_jit_compile([[maybe_unused]] asSVMRegisters* registers, [[maybe_unused]] asPWORD jit_arg)
 {
-	throw std::runtime_error{
-		"JIT module was not built and late JIT compiles were disabled. application forgot a call to BuildModule()."};
+	asllvm_assert(
+		false
+		&& "JIT module was not built and late JIT compiles were disabled. application forgot a call to BuildModule().");
 }
 
 void JitCompiler::late_jit_compile([[maybe_unused]] asSVMRegisters* registers, [[maybe_unused]] asPWORD jit_arg)

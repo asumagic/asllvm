@@ -1,5 +1,6 @@
 #include <angelscript-llvm/detail/modulebuilder.hpp>
 
+#include <angelscript-llvm/detail/assert.hpp>
 #include <angelscript-llvm/detail/functionbuilder.hpp>
 #include <angelscript-llvm/detail/jitcompiler.hpp>
 #include <angelscript-llvm/detail/llvmglobals.hpp>
@@ -96,7 +97,7 @@ llvm::Function* ModuleBuilder::get_system_function(asCScriptFunction& system_fun
 	// C calling convention: nothing special to do
 	case ICC_CDECL: break;
 
-	default: throw std::runtime_error{"unhandled calling convention"};
+	default: asllvm_assert(false && "unsupported calling convention");
 	}
 
 	llvm::FunctionType* function_type = llvm::FunctionType::get(return_type, types, false);
