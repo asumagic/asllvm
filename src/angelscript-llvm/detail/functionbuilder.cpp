@@ -190,6 +190,8 @@ void FunctionBuilder::preprocess_instruction(InstructionContext instruction)
 	// These instructions always write a pointer to the stack
 	case asBC_PGA:
 	case asBC_PSF:
+	case asBC_PshVPtr:
+	case asBC_VAR:
 	{
 		m_max_extra_stack_size += AS_PTR_SIZE;
 		break;
@@ -365,11 +367,25 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 		break;
 	}
 
+	case asBC_VAR:
+	{
+		m_stack_pointer += AS_PTR_SIZE;
+		store_stack_value(m_stack_pointer, llvm::ConstantInt::get(defs.i64, asBC_SWORDARG0(instruction.pointer)));
+		break;
+	}
+
 	case asBC_PSF:
 	{
 		m_stack_pointer += AS_PTR_SIZE;
 		llvm::Value* ptr = get_stack_value_pointer(asBC_SWORDARG0(instruction.pointer), defs.i64);
 		store_stack_value(m_stack_pointer, ptr);
+		break;
+	}
+
+	case asBC_PshVPtr:
+	{
+		m_stack_pointer += AS_PTR_SIZE;
+		store_stack_value(m_stack_pointer, load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i64));
 		break;
 	}
 

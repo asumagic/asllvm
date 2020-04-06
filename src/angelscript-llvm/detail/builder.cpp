@@ -40,6 +40,11 @@ llvm::Type* Builder::to_llvm_type(asCDataType& type) const
 		return llvm::Type::getInt8PtrTy(*m_context);
 	}
 
+	if (type.IsObject())
+	{
+		return llvm::ArrayType::get(m_common_definitions.i32, get_script_type_dword_size(type));
+	}
+
 	throw std::runtime_error{"type not supported"};
 }
 
@@ -53,7 +58,7 @@ bool Builder::is_script_type_64(asCDataType& type) const
 	return type.GetSizeOnStackDWords() == 2;
 }
 
-std::size_t Builder::get_script_type_dword_size(asCDataType& type) const { return is_script_type_64(type) ? 2 : 1; }
+std::size_t Builder::get_script_type_dword_size(asCDataType& type) const { return type.GetSizeOnStackDWords(); }
 
 llvm::legacy::PassManager& Builder::optimizer() { return m_pass_manager; }
 
