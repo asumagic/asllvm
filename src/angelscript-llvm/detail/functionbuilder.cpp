@@ -67,6 +67,8 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 		}
 
 		walk_bytecode([this](InstructionContext instruction) { return read_instruction(instruction); });
+
+		asllvm_assert(m_stack_pointer == m_locals_size);
 	}
 	catch (std::exception& exception)
 	{
@@ -253,6 +255,10 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 		emit_branch_if_missing(it->second);
 	}
 
+	// Ensure that the stack pointer is within bounds
+	asllvm_assert(m_stack_pointer >= m_locals_size);
+	asllvm_assert(m_stack_pointer <= m_locals_size + m_max_extra_stack_size);
+
 	switch (instruction.info->bc)
 	{
 	case asBC_JitEntry:
@@ -386,7 +392,7 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 	case asBC_PshVPtr:
 	{
 		m_stack_pointer += AS_PTR_SIZE;
-		store_stack_value(m_stack_pointer, load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i64));
+		store_stack_value(m_stack_pointer, load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.iptr));
 		break;
 	}
 
@@ -760,7 +766,10 @@ llvm::Value* FunctionBuilder::get_stack_value_pointer(FunctionBuilder::StackVari
 
 	// Get a pointer to that value on the local stack
 	{
-		const std::size_t local_offset = m_locals_size + m_max_extra_stack_size - i;
+		const long local_offset = m_locals_size + m_max_extra_stack_size - i;
+
+		// Ensure offset is within alloca boundaries
+		asllvm_assert(local_offset >= 0 && local_offset < m_locals_size + m_max_extra_stack_size);
 
 		std::array<llvm::Value*, 2> indices{
 			{llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(context), 0),
