@@ -36,9 +36,9 @@ void foo()
 	}
 }
 
-void foo(const string &in a, const string &in b)
+string add_string(const string &in a, const string &in b)
 {
-	a + b;
+	return a + b;
 }
 
 void main()
@@ -56,7 +56,7 @@ void main()
 	s += s2;
 	print(s);
 
-	foo("hello", "world");
+	print(add_string("hello", ", world"));
 
 	string yolo;
 	for (int i = 0; i < 3; ++i)
