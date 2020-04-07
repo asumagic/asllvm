@@ -214,125 +214,24 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	asllvm_assert(m_stack_pointer >= m_locals_size);
 	asllvm_assert(m_stack_pointer <= m_locals_size + m_max_extra_stack_size);
 
+	const auto unimpl = [] { asllvm_assert(false && "unrecognized instruction while translating bytecode"); };
+
 	switch (instruction.info->bc)
 	{
-	case asBC_JitEntry:
+	case asBC_PopPtr: unimpl(); break;
+	case asBC_PshGPtr: unimpl(); break;
+
+	case asBC_PshC4:
 	{
-		if (m_compiler.config().verbose)
-		{
-			m_compiler.diagnostic(engine, "Found JIT entry point, patching as valid entry point");
-		}
-
-		// Pass the JitCompiler as the jitArg value, which can be used by lazy_jit_compiler().
-		// TODO: this is probably UB
-		asBC_PTRARG(instruction.pointer) = reinterpret_cast<asPWORD>(&m_compiler);
-
+		++m_stack_pointer;
+		store_stack_value(m_stack_pointer, llvm::ConstantInt::get(defs.i32, asBC_DWORDARG(instruction.pointer)));
 		break;
 	}
 
-	case asBC_SUSPEND:
+	case asBC_PshV4:
 	{
-		if (m_compiler.config().verbose)
-		{
-			m_compiler.diagnostic(engine, "Found VM suspend, these are unsupported and ignored", asMSGTYPE_WARNING);
-		}
-
-		break;
-	}
-
-	case asBC_ADDi:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::Add, defs.i32);
-		break;
-	}
-
-	case asBC_ADDi64:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::Add, defs.i64);
-		break;
-	}
-
-	case asBC_SUBIi:
-	{
-		emit_stack_arithmetic_imm(instruction, llvm::Instruction::Sub, defs.i32);
-		break;
-	}
-
-	case asBC_CpyVtoV4:
-	{
-		auto target = asBC_SWORDARG0(instruction.pointer);
-		auto source = asBC_SWORDARG1(instruction.pointer);
-
-		store_stack_value(target, load_stack_value(source, defs.i32));
-
-		break;
-	}
-
-	case asBC_CpyVtoV8:
-	{
-		auto target = asBC_SWORDARG0(instruction.pointer);
-		auto source = asBC_SWORDARG1(instruction.pointer);
-
-		store_stack_value(target, load_stack_value(source, defs.i64));
-
-		break;
-	}
-
-	case asBC_CpyVtoR4:
-	{
-		store_value_register_value(load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32));
-		break;
-	}
-
-	case asBC_CpyVtoR8:
-	{
-		store_value_register_value(load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i64));
-		break;
-	}
-
-	case asBC_CpyRtoV4:
-	{
-		store_stack_value(asBC_SWORDARG0(instruction.pointer), load_value_register_value(defs.i32));
-		break;
-	}
-
-	case asBC_CpyRtoV8:
-	{
-		store_stack_value(asBC_SWORDARG0(instruction.pointer), load_value_register_value(defs.i64));
-		break;
-	}
-
-	case asBC_sbTOi: emit_stack_integer_sign_extend(instruction, defs.i8, defs.i32); break;
-	case asBC_swTOi: emit_stack_integer_sign_extend(instruction, defs.i16, defs.i32); break;
-	case asBC_ubTOi: emit_stack_integer_zero_extend(instruction, defs.i8, defs.i32); break;
-	case asBC_uwTOi: emit_stack_integer_zero_extend(instruction, defs.i16, defs.i32); break;
-	case asBC_iTOb: emit_stack_integer_trunc(instruction, defs.i32, defs.i8); break;
-	case asBC_iTOw: emit_stack_integer_trunc(instruction, defs.i32, defs.i16); break;
-	case asBC_i64TOi: emit_stack_integer_trunc(instruction, defs.i64, defs.i32); break;
-	case asBC_uTOi64: emit_stack_integer_zero_extend(instruction, defs.i32, defs.i64); break;
-	case asBC_iTOi64: emit_stack_integer_sign_extend(instruction, defs.i32, defs.i64); break;
-
-	case asBC_SetV1:
-	case asBC_SetV2:
-	case asBC_SetV4:
-	{
-		store_stack_value(
-			asBC_SWORDARG0(instruction.pointer), llvm::ConstantInt::get(defs.i32, asBC_DWORDARG(instruction.pointer)));
-
-		break;
-	}
-
-	case asBC_PGA:
-	{
-		m_stack_pointer += AS_PTR_SIZE;
-		store_stack_value(m_stack_pointer, llvm::ConstantInt::get(defs.i64, asBC_PTRARG(instruction.pointer)));
-		break;
-	}
-
-	case asBC_VAR:
-	{
-		m_stack_pointer += AS_PTR_SIZE;
-		store_stack_value(m_stack_pointer, llvm::ConstantInt::get(defs.i64, asBC_SWORDARG0(instruction.pointer)));
+		++m_stack_pointer;
+		store_stack_value(m_stack_pointer, load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32));
 		break;
 	}
 
@@ -344,84 +243,10 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 		break;
 	}
 
-	case asBC_PshVPtr:
-	{
-		m_stack_pointer += AS_PTR_SIZE;
-		store_stack_value(m_stack_pointer, load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.iptr));
-		break;
-	}
-
-	case asBC_PshV4:
-	{
-		++m_stack_pointer;
-		store_stack_value(m_stack_pointer, load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32));
-		break;
-	}
-
-	case asBC_PshV8:
-	{
-		m_stack_pointer += 2;
-		store_stack_value(m_stack_pointer, load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i64));
-		break;
-	}
-
-	case asBC_PshC4:
-	{
-		++m_stack_pointer;
-		store_stack_value(m_stack_pointer, llvm::ConstantInt::get(defs.i32, asBC_DWORDARG(instruction.pointer)));
-		break;
-	}
-
-	case asBC_PshC8:
-	{
-		m_stack_pointer += 2;
-		store_stack_value(m_stack_pointer, llvm::ConstantInt::get(defs.i64, asBC_QWORDARG(instruction.pointer)));
-		break;
-	}
-
-	case asBC_IncVi:
-	{
-		llvm::Value* value  = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32);
-		llvm::Value* result = ir.CreateAdd(value, llvm::ConstantInt::get(defs.i32, 1));
-		store_stack_value(asBC_SWORDARG0(instruction.pointer), result);
-		break;
-	}
-
-	case asBC_DecVi:
-	{
-		llvm::Value* value  = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32);
-		llvm::Value* result = ir.CreateSub(value, llvm::ConstantInt::get(defs.i32, 1));
-		store_stack_value(asBC_SWORDARG0(instruction.pointer), result);
-		break;
-	}
-
-	case asBC_CMPi:
-	{
-		llvm::Value* lhs = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32);
-		llvm::Value* rhs = load_stack_value(asBC_SWORDARG1(instruction.pointer), defs.i32);
-		emit_integral_compare(lhs, rhs);
-		break;
-	}
-
-	case asBC_CMPIi:
-	{
-		llvm::Value* lhs = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32);
-		llvm::Value* rhs = llvm::ConstantInt::get(defs.i32, asBC_INTARG(instruction.pointer));
-		emit_integral_compare(lhs, rhs);
-		break;
-	}
-
-	case asBC_CALLSYS:
-	{
-		asCScriptFunction* function
-			= static_cast<asCScriptFunction*>(engine.GetFunctionById(asBC_INTARG(instruction.pointer)));
-
-		asllvm_assert(function != nullptr);
-
-		emit_system_call(*function);
-
-		break;
-	}
+	case asBC_SwapPtr: unimpl(); break;
+	case asBC_NOT: unimpl(); break;
+	case asBC_PshG4: unimpl(); break;
+	case asBC_LdGRdR4: unimpl(); break;
 
 	case asBC_CALL:
 	{
@@ -534,9 +359,374 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 		break;
 	}
 
+	case asBC_TZ: unimpl(); break;
+	case asBC_TNZ: unimpl(); break;
+	case asBC_TS: unimpl(); break;
+	case asBC_TNS: unimpl(); break;
+	case asBC_TP: unimpl(); break;
+	case asBC_TNP: unimpl(); break;
+	case asBC_NEGi: unimpl(); break;
+	case asBC_NEGf: unimpl(); break;
+	case asBC_NEGd: unimpl(); break;
+	case asBC_INCi16: unimpl(); break;
+	case asBC_INCi8: unimpl(); break;
+	case asBC_DECi16: unimpl(); break;
+	case asBC_DECi8: unimpl(); break;
+	case asBC_INCi: unimpl(); break;
+	case asBC_INCf: unimpl(); break;
+	case asBC_DECf: unimpl(); break;
+	case asBC_INCd: unimpl(); break;
+	case asBC_DECd: unimpl(); break;
+
+	case asBC_IncVi:
+	{
+		llvm::Value* value  = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32);
+		llvm::Value* result = ir.CreateAdd(value, llvm::ConstantInt::get(defs.i32, 1));
+		store_stack_value(asBC_SWORDARG0(instruction.pointer), result);
+		break;
+	}
+
+	case asBC_DecVi:
+	{
+		llvm::Value* value  = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32);
+		llvm::Value* result = ir.CreateSub(value, llvm::ConstantInt::get(defs.i32, 1));
+		store_stack_value(asBC_SWORDARG0(instruction.pointer), result);
+		break;
+	}
+
+	case asBC_BNOT: unimpl(); break;
+	case asBC_BAND: unimpl(); break;
+	case asBC_BOR: unimpl(); break;
+	case asBC_BXOR: unimpl(); break;
+	case asBC_BSLL: unimpl(); break;
+	case asBC_BSRL: unimpl(); break;
+	case asBC_BSRA: unimpl(); break;
+	case asBC_COPY: unimpl(); break;
+
+	case asBC_PshC8:
+	{
+		m_stack_pointer += 2;
+		store_stack_value(m_stack_pointer, llvm::ConstantInt::get(defs.i64, asBC_QWORDARG(instruction.pointer)));
+		break;
+	}
+
+	case asBC_PshVPtr:
+	{
+		m_stack_pointer += AS_PTR_SIZE;
+		store_stack_value(m_stack_pointer, load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.iptr));
+		break;
+	}
+
+	case asBC_RDSPtr: unimpl(); break;
+	case asBC_CMPd: unimpl(); break;
+	case asBC_CMPu: unimpl(); break;
+	case asBC_CMPf: unimpl(); break;
+
+	case asBC_CMPi:
+	{
+		llvm::Value* lhs = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32);
+		llvm::Value* rhs = load_stack_value(asBC_SWORDARG1(instruction.pointer), defs.i32);
+		emit_integral_compare(lhs, rhs);
+		break;
+	}
+
+	case asBC_CMPIi:
+	{
+		llvm::Value* lhs = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32);
+		llvm::Value* rhs = llvm::ConstantInt::get(defs.i32, asBC_INTARG(instruction.pointer));
+		emit_integral_compare(lhs, rhs);
+		break;
+	}
+
+	case asBC_CMPIf: unimpl(); break;
+	case asBC_CMPIu: unimpl(); break;
+	case asBC_JMPP: unimpl(); break;
+	case asBC_PopRPtr: unimpl(); break;
+	case asBC_PshRPtr: unimpl(); break;
+	case asBC_STR: unimpl(); break;
+
+	case asBC_CALLSYS:
+	{
+		asCScriptFunction* function
+			= static_cast<asCScriptFunction*>(engine.GetFunctionById(asBC_INTARG(instruction.pointer)));
+
+		asllvm_assert(function != nullptr);
+
+		emit_system_call(*function);
+
+		break;
+	}
+
+	case asBC_CALLBND: unimpl(); break;
+
+	case asBC_SUSPEND:
+	{
+		if (m_compiler.config().verbose)
+		{
+			m_compiler.diagnostic(engine, "Found VM suspend, these are unsupported and ignored", asMSGTYPE_WARNING);
+		}
+
+		break;
+	}
+
+	case asBC_ALLOC: unimpl(); break;
+	case asBC_FREE: unimpl(); break;
+	case asBC_LOADOBJ: unimpl(); break;
+	case asBC_STOREOBJ: unimpl(); break;
+	case asBC_GETOBJ: unimpl(); break;
+	case asBC_REFCPY: unimpl(); break;
+	case asBC_CHKREF: unimpl(); break;
+	case asBC_GETOBJREF: unimpl(); break;
+	case asBC_GETREF: unimpl(); break;
+	case asBC_PshNull: unimpl(); break;
+	case asBC_ClrVPtr: unimpl(); break;
+	case asBC_OBJTYPE: unimpl(); break;
+	case asBC_TYPEID: unimpl(); break;
+
+	case asBC_SetV1:
+	case asBC_SetV2:
+	case asBC_SetV4:
+	{
+		store_stack_value(
+			asBC_SWORDARG0(instruction.pointer), llvm::ConstantInt::get(defs.i32, asBC_DWORDARG(instruction.pointer)));
+
+		break;
+	}
+
+	case asBC_SetV8: unimpl(); break;
+	case asBC_ADDSi: unimpl(); break;
+
+	case asBC_CpyVtoV4:
+	{
+		auto target = asBC_SWORDARG0(instruction.pointer);
+		auto source = asBC_SWORDARG1(instruction.pointer);
+
+		store_stack_value(target, load_stack_value(source, defs.i32));
+
+		break;
+	}
+
+	case asBC_CpyVtoV8:
+	{
+		auto target = asBC_SWORDARG0(instruction.pointer);
+		auto source = asBC_SWORDARG1(instruction.pointer);
+
+		store_stack_value(target, load_stack_value(source, defs.i64));
+
+		break;
+	}
+
+	case asBC_CpyVtoR4:
+	{
+		store_value_register_value(load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32));
+		break;
+	}
+
+	case asBC_CpyVtoR8:
+	{
+		store_value_register_value(load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i64));
+		break;
+	}
+
+	case asBC_CpyVtoG4: unimpl(); break;
+
+	case asBC_CpyRtoV4:
+	{
+		store_stack_value(asBC_SWORDARG0(instruction.pointer), load_value_register_value(defs.i32));
+		break;
+	}
+
+	case asBC_CpyRtoV8:
+	{
+		store_stack_value(asBC_SWORDARG0(instruction.pointer), load_value_register_value(defs.i64));
+		break;
+	}
+
+	case asBC_CpyGtoV4: unimpl(); break;
+	case asBC_WRTV1: unimpl(); break;
+	case asBC_WRTV2: unimpl(); break;
+	case asBC_WRTV4: unimpl(); break;
+	case asBC_WRTV8: unimpl(); break;
+	case asBC_RDR1: unimpl(); break;
+	case asBC_RDR2: unimpl(); break;
+	case asBC_RDR4: unimpl(); break;
+	case asBC_RDR8: unimpl(); break;
+	case asBC_LDG: unimpl(); break;
+	case asBC_LDV: unimpl(); break;
+
+	case asBC_PGA:
+	{
+		m_stack_pointer += AS_PTR_SIZE;
+		store_stack_value(m_stack_pointer, llvm::ConstantInt::get(defs.i64, asBC_PTRARG(instruction.pointer)));
+		break;
+	}
+
+	case asBC_CmpPtr: unimpl(); break;
+
+	case asBC_VAR:
+	{
+		m_stack_pointer += AS_PTR_SIZE;
+		store_stack_value(m_stack_pointer, llvm::ConstantInt::get(defs.i64, asBC_SWORDARG0(instruction.pointer)));
+		break;
+	}
+
+	case asBC_iTOf: unimpl(); break;
+	case asBC_fTOi: unimpl(); break;
+	case asBC_uTOf: unimpl(); break;
+	case asBC_fTOu: unimpl(); break;
+
+	case asBC_sbTOi: emit_stack_integer_sign_extend(instruction, defs.i8, defs.i32); break;
+	case asBC_swTOi: emit_stack_integer_sign_extend(instruction, defs.i16, defs.i32); break;
+	case asBC_ubTOi: emit_stack_integer_zero_extend(instruction, defs.i8, defs.i32); break;
+	case asBC_uwTOi: emit_stack_integer_zero_extend(instruction, defs.i16, defs.i32); break;
+
+	case asBC_dTOi: unimpl(); break;
+	case asBC_dTOu: unimpl(); break;
+	case asBC_dTOf: unimpl(); break;
+
+	case asBC_iTOd: unimpl(); break;
+	case asBC_uTOd: unimpl(); break;
+	case asBC_fTOd: unimpl(); break;
+
+	case asBC_ADDi:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::Add, defs.i32);
+		break;
+	}
+
+	case asBC_SUBi: unimpl(); break;
+	case asBC_MULi: unimpl(); break;
+	case asBC_DIVi: unimpl(); break;
+	case asBC_MODi: unimpl(); break;
+
+	case asBC_ADDf: unimpl(); break;
+	case asBC_SUBf: unimpl(); break;
+	case asBC_MULf: unimpl(); break;
+	case asBC_MODf: unimpl(); break;
+
+	case asBC_ADDd: unimpl(); break;
+	case asBC_SUBd: unimpl(); break;
+	case asBC_MULd: unimpl(); break;
+	case asBC_MODd: unimpl(); break;
+
+	case asBC_ADDIi: unimpl(); break;
+
+	case asBC_SUBIi:
+	{
+		emit_stack_arithmetic_imm(instruction, llvm::Instruction::Sub, defs.i32);
+		break;
+	}
+
+	case asBC_MULIi: unimpl(); break;
+
+	case asBC_ADDIf: unimpl(); break;
+	case asBC_SUBIf: unimpl(); break;
+	case asBC_MULIf: unimpl(); break;
+
+	case asBC_SetG4: unimpl(); break;
+
+	case asBC_ChkRefS: unimpl(); break;
+	case asBC_ChkNullV: unimpl(); break;
+
+	case asBC_CALLINTF: unimpl(); break;
+
+	case asBC_iTOb: emit_stack_integer_trunc(instruction, defs.i32, defs.i8); break;
+	case asBC_iTOw:
+		emit_stack_integer_trunc(instruction, defs.i32, defs.i16);
+		break;
+
+		// SetV1/V2 grouped with V4 further up
+
+	case asBC_Cast: unimpl(); break;
+
+	case asBC_i64TOi: emit_stack_integer_trunc(instruction, defs.i64, defs.i32); break;
+	case asBC_uTOi64: emit_stack_integer_zero_extend(instruction, defs.i32, defs.i64); break;
+	case asBC_iTOi64: emit_stack_integer_sign_extend(instruction, defs.i32, defs.i64); break;
+
+	case asBC_fTOi64: unimpl(); break;
+	case asBC_dTOi64: unimpl(); break;
+	case asBC_fTOu64: unimpl(); break;
+	case asBC_dTOu64: unimpl(); break;
+
+	case asBC_i64TOf: unimpl(); break;
+	case asBC_u64TOf: unimpl(); break;
+	case asBC_i64TOd: unimpl(); break;
+	case asBC_u64TOd: unimpl(); break;
+
+	case asBC_NEGi64: unimpl(); break;
+	case asBC_INCi64: unimpl(); break;
+	case asBC_DECi64: unimpl(); break;
+	case asBC_BNOT64: unimpl(); break;
+	case asBC_ADDi64:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::Add, defs.i64);
+		break;
+	}
+	case asBC_SUBi64: unimpl(); break;
+	case asBC_MULi64: unimpl(); break;
+	case asBC_DIVi64: unimpl(); break;
+
+	case asBC_BAND64: unimpl(); break;
+	case asBC_BOR64: unimpl(); break;
+	case asBC_BXOR64: unimpl(); break;
+	case asBC_BSLL64: unimpl(); break;
+	case asBC_BSRL64: unimpl(); break;
+	case asBC_BSRA64: unimpl(); break;
+
+	case asBC_CMPi64: unimpl(); break;
+	case asBC_CMPu64: unimpl(); break;
+	case asBC_ChkNullS: unimpl(); break;
+	case asBC_ClrHi: unimpl(); break;
+
+	case asBC_JitEntry:
+	{
+		if (m_compiler.config().verbose)
+		{
+			m_compiler.diagnostic(engine, "Found JIT entry point, patching as valid entry point");
+		}
+
+		// Pass the JitCompiler as the jitArg value, which can be used by lazy_jit_compiler().
+		// TODO: this is probably UB
+		asBC_PTRARG(instruction.pointer) = reinterpret_cast<asPWORD>(&m_compiler);
+
+		break;
+	}
+
+	case asBC_CallPtr: unimpl(); break;
+	case asBC_FuncPtr: unimpl(); break;
+	case asBC_LoadThisR: unimpl(); break;
+
+	case asBC_PshV8:
+	{
+		m_stack_pointer += 2;
+		store_stack_value(m_stack_pointer, load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i64));
+		break;
+	}
+
+	case asBC_DIVu: unimpl(); break;
+	case asBC_MODu: unimpl(); break;
+	case asBC_DIVu64: unimpl(); break;
+	case asBC_MODu64: unimpl(); break;
+	case asBC_LoadRObjR: unimpl(); break;
+	case asBC_LoadVObjR: unimpl(); break;
+	case asBC_RefCpyV: unimpl(); break;
+	case asBC_JLowZ: unimpl(); break;
+	case asBC_JLowNZ: unimpl(); break;
+	case asBC_AllocMem: unimpl(); break;
+	case asBC_SetListSize: unimpl(); break;
+	case asBC_PshListElmnt: unimpl(); break;
+	case asBC_SetListType: unimpl(); break;
+	case asBC_POWi: unimpl(); break;
+	case asBC_POWu: unimpl(); break;
+	case asBC_POWd: unimpl(); break;
+	case asBC_POWdi: unimpl(); break;
+	case asBC_POWi64: unimpl(); break;
+	case asBC_POWu64: unimpl(); break;
+	case asBC_Thiscall1: unimpl(); break;
+
 	default:
 	{
-		asllvm_assert(false && "unrecognized instruction while translating bytecode");
+		asllvm_assert(false && "unrecognized instruction - are you using an unsupported AS version?");
 	}
 	}
 
