@@ -36,6 +36,11 @@ void foo()
 	}
 }
 
+void foo(const string &in a, const string &in b)
+{
+	a + b;
+}
+
 void main()
 {
 	print(add_i8(1, 2));
@@ -50,14 +55,17 @@ void main()
 	string s2 = "world";
 	s += s2;
 	print(s);
-}
 
-/*
-void main()
-{
-	string a = "hello", b = "world";
+	foo("hello", "world");
+
+	string yolo;
+	for (int i = 0; i < 3; ++i)
+	{
+		yolo += "yolo";
+	}
+
+	print(yolo);
 }
-*/
 /*
 void no_op() {}
 

@@ -835,89 +835,133 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 	llvm::Function* callee = m_module_builder.get_system_function(function);
 
 	const std::size_t         argument_count = callee->arg_size();
-	std::vector<llvm::Value*> args(callee->arg_size());
+	std::vector<llvm::Value*> args(argument_count);
 
-	long current_parameter_offset = m_stack_pointer;
+	// TODO: should use references were possible, *const for consistency for now though
+	llvm::Type* const return_type    = callee->getReturnType();
+	llvm::Value*      return_pointer = nullptr;
 
-	llvm::Value* return_pointer = nullptr;
+	if (function.DoesReturnOnStack() && !intf.hostReturnInMemory)
+	{
+		return_pointer = load_stack_value(m_stack_pointer, return_type->getPointerTo());
+		m_stack_pointer -= AS_PTR_SIZE;
+	}
 
-	std::size_t first_param_index = 0, regular_count = argument_count;
-
-	const auto read_params = [&]() {
-		for (std::size_t i = 0; i < regular_count; ++i)
-		{
-			llvm::Argument* llvm_argument = &*(callee->arg_begin() + i + first_param_index);
-			args[i + first_param_index]   = load_stack_value(current_parameter_offset, llvm_argument->getType());
-
-			current_parameter_offset -= function.parameterTypes[i].GetSizeOnStackDWords();
-		}
+	const auto pop_sret_pointer = [&] {
+		llvm::Argument* llvm_argument = &*(callee->arg_begin() + 0);
+		llvm::Value*    value         = load_stack_value(m_stack_pointer, llvm_argument->getType());
+		m_stack_pointer -= AS_PTR_SIZE;
+		return value;
 	};
 
-	const auto handle_stack_returns = [&] {
-		if (function.DoesReturnOnStack())
+	for (std::size_t i = 0, insert_index = 0, script_param_index = 0; i < argument_count; ++i)
+	{
+		const auto pop_param = [&] {
+			llvm::Argument* llvm_argument = &*(callee->arg_begin() + i);
+
+			args[insert_index] = load_stack_value(m_stack_pointer, llvm_argument->getType());
+			m_stack_pointer -= function.parameterTypes[script_param_index].GetSizeOnStackDWords();
+
+			++insert_index;
+			++script_param_index;
+		};
+
+		switch (intf.callConv)
+		{
+		case ICC_THISCALL:
+		case ICC_CDECL_OBJFIRST:
 		{
 			if (intf.hostReturnInMemory)
 			{
-				llvm::Argument* llvm_argument = &*(callee->arg_begin() + first_param_index);
-				args[first_param_index]       = load_stack_value(current_parameter_offset, llvm_argument->getType());
-				current_parameter_offset -= AS_PTR_SIZE;
+				// 'this' pointer
+				if (i == 0)
+				{
+					llvm::Argument* llvm_argument = &*(callee->arg_begin() + 1);
+					args[1]                       = load_stack_value(m_stack_pointer, llvm_argument->getType());
+					m_stack_pointer -= AS_PTR_SIZE;
+					break;
+				}
 
-				++first_param_index;
-				--regular_count;
-				return;
+				if (i == 1)
+				{
+					args[0]      = pop_sret_pointer();
+					insert_index = 2;
+					break;
+				}
+			}
+			else
+			{
+				// 'this' pointer
+				if (i == 0)
+				{
+					llvm::Argument* llvm_argument = &*(callee->arg_begin() + 0);
+					args[1]                       = load_stack_value(m_stack_pointer, llvm_argument->getType());
+					m_stack_pointer -= AS_PTR_SIZE;
+					insert_index = 1;
+					break;
+				}
 			}
 
-			return_pointer = load_stack_value(current_parameter_offset, callee->getReturnType()->getPointerTo());
-			current_parameter_offset -= AS_PTR_SIZE;
+			pop_param();
+
+			break;
 		}
-	};
 
-	switch (intf.callConv)
-	{
-	// thiscall: add this as first parameter
-	// HACK: this is probably not very crossplatform to do
-	case ICC_THISCALL:
-	case ICC_CDECL_OBJFIRST:
-	{
-		args.front() = load_stack_value(current_parameter_offset, defs.pvoid);
-		current_parameter_offset -= AS_PTR_SIZE;
-		++first_param_index;
-		--regular_count;
+		case ICC_CDECL_OBJLAST:
+		{
+			if (intf.hostReturnInMemory)
+			{
+				// 'this' pointer
+				if (i == 0)
+				{
+					llvm::Argument* llvm_argument = &*(callee->arg_begin() + 1);
+					args.back()                   = load_stack_value(m_stack_pointer, llvm_argument->getType());
+					m_stack_pointer -= AS_PTR_SIZE;
+					break;
+				}
 
-		handle_stack_returns();
+				if (i == 1)
+				{
+					args[0]      = pop_sret_pointer();
+					insert_index = 1;
+					break;
+				}
+			}
+			else
+			{
+				// 'this' pointer
+				if (i == 0)
+				{
+					llvm::Argument* llvm_argument = &*(callee->arg_begin() + 0);
+					args.back()                   = load_stack_value(m_stack_pointer, llvm_argument->getType());
+					m_stack_pointer -= AS_PTR_SIZE;
+					break;
+				}
+			}
 
-		read_params();
-		break;
-	}
+			pop_param();
 
-	case ICC_CDECL_OBJLAST:
-	{
-		args.back() = load_stack_value(current_parameter_offset, defs.pvoid);
-		current_parameter_offset -= AS_PTR_SIZE;
-		--regular_count;
+			break;
+		}
 
-		handle_stack_returns();
+		case ICC_CDECL:
+		{
+			pop_param();
+			break;
+		}
 
-		read_params();
-		break;
-	}
-
-	// C calling convention: nothing special to do
-	case ICC_CDECL:
-	{
-		handle_stack_returns();
-		read_params();
-		break;
-	}
-
-	default: asllvm_assert(false && "unsupported calling convention");
+		default:
+		{
+			asllvm_assert(false && "unhandled calling convention");
+		}
+		}
 	}
 
 	llvm::Value* result = ir.CreateCall(callee->getFunctionType(), callee, args);
 
 	if (return_pointer == nullptr)
 	{
-		if (callee->getReturnType() != defs.tvoid)
+		if (return_type != defs.tvoid)
 		{
 			store_return_register_value(result);
 		}
@@ -926,8 +970,6 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 	{
 		ir.CreateStore(result, return_pointer);
 	}
-
-	m_stack_pointer = current_parameter_offset;
 }
 
 llvm::Value* FunctionBuilder::load_stack_value(StackVariableIdentifier i, llvm::Type* type)

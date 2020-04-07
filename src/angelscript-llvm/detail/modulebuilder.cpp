@@ -74,6 +74,7 @@ llvm::Function* ModuleBuilder::get_system_function(asCScriptFunction& system_fun
 
 	if (intf.hostReturnInMemory)
 	{
+		// types[0]
 		types.push_back(m_compiler.builder().to_llvm_type(system_function.returnType)->getPointerTo());
 	}
 	else
@@ -113,6 +114,11 @@ llvm::Function* ModuleBuilder::get_system_function(asCScriptFunction& system_fun
 
 	llvm::Function* function = llvm::Function::Create(
 		function_type, llvm::Function::ExternalLinkage, 0, make_system_function_name(system_function), m_module.get());
+
+	if (intf.hostReturnInMemory)
+	{
+		function->addParamAttr(0, llvm::Attribute::StructRet);
+	}
 
 	m_system_functions.emplace(id, function);
 

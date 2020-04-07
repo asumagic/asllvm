@@ -43,7 +43,6 @@ llvm::Type* Builder::to_llvm_type(asCDataType& type) const
 
 	if (type.IsObject())
 	{
-		// HACK: add get_script_type_byte_size for proper behavior
 		std::array<llvm::Type*, 1> types{{llvm::ArrayType::get(m_defs.i8, type.GetSizeInMemoryBytes())}};
 		asllvm_assert(type.GetTypeInfo() != nullptr);
 		return llvm::StructType::create(types, type.GetTypeInfo()->GetName());
