@@ -256,6 +256,8 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 	llvm::LLVMContext& context = m_compiler.builder().context();
 	CommonDefinitions& defs    = m_compiler.builder().definitions();
 
+	const auto old_stack_pointer = m_stack_pointer;
+
 	if (auto it = m_jump_map.find(instruction.offset); it != m_jump_map.end())
 	{
 		asllvm_assert(m_stack_pointer == m_locals_size);
@@ -585,6 +587,11 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 	{
 		asllvm_assert(false && "unrecognized instruction while translating bytecode");
 	}
+	}
+
+	if (const auto expected_increment = instruction.info->stackInc; expected_increment != 0xFFFF)
+	{
+		asllvm_assert(m_stack_pointer - old_stack_pointer == expected_increment);
 	}
 }
 
