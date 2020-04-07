@@ -19,10 +19,10 @@ FunctionBuilder::FunctionBuilder(
 	m_compiler{compiler},
 	m_module_builder{module_builder},
 	m_script_function{script_function},
-	m_llvm_function{llvm_function},
-	m_entry_block{llvm::BasicBlock::Create(m_compiler.builder().context(), "entry", llvm_function)}
+	m_llvm_function{llvm_function}
 {
-	m_compiler.builder().ir().SetInsertPoint(m_entry_block);
+	m_compiler.builder().ir().SetInsertPoint(
+		llvm::BasicBlock::Create(m_compiler.builder().context(), "entry", llvm_function));
 }
 
 llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
@@ -56,7 +56,7 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 		{
 			fmt::print(stderr, "Bytecode disassembly: \n");
 			walk_bytecode([this](InstructionContext instruction) {
-				const std::string op = read_disassemble(instruction);
+				const std::string op = disassemble(instruction);
 				if (!op.empty())
 				{
 					fmt::print(stderr, "{:04x}: {}\n", instruction.offset, op);
@@ -67,21 +67,10 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 
 		walk_bytecode([this](InstructionContext instruction) { preprocess_instruction(instruction); });
 
-		{
-			auto& script_data = *m_script_function.scriptData;
-
-			m_locals_size          = script_data.variableSpace;
-			m_max_extra_stack_size = script_data.stackNeeded - m_locals_size;
-
-			m_locals = ir.CreateAlloca(
-				llvm::ArrayType::get(llvm::IntegerType::getInt32Ty(context), script_data.stackNeeded), 0, "locals");
-			m_value = ir.CreateAlloca(llvm::IntegerType::getInt64Ty(context), 0, "valuereg");
-
-			m_stack_pointer = m_locals_size;
-		}
+		emit_allocate_local_structures();
 
 		walk_bytecode([&](InstructionContext instruction) {
-			read_instruction(instruction);
+			process_instruction(instruction);
 
 			// Emit metadata on last inserted instruction for debugging
 			if (m_compiler.config().verbose)
@@ -92,7 +81,7 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 					return;
 				}
 
-				const std::string disassembled = read_disassemble(instruction);
+				const std::string disassembled = disassemble(instruction);
 				if (disassembled.empty())
 				{
 					return;
@@ -184,48 +173,6 @@ void FunctionBuilder::preprocess_instruction(InstructionContext instruction)
 {
 	switch (instruction.info->bc)
 	{
-	case asBC_JitEntry:
-	case asBC_SUSPEND:
-	case asBC_CpyVtoR4:
-	case asBC_CpyVtoR8:
-	case asBC_RET:
-	case asBC_CALLSYS:
-	case asBC_CALL:
-	case asBC_CMPi:
-	case asBC_CMPIi:
-	case asBC_ADDi:
-	case asBC_ADDi64:
-	case asBC_SUBIi:
-	case asBC_CpyVtoV4:
-	case asBC_CpyVtoV8:
-	case asBC_CpyRtoV4:
-	case asBC_CpyRtoV8:
-	case asBC_sbTOi:
-	case asBC_swTOi:
-	case asBC_ubTOi:
-	case asBC_uwTOi:
-	case asBC_iTOb:
-	case asBC_iTOw:
-	case asBC_i64TOi:
-	case asBC_uTOi64:
-	case asBC_iTOi64:
-	case asBC_SetV1:
-	case asBC_SetV2:
-	case asBC_SetV4:
-	case asBC_IncVi:
-	case asBC_DecVi:
-	case asBC_PGA:
-	case asBC_PSF:
-	case asBC_PshVPtr:
-	case asBC_VAR:
-	case asBC_PshV4:
-	case asBC_PshC4:
-	case asBC_PshV8:
-	case asBC_PshC8:
-	{
-		break;
-	}
-
 	// Inconditional jump
 	case asBC_JMP:
 	{
@@ -245,14 +192,11 @@ void FunctionBuilder::preprocess_instruction(InstructionContext instruction)
 		break;
 	}
 
-	default:
-	{
-		asllvm_assert(false && "unrecognized instruction while preprocessing");
-	}
+	default: break;
 	}
 }
 
-void FunctionBuilder::read_instruction(InstructionContext instruction)
+void FunctionBuilder::process_instruction(InstructionContext instruction)
 {
 	asIScriptEngine&   engine  = m_compiler.engine();
 	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
@@ -264,7 +208,7 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 	if (auto it = m_jump_map.find(instruction.offset); it != m_jump_map.end())
 	{
 		asllvm_assert(m_stack_pointer == m_locals_size);
-		emit_branch_if_missing(it->second);
+		switch_to_block(it->second);
 	}
 
 	// Ensure that the stack pointer is within bounds
@@ -337,25 +281,25 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 
 	case asBC_CpyVtoR4:
 	{
-		store_return_register_value(load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32));
+		store_value_register_value(load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32));
 		break;
 	}
 
 	case asBC_CpyVtoR8:
 	{
-		store_return_register_value(load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i64));
+		store_value_register_value(load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i64));
 		break;
 	}
 
 	case asBC_CpyRtoV4:
 	{
-		store_stack_value(asBC_SWORDARG0(instruction.pointer), load_return_register_value(defs.i32));
+		store_stack_value(asBC_SWORDARG0(instruction.pointer), load_value_register_value(defs.i32));
 		break;
 	}
 
 	case asBC_CpyRtoV8:
 	{
-		store_stack_value(asBC_SWORDARG0(instruction.pointer), load_return_register_value(defs.i64));
+		store_stack_value(asBC_SWORDARG0(instruction.pointer), load_value_register_value(defs.i64));
 		break;
 	}
 
@@ -489,15 +433,20 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 
 		llvm::Function* callee = m_module_builder.create_function(function);
 
-		llvm::Value* ret = ir.CreateCall(callee->getFunctionType(), callee, args);
-
-		asllvm_assert(!function.DoesReturnOnStack() && "returning on stack unsupported for script calls");
+		llvm::CallInst* ret = ir.CreateCall(callee->getFunctionType(), callee, args);
 
 		if (callee->getReturnType() != llvm::Type::getVoidTy(context))
 		{
-			// Store to the value register
-			llvm::Value* typed_value_register = ir.CreateBitCast(m_value, ret->getType()->getPointerTo());
-			ir.CreateStore(ret, typed_value_register);
+			if (function.DoesReturnOnStack())
+			{
+				m_stack_pointer -= function.GetSpaceNeededForReturnValue();
+			}
+			else
+			{
+				// Store to the value register
+				llvm::Value* typed_value_register = ir.CreateBitCast(m_value_register, ret->getType()->getPointerTo());
+				ir.CreateStore(ret, typed_value_register);
+			}
 		}
 
 		m_stack_pointer -= function.GetSpaceNeededForArguments();
@@ -513,7 +462,7 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 		}
 		else
 		{
-			ir.CreateRet(load_return_register_value(m_llvm_function->getReturnType()));
+			ir.CreateRet(load_value_register_value(m_llvm_function->getReturnType()));
 		}
 
 		m_ret_pointer = instruction.pointer;
@@ -529,7 +478,7 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 	case asBC_JZ:
 	{
 		llvm::Value* condition = ir.CreateICmp(
-			llvm::CmpInst::ICMP_EQ, load_return_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
+			llvm::CmpInst::ICMP_EQ, load_value_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
 
 		ir.CreateCondBr(condition, get_branch_target(instruction), get_conditional_fail_branch_target(instruction));
 
@@ -539,7 +488,7 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 	case asBC_JNZ:
 	{
 		llvm::Value* condition = ir.CreateICmp(
-			llvm::CmpInst::ICMP_NE, load_return_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
+			llvm::CmpInst::ICMP_NE, load_value_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
 
 		ir.CreateCondBr(condition, get_branch_target(instruction), get_conditional_fail_branch_target(instruction));
 
@@ -549,7 +498,7 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 	case asBC_JS:
 	{
 		llvm::Value* condition = ir.CreateICmp(
-			llvm::CmpInst::ICMP_SLT, load_return_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
+			llvm::CmpInst::ICMP_SLT, load_value_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
 
 		ir.CreateCondBr(condition, get_branch_target(instruction), get_conditional_fail_branch_target(instruction));
 
@@ -559,7 +508,7 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 	case asBC_JNS:
 	{
 		llvm::Value* condition = ir.CreateICmp(
-			llvm::CmpInst::ICMP_SGE, load_return_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
+			llvm::CmpInst::ICMP_SGE, load_value_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
 
 		ir.CreateCondBr(condition, get_branch_target(instruction), get_conditional_fail_branch_target(instruction));
 
@@ -569,7 +518,7 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 	case asBC_JP:
 	{
 		llvm::Value* condition = ir.CreateICmp(
-			llvm::CmpInst::ICMP_SGT, load_return_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
+			llvm::CmpInst::ICMP_SGT, load_value_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
 
 		ir.CreateCondBr(condition, get_branch_target(instruction), get_conditional_fail_branch_target(instruction));
 
@@ -579,7 +528,7 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 	case asBC_JNP:
 	{
 		llvm::Value* condition = ir.CreateICmp(
-			llvm::CmpInst::ICMP_SLE, load_return_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
+			llvm::CmpInst::ICMP_SLE, load_value_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
 
 		ir.CreateCondBr(condition, get_branch_target(instruction), get_conditional_fail_branch_target(instruction));
 
@@ -598,7 +547,7 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 	}
 }
 
-std::string FunctionBuilder::read_disassemble(FunctionBuilder::InstructionContext instruction)
+std::string FunctionBuilder::disassemble(FunctionBuilder::InstructionContext instruction)
 {
 	// Handle certain instructions specifically
 	switch (instruction.info->bc)
@@ -736,6 +685,22 @@ std::string FunctionBuilder::read_disassemble(FunctionBuilder::InstructionContex
 	}
 }
 
+void FunctionBuilder::emit_allocate_local_structures()
+{
+	llvm::IRBuilder<>& ir          = m_compiler.builder().ir();
+	CommonDefinitions& defs        = m_compiler.builder().definitions();
+	auto&              script_data = *m_script_function.scriptData;
+
+	// TODO: use scriptData instead of having redundant fields for this
+	m_locals_size          = script_data.variableSpace;
+	m_max_extra_stack_size = script_data.stackNeeded - m_locals_size;
+
+	m_locals         = ir.CreateAlloca(llvm::ArrayType::get(defs.i32, script_data.stackNeeded), 0, "locals");
+	m_value_register = ir.CreateAlloca(defs.i64, 0, "valuereg");
+
+	m_stack_pointer = m_locals_size;
+}
+
 void FunctionBuilder::emit_stack_integer_trunc(
 	FunctionBuilder::InstructionContext instruction, llvm::Type* source, llvm::Type* destination)
 {
@@ -823,7 +788,7 @@ void FunctionBuilder::emit_integral_compare(llvm::Value* lhs, llvm::Value* rhs)
 	// cmp = lhs > rhs ? 1 : (lhs < rhs ? -1 : 0)
 	llvm::Value* cmp = ir.CreateSelect(greater_than, constant_gt, lt_or_eq);
 
-	store_return_register_value(cmp);
+	store_value_register_value(cmp);
 }
 
 void FunctionBuilder::emit_system_call(asCScriptFunction& function)
@@ -963,7 +928,7 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 	{
 		if (return_type != defs.tvoid)
 		{
-			store_return_register_value(result);
+			store_value_register_value(result);
 		}
 	}
 	else
@@ -1018,25 +983,25 @@ llvm::Value* FunctionBuilder::get_stack_value_pointer(FunctionBuilder::StackVari
 	}
 }
 
-void FunctionBuilder::store_return_register_value(llvm::Value* value)
+void FunctionBuilder::store_value_register_value(llvm::Value* value)
 {
 	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
 
-	ir.CreateStore(value, get_return_register_pointer(value->getType()));
+	ir.CreateStore(value, get_value_register_pointer(value->getType()));
 }
 
-llvm::Value* FunctionBuilder::load_return_register_value(llvm::Type* type)
+llvm::Value* FunctionBuilder::load_value_register_value(llvm::Type* type)
 {
 	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
 
-	return ir.CreateLoad(type, get_return_register_pointer(type));
+	return ir.CreateLoad(type, get_value_register_pointer(type));
 }
 
-llvm::Value* FunctionBuilder::get_return_register_pointer(llvm::Type* type)
+llvm::Value* FunctionBuilder::get_value_register_pointer(llvm::Type* type)
 {
 	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
 
-	return ir.CreateBitCast(m_value, type->getPointerTo());
+	return ir.CreateBitCast(m_value_register, type->getPointerTo());
 }
 
 void FunctionBuilder::insert_label(long offset)
@@ -1077,7 +1042,7 @@ llvm::BasicBlock* FunctionBuilder::get_conditional_fail_branch_target(FunctionBu
 	return m_jump_map.at(instruction.offset + 2);
 }
 
-void FunctionBuilder::emit_branch_if_missing(llvm::BasicBlock* block)
+void FunctionBuilder::switch_to_block(llvm::BasicBlock* block)
 {
 	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
 

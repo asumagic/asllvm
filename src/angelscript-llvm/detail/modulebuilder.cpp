@@ -36,7 +36,10 @@ llvm::Function* ModuleBuilder::create_function(asCScriptFunction& function)
 	}
 
 	std::array<llvm::Type*, 1> types{llvm::PointerType::getInt32PtrTy(m_compiler.builder().context())};
-	llvm::Type*                return_type = m_compiler.builder().to_llvm_type(function.returnType);
+
+	// If returning on stack, this means the return object will be written to a pointer passed as a param (using PSF).
+	llvm::Type* return_type = function.DoesReturnOnStack() ? m_compiler.builder().definitions().tvoid
+														   : m_compiler.builder().to_llvm_type(function.returnType);
 
 	llvm::FunctionType* function_type = llvm::FunctionType::get(return_type, types, false);
 

@@ -20,6 +20,7 @@ class FunctionBuilder
 	};
 
 	public:
+	//! \brief Constructor for FunctionBuilder, usually called by ModuleBuilder::create_function_builder().
 	FunctionBuilder(
 		JitCompiler&       compiler,
 		ModuleBuilder&     module_builder,
@@ -28,8 +29,8 @@ class FunctionBuilder
 
 	//! \brief Type used by AngelScript for local variable identifiers.
 	//! \details
-	//!		- When <= 0, refers to a function parameter. 0 refers to the 1st parameter, -1 to the 2nd, and so on.
-	//!		- When >1, refers to a local variable or temporary stack slot.
+	//!		- When <= 0, refers to a function parameter. The topmost element is the first passed parameter.
+	//!		- When >1, refers to the local function stack.
 	//! \note
 	//!		Depending on the size of the first parameter, the offset of the first local value might be higher than 1.
 	using StackVariableIdentifier = std::int16_t;
@@ -46,19 +47,57 @@ class FunctionBuilder
 	llvm::Function* create_wrapper_function();
 
 	private:
-	void        preprocess_instruction(InstructionContext bytecode);
-	void        read_instruction(InstructionContext bytecode);
-	std::string read_disassemble(InstructionContext context);
+	//! \brief Handle a given bytecode instruction for preprocessing.
+	//! \details
+	//!		The preprocessing stage is currently only used to populate certain internal structures as required by the
+	//!		further processing stage.
+	//!		In particular, this creates labels that are used for branching instructions.
+	//! \see read_bytecode()
+	void preprocess_instruction(InstructionContext instruction);
 
+	//! \brief Do the dirty work for the current bytecode instruction.
+	//! \details
+	//!		This does most of the processing for bytecode instructions, namely, translating a bytecode instruction to
+	//!		IR.
+	//! \warning
+	//!		This requires preprocess_instruction() to have been used beforehand.
+	//! \see read_bytecode()
+	void process_instruction(InstructionContext instruction);
+
+	//! \brief Get a human-readable disassembly for a given bytecode instruction.
+	std::string disassemble(InstructionContext instruction);
+
+	//! \brief Emit stack allocations for structures used locally within the current function.
+	//! \see Populates m_locals and m_registers.
+	void emit_allocate_local_structures();
+
+	//! \brief Implements a stack integer truncation instruction from type \p source to type \p destination.
 	void emit_stack_integer_trunc(InstructionContext instruction, llvm::Type* source, llvm::Type* destination);
+
+	//! \brief Implements a *signed* stack integer extend instruction from type \p source to type \p destination.
 	void emit_stack_integer_sign_extend(InstructionContext instruction, llvm::Type* source, llvm::Type* destination);
+
+	//! \brief Implements an *unsigned* stack integer extend instruction from type \p source to type \p destination.
 	void emit_stack_integer_zero_extend(InstructionContext instruction, llvm::Type* source, llvm::Type* destination);
+
+	//! \brief Implements an stack arithmetic instruction \p op with of type \p type.
 	void emit_stack_arithmetic(InstructionContext instruction, llvm::Instruction::BinaryOps op, llvm::Type* type);
+
+	//! \brief Implements an stack arithmetic instruction (immediate variant) \p op with of type \p type.
 	void emit_stack_arithmetic_imm(InstructionContext instruction, llvm::Instruction::BinaryOps op, llvm::Type* type);
+
+	//! \brief Implements an integral comparison instruction.
+	//! \details
+	//!		Stores compare(lhs, rhs) to the value register, with compare being:
+	//!		- `1` if `lhs > rhs`
+	//!		- `0` if `lhs == rhs`
+	//!		- `-1` if `lhs < rhs`
 	void emit_integral_compare(llvm::Value* lhs, llvm::Value* rhs);
+
+	//! \brief Performs the call to a non-script function \p function with parameters read from the stack.
 	void emit_system_call(asCScriptFunction& function);
 
-	//! \brief Load a LLVM value of type \p type from a stack variable of identifier \p! i.
+	//! \brief Load a LLVM value of type \p type from a stack variable of identifier \p i.
 	llvm::Value* load_stack_value(StackVariableIdentifier i, llvm::Type* type);
 
 	//! \brief Store a LLVM value to a stack variable of identifier \p i.
@@ -70,38 +109,71 @@ class FunctionBuilder
 	//! \brief Get a pointer to a stack value of type i32* and identifier \p i.
 	llvm::Value* get_stack_value_pointer(StackVariableIdentifier i);
 
-	void         store_return_register_value(llvm::Value* value);
-	llvm::Value* load_return_register_value(llvm::Type* type);
-	llvm::Value* get_return_register_pointer(llvm::Type* type);
+	//! \brief Store \p value into the value register.
+	//! \details
+	//!		Any data can be stored in the value register as long as it is less than 64-bit, otherwise, UB will occur.
+	void store_value_register_value(llvm::Value* value);
 
+	//! \brief Load a value of type \p type from the value register.
+	//! \see store_value_register_value()
+	llvm::Value* load_value_register_value(llvm::Type* type);
+
+	//! \brief
+	//!		Get a pointer of type `type->getPointerTo()` to the value register, performing bit casting of the pointer if
+	//!		required.
+	llvm::Value* get_value_register_pointer(llvm::Type* type);
+
+	//! \brief Insert a basic block at bytecode offset \p offset.
 	void insert_label(long offset);
+
+	//! \brief Insert labels for the conditional jump bytecode instruction \p instruction.
 	void preprocess_conditional_branch(InstructionContext instruction);
+
+	//! \brief Insert labels for the unconditional jump bytecode instruction \p instruction.
 	void preprocess_unconditional_branch(InstructionContext instruction);
 
+	//! \brief
+	//!		Determine the llvm::BasicBlock that should be branched to for a successful conditional branch or for an
+	//!		unconditional branch of the jump instruction \p instruction.
 	llvm::BasicBlock* get_branch_target(InstructionContext instruction);
+
+	//! \brief
+	//!		Determine the llvm::BasicBlock that should be branched to for a false conditional branch for the conditional
+	//!		jump instruction \p instruction.
 	llvm::BasicBlock* get_conditional_fail_branch_target(InstructionContext instruction);
 
-	void emit_branch_if_missing(llvm::BasicBlock* block);
+	//! \brief
+	//!		Changes the insert point of the IR generator to the new \p block and emit an unconditional branch to
+	//!		\p block from the old one if necessary.
+	void switch_to_block(llvm::BasicBlock* block);
 
 	JitCompiler&   m_compiler;
 	ModuleBuilder& m_module_builder;
 
 	asCScriptFunction& m_script_function;
 
-	llvm::Function*   m_llvm_function;
-	llvm::BasicBlock* m_entry_block;
+	//! \brief Pointer to the LLVM function being generated or that has been generated.
+	//! \see read_bytecode(asDWORD*, asUINT)
+	llvm::Function* m_llvm_function;
 
 	long m_locals_size = 0, m_max_extra_stack_size = 0, m_stack_pointer = 0;
 
+	//! \brief Array of DWORDs used as a local stack for bytecode operations.
+	//! \details
+	//!		This array can really be thought to be split in two:
+	//!		1. Locals, which are refered to relative to the stack frame pointer.
+	//!		2. The temporary stack, which never overlaps the locals stack.
 	llvm::AllocaInst* m_locals;
-	llvm::AllocaInst* m_value;
 
+	//! \brief Value register, used to store small (<= 64-bit) values, mostly for returning data from functions.
+	llvm::AllocaInst* m_value_register;
+
+	//! \brief Map from a bytecode offset to a BasicBlock.
+	//! \see InstructionContext::offset
 	std::map<long, llvm::BasicBlock*> m_jump_map;
 
 	//! \brief Pointer to the RET instruction.
-	//! \details
-	//!		Functions appear to only have one final RET, which is convenient for our JIT purposes: we only have one
-	//!		known exit point.
+	//! \details AngelScript bytecode functions only use RET once, we can thus assume to have only one exit point.
 	asDWORD* m_ret_pointer = nullptr;
 };
 
