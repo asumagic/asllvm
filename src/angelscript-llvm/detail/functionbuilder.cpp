@@ -479,6 +479,8 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 
 		llvm::Value* ret = ir.CreateCall(callee->getFunctionType(), callee, args);
 
+		asllvm_assert(!function.DoesReturnOnStack() && "returning on stack unsupported for script calls");
+
 		if (callee->getReturnType() != llvm::Type::getVoidTy(context))
 		{
 			// Store to the value register
@@ -682,6 +684,8 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 
 	long current_parameter_offset = m_stack_pointer;
 
+	llvm::Value* return_pointer = nullptr;
+
 	const auto read_params = [&](std::size_t first_param, std::size_t count) {
 		for (std::size_t i = 0; i < count; ++i)
 		{
@@ -689,6 +693,14 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 			args[i + first_param]         = load_stack_value(current_parameter_offset, llvm_argument->getType());
 
 			current_parameter_offset -= m_compiler.builder().get_script_type_dword_size(function.parameterTypes[i]);
+		}
+	};
+
+	const auto handle_stack_returns = [&] {
+		if (function.DoesReturnOnStack())
+		{
+			return_pointer = load_stack_value(current_parameter_offset, callee->getReturnType()->getPointerTo());
+			current_parameter_offset -= AS_PTR_SIZE;
 		}
 	};
 
@@ -701,6 +713,9 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 	{
 		args.front() = load_stack_value(current_parameter_offset, defs.pvoid);
 		current_parameter_offset -= AS_PTR_SIZE;
+
+		handle_stack_returns();
+
 		read_params(1, argument_count - 1);
 		break;
 	}
@@ -709,6 +724,9 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 	{
 		args.back() = load_stack_value(current_parameter_offset, defs.pvoid);
 		current_parameter_offset -= AS_PTR_SIZE;
+
+		handle_stack_returns();
+
 		read_params(0, argument_count - 1);
 		break;
 	}
@@ -725,9 +743,16 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 
 	llvm::Value* result = ir.CreateCall(callee->getFunctionType(), callee, args);
 
-	if (callee->getReturnType() != defs.tvoid)
+	if (return_pointer == nullptr)
 	{
-		store_return_register_value(result);
+		if (callee->getReturnType() != defs.tvoid)
+		{
+			store_return_register_value(result);
+		}
+	}
+	else
+	{
+		ir.CreateStore(result, return_pointer);
 	}
 
 	m_stack_pointer = current_parameter_offset;
