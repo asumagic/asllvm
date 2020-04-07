@@ -28,7 +28,6 @@ class Builder
 
 	llvm::Type* to_llvm_type(asCDataType& type) const;
 	bool        is_script_type_64(asCDataType& type) const;
-	std::size_t get_script_type_dword_size(asCDataType& type) const;
 
 	llvm::legacy::PassManager&         optimizer();
 	llvm::LLVMContext&                 context();

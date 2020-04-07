@@ -43,7 +43,10 @@ llvm::Type* Builder::to_llvm_type(asCDataType& type) const
 
 	if (type.IsObject())
 	{
-		return llvm::ArrayType::get(m_defs.i32, get_script_type_dword_size(type));
+		// HACK: add get_script_type_byte_size for proper behavior
+		std::array<llvm::Type*, 1> types{{llvm::ArrayType::get(m_defs.i8, type.GetSizeInMemoryBytes())}};
+		asllvm_assert(type.GetTypeInfo() != nullptr);
+		return llvm::StructType::create(types, type.GetTypeInfo()->GetName());
 	}
 
 	asllvm_assert(false && "type not supported");
@@ -54,8 +57,6 @@ bool Builder::is_script_type_64(asCDataType& type) const
 	asllvm_assert(type.GetSizeOnStackDWords() <= 2);
 	return type.GetSizeOnStackDWords() == 2;
 }
-
-std::size_t Builder::get_script_type_dword_size(asCDataType& type) const { return type.GetSizeOnStackDWords(); }
 
 llvm::legacy::PassManager& Builder::optimizer() { return m_pass_manager; }
 

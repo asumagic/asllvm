@@ -27,9 +27,8 @@ FunctionBuilder::FunctionBuilder(
 
 llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 {
-	llvm::IRBuilder<>& ir          = m_compiler.builder().ir();
-	llvm::LLVMContext& context     = m_compiler.builder().context();
-	auto&              script_data = *m_script_function.scriptData;
+	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
+	llvm::LLVMContext& context = m_compiler.builder().context();
 
 	const auto walk_bytecode = [&](auto&& func) {
 		asDWORD* bytecode_current = bytecode;
@@ -69,6 +68,8 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 		walk_bytecode([this](InstructionContext instruction) { preprocess_instruction(instruction); });
 
 		{
+			auto& script_data = *m_script_function.scriptData;
+
 			m_locals_size          = script_data.variableSpace;
 			m_max_extra_stack_size = script_data.stackNeeded - m_locals_size;
 
@@ -395,7 +396,7 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 	case asBC_PSF:
 	{
 		m_stack_pointer += AS_PTR_SIZE;
-		llvm::Value* ptr = get_stack_value_pointer(asBC_SWORDARG0(instruction.pointer), defs.i64);
+		llvm::Value* ptr = get_stack_value_pointer(asBC_SWORDARG0(instruction.pointer), defs.iptr);
 		store_stack_value(m_stack_pointer, ptr);
 		break;
 	}
@@ -840,19 +841,32 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 
 	llvm::Value* return_pointer = nullptr;
 
-	const auto read_params = [&](std::size_t first_param, std::size_t count) {
-		for (std::size_t i = 0; i < count; ++i)
-		{
-			llvm::Argument* llvm_argument = &*(callee->arg_begin() + i + first_param);
-			args[i + first_param]         = load_stack_value(current_parameter_offset, llvm_argument->getType());
+	std::size_t first_param_index = 0, regular_count = argument_count;
 
-			current_parameter_offset -= m_compiler.builder().get_script_type_dword_size(function.parameterTypes[i]);
+	const auto read_params = [&]() {
+		for (std::size_t i = 0; i < regular_count; ++i)
+		{
+			llvm::Argument* llvm_argument = &*(callee->arg_begin() + i + first_param_index);
+			args[i + first_param_index]   = load_stack_value(current_parameter_offset, llvm_argument->getType());
+
+			current_parameter_offset -= function.parameterTypes[i].GetSizeOnStackDWords();
 		}
 	};
 
 	const auto handle_stack_returns = [&] {
 		if (function.DoesReturnOnStack())
 		{
+			if (intf.hostReturnInMemory)
+			{
+				llvm::Argument* llvm_argument = &*(callee->arg_begin() + first_param_index);
+				args[first_param_index]       = load_stack_value(current_parameter_offset, llvm_argument->getType());
+				current_parameter_offset -= AS_PTR_SIZE;
+
+				++first_param_index;
+				--regular_count;
+				return;
+			}
+
 			return_pointer = load_stack_value(current_parameter_offset, callee->getReturnType()->getPointerTo());
 			current_parameter_offset -= AS_PTR_SIZE;
 		}
@@ -867,10 +881,12 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 	{
 		args.front() = load_stack_value(current_parameter_offset, defs.pvoid);
 		current_parameter_offset -= AS_PTR_SIZE;
+		++first_param_index;
+		--regular_count;
 
 		handle_stack_returns();
 
-		read_params(1, argument_count - 1);
+		read_params();
 		break;
 	}
 
@@ -878,17 +894,19 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 	{
 		args.back() = load_stack_value(current_parameter_offset, defs.pvoid);
 		current_parameter_offset -= AS_PTR_SIZE;
+		--regular_count;
 
 		handle_stack_returns();
 
-		read_params(0, argument_count - 1);
+		read_params();
 		break;
 	}
 
 	// C calling convention: nothing special to do
 	case ICC_CDECL:
 	{
-		read_params(0, argument_count);
+		handle_stack_returns();
+		read_params();
 		break;
 	}
 

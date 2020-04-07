@@ -67,14 +67,23 @@ llvm::Function* ModuleBuilder::get_system_function(asCScriptFunction& system_fun
 		return it->second;
 	}
 
-	llvm::Type* return_type = m_compiler.builder().to_llvm_type(system_function.returnType);
+	llvm::Type* return_type = defs.tvoid;
 
 	const std::size_t        param_count = system_function.GetParamCount();
-	std::vector<llvm::Type*> types(param_count);
+	std::vector<llvm::Type*> types;
+
+	if (intf.hostReturnInMemory)
+	{
+		types.push_back(m_compiler.builder().to_llvm_type(system_function.returnType)->getPointerTo());
+	}
+	else
+	{
+		return_type = m_compiler.builder().to_llvm_type(system_function.returnType);
+	}
 
 	for (std::size_t i = 0; i < param_count; ++i)
 	{
-		types[i] = m_compiler.builder().to_llvm_type(system_function.parameterTypes[i]);
+		types.push_back(m_compiler.builder().to_llvm_type(system_function.parameterTypes[i]));
 	}
 
 	switch (intf.callConv)
