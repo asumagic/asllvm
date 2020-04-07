@@ -435,7 +435,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 		llvm::CallInst* ret = ir.CreateCall(callee->getFunctionType(), callee, args);
 
-		if (callee->getReturnType() != llvm::Type::getVoidTy(context))
+		if (function.returnType.GetTokenType() != ttVoid)
 		{
 			if (function.DoesReturnOnStack())
 			{
