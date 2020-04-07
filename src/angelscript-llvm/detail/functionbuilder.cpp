@@ -218,7 +218,12 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	switch (instruction.info->bc)
 	{
-	case asBC_PopPtr: unimpl(); break;
+	case asBC_PopPtr:
+	{
+		m_stack_pointer -= AS_PTR_SIZE;
+		break;
+	}
+
 	case asBC_PshGPtr: unimpl(); break;
 
 	case asBC_PshC4:
