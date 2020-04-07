@@ -448,7 +448,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	case asBC_JMPP: unimpl(); break;
 	case asBC_PopRPtr: unimpl(); break;
 	case asBC_PshRPtr: unimpl(); break;
-	case asBC_STR: unimpl(); break;
+	case asBC_STR: asllvm_assert(false && "STR is deperecated and should not have been emitted by AS"); break;
 
 	case asBC_CALLSYS:
 	{
