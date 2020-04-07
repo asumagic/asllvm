@@ -895,7 +895,7 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 				if (i == 0)
 				{
 					llvm::Argument* llvm_argument = &*(callee->arg_begin() + 0);
-					args[1]                       = load_stack_value(m_stack_pointer, llvm_argument->getType());
+					args[0]                       = load_stack_value(m_stack_pointer, llvm_argument->getType());
 					m_stack_pointer -= AS_PTR_SIZE;
 					insert_index = 1;
 					break;

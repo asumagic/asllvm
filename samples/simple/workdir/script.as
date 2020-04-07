@@ -61,7 +61,7 @@ void main()
 	string yolo;
 	for (int i = 0; i < 3; ++i)
 	{
-		yolo += "yolo";
+		yolo = yolo + "yolo";
 	}
 
 	print(yolo);
