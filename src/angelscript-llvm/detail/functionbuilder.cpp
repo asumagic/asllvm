@@ -250,7 +250,17 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_SwapPtr: unimpl(); break;
 	case asBC_NOT: unimpl(); break;
-	case asBC_PshG4: unimpl(); break;
+	case asBC_PshG4:
+	{
+		++m_stack_pointer;
+		// TODO: common code for global_ptr
+		llvm::Value* global_ptr
+			= ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, asBC_PTRARG(instruction.pointer)), defs.pi32);
+		llvm::Value* global = ir.CreateLoad(defs.i32, global_ptr);
+		store_stack_value(m_stack_pointer, global);
+		break;
+	}
+
 	case asBC_LdGRdR4: unimpl(); break;
 
 	case asBC_CALL:
