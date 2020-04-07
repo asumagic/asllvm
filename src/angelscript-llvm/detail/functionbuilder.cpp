@@ -183,7 +183,6 @@ void FunctionBuilder::preprocess_instruction(InstructionContext instruction)
 {
 	switch (instruction.info->bc)
 	{
-	// These instructions do not write to the stack
 	case asBC_JitEntry:
 	case asBC_SUSPEND:
 	case asBC_CpyVtoR4:
@@ -193,11 +192,6 @@ void FunctionBuilder::preprocess_instruction(InstructionContext instruction)
 	case asBC_CALL:
 	case asBC_CMPi:
 	case asBC_CMPIi:
-	{
-		break;
-	}
-
-	// These instructions write to the stack, always at the first sword
 	case asBC_ADDi:
 	case asBC_ADDi64:
 	case asBC_SUBIi:
@@ -219,35 +213,15 @@ void FunctionBuilder::preprocess_instruction(InstructionContext instruction)
 	case asBC_SetV4:
 	case asBC_IncVi:
 	case asBC_DecVi:
-	{
-		auto target   = asBC_SWORDARG0(instruction.pointer);
-		m_locals_size = std::max(m_locals_size, long(target) + 2); // TODO: pretty dodgy
-		break;
-	}
-
-	// These instructions always write a pointer to the stack
 	case asBC_PGA:
 	case asBC_PSF:
 	case asBC_PshVPtr:
 	case asBC_VAR:
-	{
-		m_max_extra_stack_size += AS_PTR_SIZE;
-		break;
-	}
-
-	// These instructions always write a 32-bit value to the stack
 	case asBC_PshV4:
 	case asBC_PshC4:
-	{
-		++m_max_extra_stack_size;
-		break;
-	}
-
-	// These instructions always write a 64-bit value to the stack
 	case asBC_PshV8:
 	case asBC_PshC8:
 	{
-		m_max_extra_stack_size += 2;
 		break;
 	}
 
