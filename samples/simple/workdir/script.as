@@ -61,6 +61,13 @@ string add_string(const string &in a, const string &in b)
 	return a + b;
 }
 
+int global = 0;
+void globals(int a)
+{
+	global = a;
+	print(global);
+}
+
 void main()
 {
 	print(add_i8(1, 2));
@@ -89,6 +96,8 @@ void main()
 	}
 
 	print(yolo);
+
+	globals(123);
 }
 /*
 void no_op() {}
