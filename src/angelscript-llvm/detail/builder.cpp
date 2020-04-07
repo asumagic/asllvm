@@ -28,10 +28,14 @@ llvm::Type* Builder::to_llvm_type(asCDataType& type) const
 		{
 		case ttVoid: return m_defs.tvoid;
 		case ttBool: return m_defs.i1;
-		case ttInt8: return m_defs.i8;
-		case ttInt16: return m_defs.i16;
-		case ttInt: return m_defs.i32;
-		case ttInt64: return m_defs.i64;
+		case ttInt8:
+		case ttUInt8: return m_defs.i8;
+		case ttInt16:
+		case ttUInt16: return m_defs.i16;
+		case ttInt:
+		case ttUInt: return m_defs.i32;
+		case ttInt64:
+		case ttUInt64: return m_defs.i64;
 		default: asllvm_assert(false && "provided primitive type not supported");
 		}
 	}

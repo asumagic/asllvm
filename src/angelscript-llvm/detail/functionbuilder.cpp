@@ -198,10 +198,9 @@ void FunctionBuilder::preprocess_instruction(InstructionContext instruction)
 
 void FunctionBuilder::process_instruction(InstructionContext instruction)
 {
-	asIScriptEngine&   engine  = m_compiler.engine();
-	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
-	llvm::LLVMContext& context = m_compiler.builder().context();
-	CommonDefinitions& defs    = m_compiler.builder().definitions();
+	asIScriptEngine&   engine = m_compiler.engine();
+	llvm::IRBuilder<>& ir     = m_compiler.builder().ir();
+	CommonDefinitions& defs   = m_compiler.builder().definitions();
 
 	const auto old_stack_pointer = m_stack_pointer;
 
