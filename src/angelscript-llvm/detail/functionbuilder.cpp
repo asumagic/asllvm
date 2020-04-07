@@ -27,6 +27,10 @@ FunctionBuilder::FunctionBuilder(
 
 llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 {
+	llvm::IRBuilder<>& ir          = m_compiler.builder().ir();
+	llvm::LLVMContext& context     = m_compiler.builder().context();
+	auto&              script_data = *m_script_function.scriptData;
+
 	const auto walk_bytecode = [&](auto&& func) {
 		asDWORD* bytecode_current = bytecode;
 		asDWORD* bytecode_end     = bytecode + length;
@@ -65,10 +69,6 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 		walk_bytecode([this](InstructionContext instruction) { preprocess_instruction(instruction); });
 
 		{
-			llvm::IRBuilder<>& ir          = m_compiler.builder().ir();
-			llvm::LLVMContext& context     = m_compiler.builder().context();
-			auto&              script_data = *m_script_function.scriptData;
-
 			m_locals_size          = script_data.variableSpace;
 			m_max_extra_stack_size = script_data.stackNeeded - m_locals_size;
 
@@ -79,7 +79,29 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 			m_stack_pointer = m_locals_size;
 		}
 
-		walk_bytecode([this](InstructionContext instruction) { read_instruction(instruction); });
+		walk_bytecode([&](InstructionContext instruction) {
+			read_instruction(instruction);
+
+			// Emit metadata on last inserted instruction for debugging
+			if (m_compiler.config().verbose)
+			{
+				llvm::BasicBlock* block = ir.GetInsertBlock();
+				if (block->empty())
+				{
+					return;
+				}
+
+				const std::string disassembled = read_disassemble(instruction);
+				if (disassembled.empty())
+				{
+					return;
+				}
+
+				auto& inst = block->back();
+				auto* meta = llvm::MDNode::get(context, llvm::MDString::get(context, disassembled));
+				inst.setMetadata("asopcode", meta);
+			}
+		});
 
 		asllvm_assert(m_stack_pointer == m_locals_size);
 	}
