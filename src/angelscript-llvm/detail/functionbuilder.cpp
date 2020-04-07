@@ -49,6 +49,13 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 
 	try
 	{
+		if (m_compiler.config().verbose)
+		{
+			fmt::print(stderr, "Bytecode disassembly: \n");
+			walk_bytecode([this](InstructionContext instruction) { return read_disassemble(instruction); });
+			fmt::print(stderr, "\n");
+		}
+
 		walk_bytecode([this](InstructionContext instruction) { return preprocess_instruction(instruction); });
 
 		{
@@ -577,6 +584,177 @@ void FunctionBuilder::read_instruction(InstructionContext instruction)
 	default:
 	{
 		asllvm_assert(false && "unrecognized instruction while translating bytecode");
+	}
+	}
+}
+
+void FunctionBuilder::read_disassemble(FunctionBuilder::InstructionContext instruction)
+{
+	// Handle certain instructions specifically
+	switch (instruction.info->bc)
+	{
+	case asBC_JitEntry:
+	case asBC_SUSPEND:
+	{
+		return;
+	}
+
+	case asBC_CALLSYS:
+	{
+		auto* func
+			= static_cast<asCScriptFunction*>(m_compiler.engine().GetFunctionById(asBC_INTARG(instruction.pointer)));
+
+		asllvm_assert(func != nullptr);
+
+		fmt::print(stderr, "CALLSYS {} # {}\n", func->GetName(), func->GetDeclaration(true, true, true));
+
+		return;
+	}
+
+	default: break;
+	}
+
+	// Disassemble based on the generic instruction type
+	// TODO: figure out variable references
+	switch (instruction.info->type)
+	{
+	case asBCTYPE_NO_ARG:
+	{
+		break;
+	}
+
+	case asBCTYPE_W_ARG:
+	case asBCTYPE_wW_ARG:
+	case asBCTYPE_rW_ARG:
+	{
+		fmt::print(stderr, "{} {}\n", instruction.info->name, asBC_SWORDARG0(instruction.pointer));
+		break;
+	}
+
+	case asBCTYPE_DW_ARG:
+	{
+		fmt::print(stderr, "{} {}\n", instruction.info->name, asBC_INTARG(instruction.pointer));
+		break;
+	}
+
+	case asBCTYPE_rW_DW_ARG:
+	case asBCTYPE_wW_DW_ARG:
+	case asBCTYPE_W_DW_ARG:
+	{
+		fmt::print(
+			stderr,
+			"{} {} {}\n",
+			instruction.info->name,
+			asBC_SWORDARG0(instruction.pointer),
+			asBC_INTARG(instruction.pointer));
+		break;
+	}
+
+	case asBCTYPE_QW_ARG:
+	{
+		fmt::print(stderr, "{} {}\n", instruction.info->name, asBC_PTRARG(instruction.pointer));
+		break;
+	}
+
+	case asBCTYPE_DW_DW_ARG:
+	{
+		// TODO: double check this
+		fmt::print(
+			stderr,
+			"{} {} {}\n",
+			instruction.info->name,
+			asBC_INTARG(instruction.pointer),
+			asBC_INTARG(instruction.pointer + 1));
+		break;
+	}
+
+	case asBCTYPE_wW_rW_rW_ARG:
+	{
+		fmt::print(
+			stderr,
+			"{} {} {} {}\n",
+			instruction.info->name,
+			asBC_SWORDARG0(instruction.pointer),
+			asBC_SWORDARG1(instruction.pointer),
+			asBC_SWORDARG2(instruction.pointer));
+		break;
+	}
+
+	case asBCTYPE_wW_QW_ARG:
+	{
+		fmt::print(
+			stderr,
+			"{} {} {}\n",
+			instruction.info->name,
+			asBC_SWORDARG0(instruction.pointer),
+			asBC_PTRARG(instruction.pointer + 1));
+		break;
+	}
+
+	case asBCTYPE_wW_rW_ARG:
+	case asBCTYPE_rW_rW_ARG:
+	case asBCTYPE_wW_W_ARG:
+	{
+		fmt::print(
+			stderr,
+			"{} {} {}\n",
+			instruction.info->name,
+			asBC_SWORDARG0(instruction.pointer),
+			asBC_SWORDARG1(instruction.pointer));
+		break;
+	}
+
+	case asBCTYPE_wW_rW_DW_ARG:
+	case asBCTYPE_rW_W_DW_ARG:
+	{
+		fmt::print(
+			stderr,
+			"{} {} {} {}\n",
+			instruction.info->name,
+			asBC_SWORDARG0(instruction.pointer),
+			asBC_SWORDARG1(instruction.pointer),
+			asBC_INTARG(instruction.pointer + 1));
+		break;
+	}
+
+	case asBCTYPE_QW_DW_ARG:
+	{
+		fmt::print(
+			stderr,
+			"{} {} {}\n",
+			instruction.info->name,
+			asBC_PTRARG(instruction.pointer),
+			asBC_INTARG(instruction.pointer + 2));
+		break;
+	}
+
+	case asBCTYPE_rW_QW_ARG:
+	{
+		fmt::print(
+			stderr,
+			"{} {} {}\n",
+			instruction.info->name,
+			asBC_SWORDARG0(instruction.pointer),
+			asBC_PTRARG(instruction.pointer + 1));
+		break;
+	}
+
+	case asBCTYPE_rW_DW_DW_ARG:
+	{
+		fmt::print(
+			stderr,
+			"{} {} {} {}\n",
+			instruction.info->name,
+			asBC_SWORDARG0(instruction.pointer),
+			asBC_INTARG(instruction.pointer + 1),
+			asBC_INTARG(instruction.pointer + 2));
+		break;
+	}
+
+	default:
+	{
+		fmt::print(stderr, "(unimplemented)\n");
+		break;
 	}
 	}
 }

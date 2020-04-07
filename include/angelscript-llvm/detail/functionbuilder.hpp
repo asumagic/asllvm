@@ -48,6 +48,7 @@ class FunctionBuilder
 	private:
 	void preprocess_instruction(InstructionContext bytecode);
 	void read_instruction(InstructionContext bytecode);
+	void read_disassemble(InstructionContext context);
 
 	void emit_stack_integer_trunc(InstructionContext instruction, llvm::Type* source, llvm::Type* destination);
 	void emit_stack_integer_sign_extend(InstructionContext instruction, llvm::Type* source, llvm::Type* destination);
