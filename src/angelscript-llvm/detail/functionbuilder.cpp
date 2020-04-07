@@ -631,7 +631,7 @@ std::string FunctionBuilder::read_disassemble(FunctionBuilder::InstructionContex
 	{
 	case asBCTYPE_NO_ARG:
 	{
-		break;
+		return {};
 	}
 
 	case asBCTYPE_W_ARG:
@@ -735,7 +735,6 @@ std::string FunctionBuilder::read_disassemble(FunctionBuilder::InstructionContex
 	default:
 	{
 		return fmt::format("(unimplemented)");
-		break;
 	}
 	}
 }
