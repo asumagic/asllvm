@@ -216,6 +216,8 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	const auto unimpl = [] { asllvm_assert(false && "unimplemented instruction while translating bytecode"); };
 
+	// TODO: handle division by zero by setting an exception on the context
+
 	switch (instruction.info->bc)
 	{
 	case asBC_PopPtr:
@@ -410,12 +412,43 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	}
 
 	case asBC_BNOT: unimpl(); break;
-	case asBC_BAND: unimpl(); break;
-	case asBC_BOR: unimpl(); break;
-	case asBC_BXOR: unimpl(); break;
-	case asBC_BSLL: unimpl(); break;
-	case asBC_BSRL: unimpl(); break;
-	case asBC_BSRA: unimpl(); break;
+
+	case asBC_BAND:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::And, defs.i32);
+		break;
+	}
+
+	case asBC_BOR:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::Or, defs.i32);
+		break;
+	}
+
+	case asBC_BXOR:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::Xor, defs.i32);
+		break;
+	}
+
+	case asBC_BSLL:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::Shl, defs.i32);
+		break;
+	}
+
+	case asBC_BSRL:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::LShr, defs.i32);
+		break;
+	}
+
+	case asBC_BSRA:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::AShr, defs.i32);
+		break;
+	}
+
 	case asBC_COPY: unimpl(); break;
 
 	case asBC_PshC8:
