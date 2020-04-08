@@ -641,10 +641,29 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 		break;
 	}
 
-	case asBC_SUBi: unimpl(); break;
-	case asBC_MULi: unimpl(); break;
-	case asBC_DIVi: unimpl(); break;
-	case asBC_MODi: unimpl(); break;
+	case asBC_SUBi:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::Sub, defs.i32);
+		break;
+	}
+
+	case asBC_MULi:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::Mul, defs.i32);
+		break;
+	}
+
+	case asBC_DIVi:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::SDiv, defs.i32);
+		break;
+	}
+
+	case asBC_MODi:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::SRem, defs.i32);
+		break;
+	}
 
 	case asBC_ADDf: unimpl(); break;
 	case asBC_SUBf: unimpl(); break;
@@ -704,14 +723,36 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	case asBC_INCi64: unimpl(); break;
 	case asBC_DECi64: unimpl(); break;
 	case asBC_BNOT64: unimpl(); break;
+
 	case asBC_ADDi64:
 	{
 		emit_stack_arithmetic(instruction, llvm::Instruction::Add, defs.i64);
 		break;
 	}
-	case asBC_SUBi64: unimpl(); break;
-	case asBC_MULi64: unimpl(); break;
-	case asBC_DIVi64: unimpl(); break;
+
+	case asBC_SUBi64:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::Sub, defs.i64);
+		break;
+	}
+
+	case asBC_MULi64:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::Mul, defs.i64);
+		break;
+	}
+
+	case asBC_DIVi64:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::SDiv, defs.i64);
+		break;
+	}
+
+	case asBC_MODi64:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::SRem, defs.i64);
+		break;
+	}
 
 	case asBC_BAND64: unimpl(); break;
 	case asBC_BOR64: unimpl(); break;
