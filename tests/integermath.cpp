@@ -1,6 +1,5 @@
-#include <catch2/catch.hpp>
-
 #include "common.hpp"
+#include <catch2/catch.hpp>
 
 TEST_CASE("signed add logic", "[signedmath]")
 {
