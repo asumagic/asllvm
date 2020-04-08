@@ -62,10 +62,12 @@ TEST_CASE("64-bit unsigned division math", "[unsignedmathdiv64]")
 
 TEST_CASE("32-bit bitwise logic", "[bitwise32]")
 {
-	REQUIRE(run_string("uint32 a = 4354352, b = 1213516; print(a & b)") == "131072\n");
-	REQUIRE(run_string("uint32 a = 4354352, b = 1213516; print(a | b)") == "5436796\n");
-	REQUIRE(run_string("uint32 a = 4354352, b = 1213516; print(a ^ b)") == "5305724\n");
-	REQUIRE(run_string("uint32 a = 4354352, b = 2; print(a << b)") == "17417408\n");
-	REQUIRE(run_string("uint32 a = 4354352, b = 2; print(a >> b)") == "1088588\n");
-	REQUIRE(run_string("uint32 a = 4354352, b = 2; print(a >>> b)") == "1088588\n");
+	REQUIRE(run_string("int32 a = 4354352, b = 1213516; print(a & b)") == "131072\n");
+	REQUIRE(run_string("int32 a = 4354352, b = 1213516; print(a | b)") == "5436796\n");
+	REQUIRE(run_string("int32 a = 4354352, b = 1213516; print(a ^ b)") == "5305724\n");
+	REQUIRE(run_string("int32 a = 4354352, b = 2; print(a << b)") == "17417408\n");
+	REQUIRE(run_string("int32 a = 4354352, b = 2; print(a >> b)") == "1088588\n");
+	REQUIRE(run_string("int32 a = -4354352, b = 2; print(a >> b)") == "1072653236\n");
+	REQUIRE(run_string("int32 a = 4354352, b = 2; print(a >>> b)") == "1088588\n");
+	REQUIRE(run_string("int32 a = -4354352, b = 2; print(a >>> b)") == "-1088588\n");
 }
