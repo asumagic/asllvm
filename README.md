@@ -18,7 +18,8 @@ current support.
 You will need:
 - A C++17 compliant compiler.
 - A recent LLVM version (tested on LLVM9).
-- The `{fmt}` library. Note that eventually, this will be fetched automatically on build.
+
+Extra dependencies (`{fmt}` and `Catch2`) will be fetched automatically using `hunter`.
 
 ## Example
 
