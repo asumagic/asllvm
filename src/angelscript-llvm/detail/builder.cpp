@@ -24,20 +24,29 @@ llvm::Type* Builder::to_llvm_type(asCDataType& type) const
 {
 	if (type.IsPrimitive())
 	{
+		llvm::Type* base_type = nullptr;
+
 		switch (type.GetTokenType())
 		{
-		case ttVoid: return m_defs.tvoid;
-		case ttBool: return m_defs.i1;
+		case ttVoid: base_type = m_defs.tvoid; break;
+		case ttBool: base_type = m_defs.i1; break;
 		case ttInt8:
-		case ttUInt8: return m_defs.i8;
+		case ttUInt8: base_type = m_defs.i8; break;
 		case ttInt16:
-		case ttUInt16: return m_defs.i16;
+		case ttUInt16: base_type = m_defs.i16; break;
 		case ttInt:
-		case ttUInt: return m_defs.i32;
+		case ttUInt: base_type = m_defs.i32; break;
 		case ttInt64:
-		case ttUInt64: return m_defs.i64;
+		case ttUInt64: base_type = m_defs.i64; break;
 		default: asllvm_assert(false && "provided primitive type not supported");
 		}
+
+		if (type.IsReference())
+		{
+			return base_type->getPointerTo();
+		}
+
+		return base_type;
 	}
 
 	if (type.IsReference())

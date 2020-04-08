@@ -492,7 +492,18 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	case asBC_REFCPY: unimpl(); break;
 	case asBC_CHKREF: unimpl(); break;
 	case asBC_GETOBJREF: unimpl(); break;
-	case asBC_GETREF: unimpl(); break;
+	case asBC_GETREF:
+	{
+		llvm::Value* pointer = get_stack_value_pointer(m_stack_pointer - asBC_WORDARG0(instruction.pointer), defs.pi32);
+
+		llvm::Value*                      index = ir.CreateLoad(defs.i32, ir.CreateBitCast(pointer, defs.pi32));
+		const std::array<llvm::Value*, 2> indices{{llvm::ConstantInt::get(defs.i64, 0), index}};
+		llvm::Value*                      variable_address = ir.CreateGEP(m_locals, indices);
+
+		ir.CreateStore(variable_address, ir.CreateBitCast(pointer, defs.pi32->getPointerTo()));
+
+		break;
+	}
 	case asBC_PshNull: unimpl(); break;
 	case asBC_ClrVPtr: unimpl(); break;
 	case asBC_OBJTYPE: unimpl(); break;
