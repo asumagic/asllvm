@@ -66,6 +66,8 @@ void globals(int a)
 {
 	global = a;
 	print(global);
+	int v = global;
+	print(v);
 }
 
 void main()

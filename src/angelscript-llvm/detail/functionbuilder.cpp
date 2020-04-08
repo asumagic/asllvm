@@ -564,7 +564,14 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 		break;
 	}
 
-	case asBC_CpyGtoV4: unimpl(); break;
+	case asBC_CpyGtoV4:
+	{
+		llvm::Value* global_ptr
+			= ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, asBC_PTRARG(instruction.pointer)), defs.pi32);
+		store_stack_value(asBC_SWORDARG0(instruction.pointer), ir.CreateLoad(global_ptr, defs.i32));
+		break;
+	}
+
 	case asBC_WRTV1: unimpl(); break;
 	case asBC_WRTV2: unimpl(); break;
 	case asBC_WRTV4: unimpl(); break;
