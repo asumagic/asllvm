@@ -787,12 +787,41 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 		break;
 	}
 
-	case asBC_BAND64: unimpl(); break;
-	case asBC_BOR64: unimpl(); break;
-	case asBC_BXOR64: unimpl(); break;
-	case asBC_BSLL64: unimpl(); break;
-	case asBC_BSRL64: unimpl(); break;
-	case asBC_BSRA64: unimpl(); break;
+	case asBC_BAND64:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::And, defs.i64);
+		break;
+	}
+
+	case asBC_BOR64:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::Or, defs.i64);
+		break;
+	}
+
+	case asBC_BXOR64:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::Xor, defs.i64);
+		break;
+	}
+
+	case asBC_BSLL64:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::Shl, defs.i64);
+		break;
+	}
+
+	case asBC_BSRL64:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::LShr, defs.i64);
+		break;
+	}
+
+	case asBC_BSRA64:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::AShr, defs.i64);
+		break;
+	}
 
 	case asBC_CMPi64: unimpl(); break;
 	case asBC_CMPu64: unimpl(); break;
