@@ -2,15 +2,16 @@
 
 #include "common.hpp"
 
-TEST_CASE("Basic integral math", "[intmath]")
+TEST_CASE("signed add logic", "[signedmath]")
 {
-	// Verify signed logic
 	REQUIRE(run_string("print(int8(1) + int8(-2))") == "-1\n");
 	REQUIRE(run_string("print(int16(1) + int16(-2))") == "-1\n");
 	REQUIRE(run_string("print(int32(1) + int32(-2))") == "-1\n");
 	REQUIRE(run_string("print(int64(1) + int64(-2))") == "-1\n");
+}
 
-	// Verify unsigned underflow logic
+TEST_CASE("unsigned overflow logic", "[unsignedmath]")
+{
 	REQUIRE(run_string("print(uint8(1) + uint8(-2))") == "255\n");
 	REQUIRE(run_string("print(uint16(1) + uint16(-2))") == "65535\n");
 	REQUIRE(run_string("print(uint32(1) + uint32(-2))") == "4294967295\n");
