@@ -1,43 +1,3 @@
-int8 add_i8(int8 a, int8 b)
-{
-	return a + b;
-}
-
-int16 add_i16(int16 a, int16 b)
-{
-	return a + b;
-}
-
-int add_i32(int a, int b)
-{
-	return a + b;
-}
-
-int64 add_i64(int64 a, int64 b)
-{
-	return a + b;
-}
-
-uint8 add_u8(uint8 a, uint8 b)
-{
-	return a + b;
-}
-
-uint16 add_u16(uint16 a, uint16 b)
-{
-	return a + b;
-}
-
-uint add_u32(uint a, uint b)
-{
-	return a + b;
-}
-
-uint64 add_u64(uint64 a, uint64 b)
-{
-	return a + b;
-}
-
 int fib(int n)
 {
 	if (n < 2)
@@ -72,14 +32,7 @@ void globals(int a)
 
 void main()
 {
-	print(add_i8(1, 2));
-	print(add_i16(10, 20));
-	print(add_i32(100, 200));
-	print(add_i64(1000, 2000));
-	print(add_u8(1, 2));
-	print(add_u16(10, 20));
-	print(add_u32(100, 200));
-	print(add_u64(1000, 2000));
+
 	print(fib(10));
 	foo();
 	print("hello");
