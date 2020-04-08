@@ -11,7 +11,7 @@ project(angelscript-llvm LANGUAGES CXX)
 hunter_add_package(fmt)
 find_package(fmt CONFIG REQUIRED)
 
-if(NOT DEFINED DISABLE_TESTING)
+if(DEFINED ENABLE_TESTING)
     hunter_add_package(Catch)
     find_package(Catch2 CONFIG REQUIRED)
 endif()
@@ -60,11 +60,6 @@ target_compile_options(angelscript-llvm PUBLIC
 add_subdirectory(3rd)
 add_subdirectory(samples/simple)
 
-if(NOT DEFINED DISABLE_TESTING)
-    enable_testing()
-
+if(DEFINED ENABLE_TESTING)
     add_subdirectory(tests/)
-
-    include(ParseAndAddCatchTests)
-    ParseAndAddCatchTests(angelscript-llvm)
 endif()
