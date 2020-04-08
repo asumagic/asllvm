@@ -214,7 +214,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	asllvm_assert(m_stack_pointer >= m_locals_size);
 	asllvm_assert(m_stack_pointer <= m_locals_size + m_max_extra_stack_size);
 
-	const auto unimpl = [] { asllvm_assert(false && "unrecognized instruction while translating bytecode"); };
+	const auto unimpl = [] { asllvm_assert(false && "unimplemented instruction while translating bytecode"); };
 
 	switch (instruction.info->bc)
 	{
