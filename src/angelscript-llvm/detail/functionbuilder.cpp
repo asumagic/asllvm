@@ -1054,8 +1054,9 @@ void FunctionBuilder::emit_allocate_local_structures()
 	m_locals_size          = script_data.variableSpace;
 	m_max_extra_stack_size = script_data.stackNeeded - m_locals_size;
 
-	m_locals         = ir.CreateAlloca(llvm::ArrayType::get(defs.i32, script_data.stackNeeded), 0, "locals");
-	m_value_register = ir.CreateAlloca(defs.i64, 0, "valuereg");
+	m_locals          = ir.CreateAlloca(llvm::ArrayType::get(defs.i32, script_data.stackNeeded), 0, "locals");
+	m_value_register  = ir.CreateAlloca(defs.i64, 0, "valuereg");
+	m_object_register = ir.CreateAlloca(defs.pvoid, 0, "objreg");
 
 	m_stack_pointer = m_locals_size;
 }

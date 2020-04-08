@@ -165,8 +165,14 @@ class FunctionBuilder
 	//!		2. The temporary stack, which never overlaps the locals stack.
 	llvm::AllocaInst* m_locals;
 
-	//! \brief Value register, used to store small (<= 64-bit) values, mostly for returning data from functions.
+	//! \brief
+	//!		Value register, used to temporarily store small (<= 64-bit) values (and sometimes for returning data from
+	//!		functions).
 	llvm::AllocaInst* m_value_register;
+
+	//! \brief
+	//!		Object register, a temporary register to hold objects.
+	llvm::AllocaInst* m_object_register;
 
 	//! \brief Map from a bytecode offset to a BasicBlock.
 	//! \see InstructionContext::offset
