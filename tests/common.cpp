@@ -90,10 +90,17 @@ void EngineContext::run(asIScriptModule& module, const char* entry_point)
 	context->Release();
 }
 
+asllvm::JitConfig default_config()
+{
+	asllvm::JitConfig config;
+	// config.verbose = true;
+	return config;
+}
+
 std::string run(const char* path, const char* entry)
 {
 	out = {};
-	EngineContext    context({});
+	EngineContext    context(default_config());
 	asIScriptModule& module = context.build("build", path);
 	context.run(module, entry);
 	return out.str();
@@ -103,7 +110,7 @@ std::string run_string(const char* str)
 {
 	out = {};
 
-	EngineContext  context({});
+	EngineContext  context(default_config());
 	CScriptBuilder builder;
 	builder.StartNewModule(context.engine, "build");
 	builder.AddSectionFromMemory("str", (std::string("void main() {") + str + ";}").c_str());
