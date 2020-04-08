@@ -47,6 +47,15 @@ TEST_CASE("unsigned overflow logic", "[unsignedmathoverflow]")
 	REQUIRE(run_string("uint32 a = 1, b = uint32(-2); print(a + b)") == "4294967295\n");
 	REQUIRE(run_string("uint64 a = 1, b = uint64(-2); print(a + b)") == "18446744073709551615\n");
 }
-/*
-TEST_CASE("32-bit unsigned division math", "[unsignedmathdiv32]") { REQUIRE(run_string("")) }
-*/
+
+TEST_CASE("32-bit unsigned division math", "[unsignedmathdiv32]")
+{
+	REQUIRE(run_string("uint32 a = 10, b = 4; print(a / b)") == "2\n");
+	REQUIRE(run_string("uint32 a = 10, b = 4; print(a % b)") == "2\n");
+}
+
+TEST_CASE("64-bit unsigned division math", "[unsignedmathdiv64]")
+{
+	REQUIRE(run_string("uint64 a = 10, b = 4; print(a / b)") == "2\n");
+	REQUIRE(run_string("uint64 a = 10, b = 4; print(a % b)") == "2\n");
+}

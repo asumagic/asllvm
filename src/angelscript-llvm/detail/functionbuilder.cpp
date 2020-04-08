@@ -791,10 +791,30 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 		break;
 	}
 
-	case asBC_DIVu: unimpl(); break;
-	case asBC_MODu: unimpl(); break;
-	case asBC_DIVu64: unimpl(); break;
-	case asBC_MODu64: unimpl(); break;
+	case asBC_DIVu:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::UDiv, defs.i32);
+		break;
+	}
+
+	case asBC_MODu:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::URem, defs.i32);
+		break;
+	}
+
+	case asBC_DIVu64:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::UDiv, defs.i64);
+		break;
+	}
+
+	case asBC_MODu64:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::URem, defs.i64);
+		break;
+	}
+
 	case asBC_LoadRObjR: unimpl(); break;
 	case asBC_LoadVObjR: unimpl(); break;
 	case asBC_RefCpyV: unimpl(); break;
