@@ -58,7 +58,6 @@ target_compile_options(angelscript-llvm PUBLIC
 )
 
 add_subdirectory(3rd)
-add_subdirectory(samples/simple)
 
 if(DEFINED ENABLE_TESTING)
     add_subdirectory(tests/)

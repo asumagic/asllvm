@@ -2,6 +2,7 @@ add_executable(tests
 	main.cpp
 	common.cpp
 	integermath.cpp
+	branching.cpp
 	recursion.cpp
 	classmanip.cpp
 )
