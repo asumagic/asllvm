@@ -519,7 +519,14 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 		break;
 	}
 
-	case asBC_SetV8: unimpl(); break;
+	case asBC_SetV8:
+	{
+		store_stack_value(
+			asBC_SWORDARG0(instruction.pointer), llvm::ConstantInt::get(defs.i64, asBC_QWORDARG(instruction.pointer)));
+
+		break;
+	}
+
 	case asBC_ADDSi: unimpl(); break;
 
 	case asBC_CpyVtoV4:
