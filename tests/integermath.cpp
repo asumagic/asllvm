@@ -2,8 +2,7 @@
 #include <catch2/catch.hpp>
 
 // Note that the 8-bit and 16-bit arithmetic checks are somewhat redundant: operations over these types usually get
-// promoted to 32-bit anyway. Checking for this potentially helps detecting bugs related to sign extension and such,
-// though.
+// promoted to 32-bit. Checking for this potentially helps detecting bugs related to sign extension and such, though.
 
 TEST_CASE("8-bit signed math", "[signedmath8]")
 {
@@ -41,10 +40,13 @@ TEST_CASE("64-bit signed math", "[signedmath64]")
 	REQUIRE(run_string("int64 a = 7, b = 4; print(a % b)") == "3\n");
 }
 
-TEST_CASE("unsigned overflow logic", "[unsignedmath]")
+TEST_CASE("unsigned overflow logic", "[unsignedmathoverflow]")
 {
-	REQUIRE(run_string("print(uint8(1) + uint8(-2))") == "255\n");
-	REQUIRE(run_string("print(uint16(1) + uint16(-2))") == "65535\n");
-	REQUIRE(run_string("print(uint32(1) + uint32(-2))") == "4294967295\n");
-	REQUIRE(run_string("print(uint64(1) + uint64(-2))") == "18446744073709551615\n");
+	REQUIRE(run_string("uint8 a = 1, b = uint8(-2); print(a + b)") == "255\n");
+	REQUIRE(run_string("uint16 a = 1, b = uint16(-2); print(a + b)") == "65535\n");
+	REQUIRE(run_string("uint32 a = 1, b = uint32(-2); print(a + b)") == "4294967295\n");
+	REQUIRE(run_string("uint64 a = 1, b = uint64(-2); print(a + b)") == "18446744073709551615\n");
 }
+/*
+TEST_CASE("32-bit unsigned division math", "[unsignedmathdiv32]") { REQUIRE(run_string("")) }
+*/
