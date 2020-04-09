@@ -93,7 +93,7 @@ void EngineContext::run(asIScriptModule& module, const char* entry_point)
 asllvm::JitConfig default_config()
 {
 	asllvm::JitConfig config;
-	// config.verbose = true;
+	config.verbose = true;
 	return config;
 }
 

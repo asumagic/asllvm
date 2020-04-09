@@ -49,7 +49,7 @@ llvm::Type* Builder::to_llvm_type(asCDataType& type) const
 		return base_type;
 	}
 
-	if (type.IsReference())
+	if (type.IsReference() || type.IsObjectHandle())
 	{
 		return m_defs.pvoid;
 	}

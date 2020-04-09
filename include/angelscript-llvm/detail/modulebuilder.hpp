@@ -17,6 +17,11 @@
 
 namespace asllvm::detail
 {
+struct InternalFunctions
+{
+	llvm::Function *alloc, *script_object_constructor;
+};
+
 class ModuleBuilder
 {
 	public:
@@ -30,16 +35,20 @@ class ModuleBuilder
 
 	void build();
 
-	llvm::Module& module() { return *m_module; }
+	llvm::Module&      module() { return *m_module; }
+	InternalFunctions& internal_functions() { return m_internal_functions; }
 
 	void dump_state() const;
 
 	private:
+	InternalFunctions setup_internal_functions();
+
 	JitCompiler&                                        m_compiler;
 	std::unique_ptr<llvm::Module>                       m_module;
 	std::vector<std::pair<std::string, asJITFunction*>> m_jit_functions;
 	std::map<int, llvm::Function*>                      m_script_functions;
 	std::map<int, llvm::Function*>                      m_system_functions;
+	InternalFunctions                                   m_internal_functions;
 };
 
 } // namespace asllvm::detail

@@ -15,7 +15,8 @@ namespace asllvm::detail
 {
 ModuleBuilder::ModuleBuilder(JitCompiler& compiler, std::string_view angelscript_module_name) :
 	m_compiler{compiler},
-	m_module{std::make_unique<llvm::Module>(make_module_name(angelscript_module_name), compiler.builder().context())}
+	m_module{std::make_unique<llvm::Module>(make_module_name(angelscript_module_name), compiler.builder().context())},
+	m_internal_functions{setup_internal_functions()}
 {}
 
 void ModuleBuilder::add_jit_function(std::string name, asJITFunction* function)
@@ -137,16 +138,21 @@ void ModuleBuilder::build()
 
 	m_compiler.builder().optimizer().run(*m_module);
 
+	const auto define_function = [&](auto* address, const std::string& name) {
+		llvm::JITEvaluatedSymbol symbol(llvm::pointerToJITTargetAddress(address), llvm::JITSymbolFlags::Callable);
+
+		ExitOnError(m_compiler.jit().defineAbsolute(name, symbol));
+	};
+
 	for (const auto& it : m_system_functions)
 	{
 		auto& script_func = static_cast<asCScriptFunction&>(*m_compiler.engine().GetFunctionById(it.first));
-
-		llvm::JITTargetAddress address = {};
-		std::memcpy(&address, &script_func.sysFuncIntf->func, sizeof(asFUNCTION_t));
-		llvm::JITEvaluatedSymbol symbol(address, llvm::JITSymbolFlags::Callable);
-
-		ExitOnError(m_compiler.jit().defineAbsolute(it.second->getName(), symbol));
+		define_function(script_func.sysFuncIntf->func, it.second->getName());
 	}
+
+	// TODO: figure out why func->getName() returns an empty string
+	define_function(*userAlloc, "asllvm.private.alloc");
+	define_function(ScriptObject_Construct, "asllvm.private.script_object_constructor");
 
 	ExitOnError(m_compiler.jit().addIRModule(
 		llvm::orc::ThreadSafeModule(std::move(m_module), m_compiler.builder().extract_old_context())));
@@ -166,5 +172,35 @@ void ModuleBuilder::dump_state() const
 	}
 
 	m_module->print(llvm::errs(), nullptr);
+}
+
+InternalFunctions ModuleBuilder::setup_internal_functions()
+{
+	CommonDefinitions& defs = m_compiler.builder().definitions();
+
+	InternalFunctions funcs;
+
+	{
+		std::array<llvm::Type*, 1> types{{defs.iptr}};
+		llvm::Type*                return_type = defs.pvoid;
+
+		llvm::FunctionType* function_type = llvm::FunctionType::get(return_type, types, false);
+		funcs.alloc                       = llvm::Function::Create(
+			function_type, llvm::Function::ExternalLinkage, 0, "asllvm.private.alloc", m_module.get());
+	}
+
+	{
+		std::array<llvm::Type*, 2> types{{defs.pvoid, defs.pvoid}};
+
+		llvm::FunctionType* function_type = llvm::FunctionType::get(defs.tvoid, types, false);
+		funcs.script_object_constructor   = llvm::Function::Create(
+			function_type,
+			llvm::Function::ExternalLinkage,
+			0,
+			"asllvm.private.script_object_constructor",
+			m_module.get());
+	}
+
+	return funcs;
 }
 } // namespace asllvm::detail

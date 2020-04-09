@@ -198,9 +198,10 @@ void FunctionBuilder::preprocess_instruction(InstructionContext instruction)
 
 void FunctionBuilder::process_instruction(InstructionContext instruction)
 {
-	asIScriptEngine&   engine = m_compiler.engine();
-	llvm::IRBuilder<>& ir     = m_compiler.builder().ir();
-	CommonDefinitions& defs   = m_compiler.builder().definitions();
+	asIScriptEngine&   engine         = m_compiler.engine();
+	llvm::IRBuilder<>& ir             = m_compiler.builder().ir();
+	CommonDefinitions& defs           = m_compiler.builder().definitions();
+	InternalFunctions& internal_funcs = m_module_builder.internal_functions();
 
 	const auto old_stack_pointer = m_stack_pointer;
 
@@ -268,38 +269,21 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	case asBC_CALL:
 	{
 		auto& function = static_cast<asCScriptFunction&>(*engine.GetFunctionById(asBC_INTARG(instruction.pointer)));
-
-		llvm::Value*                new_frame_pointer = get_stack_value_pointer(m_stack_pointer, defs.i32);
-		std::array<llvm::Value*, 1> args{{new_frame_pointer}};
-
-		llvm::Function* callee = m_module_builder.create_function(function);
-
-		llvm::CallInst* ret = ir.CreateCall(callee->getFunctionType(), callee, args);
-
-		if (function.returnType.GetTokenType() != ttVoid)
-		{
-			if (function.DoesReturnOnStack())
-			{
-				m_stack_pointer -= function.GetSpaceNeededForReturnValue();
-			}
-			else
-			{
-				// Store to the value register
-				llvm::Value* typed_value_register = ir.CreateBitCast(m_value_register, ret->getType()->getPointerTo());
-				ir.CreateStore(ret, typed_value_register);
-			}
-		}
-
-		m_stack_pointer -= function.GetSpaceNeededForArguments();
-
+		emit_script_call(function);
 		break;
 	}
 
 	case asBC_RET:
 	{
+		asCDataType& type = m_script_function.returnType;
+
 		if (m_llvm_function->getReturnType() == defs.tvoid)
 		{
 			ir.CreateRetVoid();
+		}
+		else if (type.IsObjectHandle())
+		{
+			ir.CreateRet(ir.CreateLoad(defs.pvoid, m_object_register));
 		}
 		else
 		{
@@ -517,10 +501,76 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 		break;
 	}
 
-	case asBC_ALLOC: unimpl(); break;
-	case asBC_FREE: unimpl(); break;
-	case asBC_LOADOBJ: unimpl(); break;
-	case asBC_STOREOBJ: unimpl(); break;
+	case asBC_ALLOC:
+	{
+		auto&     type           = *reinterpret_cast<asCObjectType*>(asBC_PTRARG(instruction.pointer));
+		const int constructor_id = asBC_INTARG(instruction.pointer + AS_PTR_SIZE);
+
+		if (type.flags & asOBJ_SCRIPT_OBJECT)
+		{
+			// Allocate memory for the object
+			std::array<llvm::Value*, 1> alloc_args{{
+				llvm::ConstantInt::get(defs.iptr, type.size) // TODO: align type.size to 4 bytes
+			}};
+
+			llvm::Value* object_memory_pointer
+				= ir.CreateCall(internal_funcs.alloc->getFunctionType(), internal_funcs.alloc, alloc_args);
+
+			// Initialize stuff using the scriptobject constructor
+			std::array<llvm::Value*, 2> scriptobject_constructor_args{
+				{ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, reinterpret_cast<asPWORD>(&type)), defs.pvoid),
+				 object_memory_pointer}};
+
+			ir.CreateCall(
+				internal_funcs.script_object_constructor->getFunctionType(),
+				internal_funcs.script_object_constructor,
+				scriptobject_constructor_args);
+
+			// Constructor
+			asCScriptFunction& constructor = *static_cast<asCScriptEngine&>(engine).scriptFunctions[constructor_id];
+
+			llvm::Value* pointer_to_target_pointer = load_stack_value(
+				m_stack_pointer - constructor.GetSpaceNeededForArguments(), defs.pvoid->getPointerTo());
+			llvm::Value* target_pointer = ir.CreateLoad(defs.pvoid, pointer_to_target_pointer);
+			target_pointer              = ir.CreateBitCast(target_pointer, defs.pvoid->getPointerTo());
+
+			// TODO: check if target_pointer is null before the store (we really should)
+			ir.CreateStore(object_memory_pointer, target_pointer);
+
+			m_stack_pointer -= AS_PTR_SIZE;
+			store_stack_value(m_stack_pointer, object_memory_pointer);
+
+			emit_script_call(constructor);
+		}
+		else
+		{
+			asllvm_assert(false && "unsupported object category for script allocation");
+		}
+	}
+
+	case asBC_FREE:
+	{
+		m_compiler.diagnostic(m_compiler.engine(), "STUB: not freeing user object!!", asMSGTYPE_WARNING);
+		break;
+	}
+
+	case asBC_LOADOBJ:
+	{
+		llvm::Value* pointer_to_object = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.pvoid);
+		ir.CreateStore(pointer_to_object, m_object_register);
+		store_stack_value(
+			asBC_SWORDARG0(instruction.pointer), ir.CreatePtrToInt(llvm::ConstantInt::get(defs.iptr, 0), defs.pvoid));
+
+		break;
+	}
+
+	case asBC_STOREOBJ:
+	{
+		store_stack_value(asBC_SWORDARG0(instruction.pointer), m_object_register);
+		ir.CreateStore(ir.CreatePtrToInt(llvm::ConstantInt::get(defs.iptr, 0), defs.pvoid), m_object_register);
+		break;
+	}
+
 	case asBC_GETOBJ: unimpl(); break;
 	case asBC_REFCPY: unimpl(); break;
 	case asBC_CHKREF: unimpl(); break;
@@ -1295,6 +1345,35 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 	{
 		ir.CreateStore(result, return_pointer);
 	}
+}
+
+void FunctionBuilder::emit_script_call(asCScriptFunction& function)
+{
+	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
+	CommonDefinitions& defs = m_compiler.builder().definitions();
+
+	llvm::Value*                new_frame_pointer = get_stack_value_pointer(m_stack_pointer, defs.i32);
+	std::array<llvm::Value*, 1> args{{new_frame_pointer}};
+
+	llvm::Function* callee = m_module_builder.create_function(function);
+
+	llvm::CallInst* ret = ir.CreateCall(callee->getFunctionType(), callee, args);
+
+	if (function.returnType.GetTokenType() != ttVoid)
+	{
+		if (function.DoesReturnOnStack())
+		{
+			m_stack_pointer -= function.GetSpaceNeededForReturnValue();
+		}
+		else
+		{
+			// Store to the value register
+			llvm::Value* typed_value_register = ir.CreateBitCast(m_value_register, ret->getType()->getPointerTo());
+			ir.CreateStore(ret, typed_value_register);
+		}
+	}
+
+	m_stack_pointer -= function.GetSpaceNeededForArguments();
 }
 
 llvm::Value* FunctionBuilder::load_stack_value(StackVariableIdentifier i, llvm::Type* type)
