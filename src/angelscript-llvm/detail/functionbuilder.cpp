@@ -529,14 +529,11 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 			// Constructor
 			asCScriptFunction& constructor = *static_cast<asCScriptEngine&>(engine).scriptFunctions[constructor_id];
 
-			llvm::Value* pointer_to_target_pointer = load_stack_value(
+			llvm::Value* target_pointer = load_stack_value(
 				m_stack_pointer - constructor.GetSpaceNeededForArguments(), defs.pvoid->getPointerTo());
-			llvm::Value* target_pointer = ir.CreateLoad(defs.pvoid, pointer_to_target_pointer);
-			target_pointer              = ir.CreateBitCast(target_pointer, defs.pvoid->getPointerTo());
 
 			// TODO: check if target_pointer is null before the store (we really should)
-			// HACK: commented out because it causes stack corruption for some reason, figure out why
-			// ir.CreateStore(object_memory_pointer, target_pointer);
+			ir.CreateStore(object_memory_pointer, target_pointer);
 
 			m_stack_pointer -= AS_PTR_SIZE;
 			store_stack_value(m_stack_pointer, object_memory_pointer);
