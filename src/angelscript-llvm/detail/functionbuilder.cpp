@@ -495,7 +495,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	{
 		if (m_compiler.config().verbose)
 		{
-			m_compiler.diagnostic(engine, "Found VM suspend, these are unsupported and ignored", asMSGTYPE_WARNING);
+			m_compiler.diagnostic("Found VM suspend, these are unsupported and ignored", asMSGTYPE_WARNING);
 		}
 
 		break;
@@ -548,7 +548,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_FREE:
 	{
-		m_compiler.diagnostic(m_compiler.engine(), "STUB: not freeing user object!!", asMSGTYPE_WARNING);
+		m_compiler.diagnostic("STUB: not freeing user object!!", asMSGTYPE_WARNING);
 		break;
 	}
 
@@ -880,7 +880,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	{
 		if (m_compiler.config().verbose)
 		{
-			m_compiler.diagnostic(engine, "Found JIT entry point, patching as valid entry point");
+			m_compiler.diagnostic("Found JIT entry point, patching as valid entry point");
 		}
 
 		// Pass the JitCompiler as the jitArg value, which can be used by lazy_jit_compiler().

@@ -37,18 +37,18 @@ int JitCompiler::jit_compile(asIScriptFunction* function, asJITFunction* output)
 
 	try
 	{
-		status = compile(*m_engine, static_cast<asCScriptFunction&>(*function), *output);
+		status = compile(static_cast<asCScriptFunction&>(*function), *output);
 	}
 	catch (std::runtime_error& error)
 	{
-		diagnostic(*m_engine, fmt::format("Failed to compile module: {}\n", error.what()), asMSGTYPE_ERROR);
+		diagnostic(fmt::format("Failed to compile module: {}\n", error.what()), asMSGTYPE_ERROR);
 	}
 
 	if (status == CompileStatus::SUCCESS)
 	{
 		if (m_config.verbose)
 		{
-			diagnostic(*m_engine, "Function JITted successfully.\n", asMSGTYPE_INFORMATION);
+			diagnostic("Function JITted successfully.\n", asMSGTYPE_INFORMATION);
 		}
 
 		if (*output == nullptr)
@@ -61,7 +61,6 @@ int JitCompiler::jit_compile(asIScriptFunction* function, asJITFunction* output)
 	}
 
 	diagnostic(
-		*m_engine,
 		"Function could not be JITted. This is not a supported usecase and is likely to cause crashes.\n",
 		asMSGTYPE_WARNING);
 
@@ -74,8 +73,10 @@ void JitCompiler::jit_free(asJITFunction func)
 	// TODO
 }
 
-void JitCompiler::diagnostic(asIScriptEngine& engine, const std::string& text, asEMsgType message_type) const
+void JitCompiler::diagnostic(const std::string& text, asEMsgType message_type) const
 {
+	asllvm_assert(m_engine != nullptr);
+
 	const char* section = "???";
 
 	if (m_debug_state.compiling_function != nullptr)
@@ -86,19 +87,18 @@ void JitCompiler::diagnostic(asIScriptEngine& engine, const std::string& text, a
 	std::string edited_text = "asllvm: ";
 	edited_text += text;
 
-	engine.WriteMessage(section, 0, 0, message_type, edited_text.c_str());
+	m_engine->WriteMessage(section, 0, 0, message_type, edited_text.c_str());
 }
 
 void JitCompiler::build_modules() { m_module_map.build_modules(); }
 
-JitCompiler::CompileStatus
-JitCompiler::compile(asIScriptEngine& engine, asCScriptFunction& function, asJITFunction& output)
+JitCompiler::CompileStatus JitCompiler::compile(asCScriptFunction& function, asJITFunction& output)
 {
 	m_debug_state.compiling_function = &function;
 
 	if (m_config.verbose)
 	{
-		diagnostic(engine, fmt::format("JIT compiling {}", function.GetDeclaration(true, true, true)));
+		diagnostic(fmt::format("JIT compiling {}", function.GetDeclaration(true, true, true)));
 	}
 
 	asUINT   length;
@@ -106,7 +106,7 @@ JitCompiler::compile(asIScriptEngine& engine, asCScriptFunction& function, asJIT
 
 	if (bytecode == nullptr)
 	{
-		diagnostic(engine, "Null bytecode passed by engine", asMSGTYPE_WARNING);
+		diagnostic("Null bytecode passed by engine", asMSGTYPE_WARNING);
 		return CompileStatus::NULL_BYTECODE;
 	}
 

@@ -27,8 +27,7 @@ class JitCompiler
 	const JitConfig&  config() const { return m_config; }
 	Builder&          builder() { return m_builder; }
 
-	void diagnostic(
-		asIScriptEngine& engine, const std::string& message, asEMsgType message_type = asMSGTYPE_INFORMATION) const;
+	void diagnostic(const std::string& message, asEMsgType message_type = asMSGTYPE_INFORMATION) const;
 
 	void build_modules();
 
@@ -49,7 +48,7 @@ class JitCompiler
 		ICE
 	};
 
-	CompileStatus compile(asIScriptEngine& engine, asCScriptFunction& function, asJITFunction& output);
+	CompileStatus compile(asCScriptFunction& function, asJITFunction& output);
 
 	static void late_jit_compile(asSVMRegisters* registers, asPWORD jit_arg);
 	static void invalid_late_jit_compile(asSVMRegisters* registers, asPWORD jit_arg);
