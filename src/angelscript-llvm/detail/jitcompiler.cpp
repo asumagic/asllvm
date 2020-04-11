@@ -46,17 +46,10 @@ void JitCompiler::diagnostic(const std::string& text, asEMsgType message_type) c
 {
 	asllvm_assert(m_engine != nullptr);
 
-	const char* section = "???";
-
-	if (m_debug_state.compiling_function != nullptr)
-	{
-		section = m_debug_state.compiling_function->GetModuleName();
-	}
-
 	std::string edited_text = "asllvm: ";
 	edited_text += text;
 
-	m_engine->WriteMessage(section, 0, 0, message_type, edited_text.c_str());
+	m_engine->WriteMessage("", 0, 0, message_type, edited_text.c_str());
 }
 
 void JitCompiler::build_modules() { m_module_map.build_modules(); }

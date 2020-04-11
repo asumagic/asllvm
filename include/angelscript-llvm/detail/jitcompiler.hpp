@@ -32,11 +32,6 @@ class JitCompiler
 	void build_modules();
 
 	private:
-	mutable struct
-	{
-		asIScriptFunction* compiling_function = nullptr;
-	} m_debug_state;
-
 	void dump_state() const;
 
 	[[no_unique_address]] LibraryInitializer m_llvm_initializer;
