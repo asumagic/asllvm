@@ -32,40 +32,9 @@ int JitCompiler::jit_compile(asIScriptFunction* function, asJITFunction* output)
 		&& "JIT compiler expects to be used against the same asIScriptEngine during its lifetime");
 
 	m_engine = function->GetEngine();
+	m_module_map[function->GetModuleName()].append({function, output});
 
-	CompileStatus status = CompileStatus::ICE;
-
-	try
-	{
-		status = compile(static_cast<asCScriptFunction&>(*function), *output);
-	}
-	catch (std::runtime_error& error)
-	{
-		diagnostic(fmt::format("Failed to compile module: {}\n", error.what()), asMSGTYPE_ERROR);
-	}
-
-	if (status == CompileStatus::SUCCESS)
-	{
-		if (m_config.verbose)
-		{
-			diagnostic("Function JITted successfully.\n", asMSGTYPE_INFORMATION);
-		}
-
-		if (*output == nullptr)
-		{
-			*output = m_config.allow_late_jit_compiles ? late_jit_compile : invalid_late_jit_compile;
-		}
-
-		m_debug_state = {};
-		return 0;
-	}
-
-	diagnostic(
-		"Function could not be JITted. This is not a supported usecase and is likely to cause crashes.\n",
-		asMSGTYPE_WARNING);
-
-	m_debug_state = {};
-	return -1;
+	return 0;
 }
 
 void JitCompiler::jit_free(asJITFunction func)
@@ -91,52 +60,6 @@ void JitCompiler::diagnostic(const std::string& text, asEMsgType message_type) c
 }
 
 void JitCompiler::build_modules() { m_module_map.build_modules(); }
-
-JitCompiler::CompileStatus JitCompiler::compile(asCScriptFunction& function, asJITFunction& output)
-{
-	m_debug_state.compiling_function = &function;
-
-	if (m_config.verbose)
-	{
-		diagnostic(fmt::format("JIT compiling {}", function.GetDeclaration(true, true, true)));
-	}
-
-	asUINT   length;
-	asDWORD* bytecode = function.GetByteCode(&length);
-
-	if (bytecode == nullptr)
-	{
-		diagnostic("Null bytecode passed by engine", asMSGTYPE_WARNING);
-		return CompileStatus::NULL_BYTECODE;
-	}
-
-	detail::ModuleBuilder& module_builder = m_module_map[function.GetModuleName()];
-
-	detail::FunctionBuilder function_builder = module_builder.create_function_builder(function);
-
-	function_builder.read_bytecode(bytecode, length);
-	function_builder.create_wrapper_function();
-
-	module_builder.add_jit_function(make_function_name(function.GetName(), function.GetNamespace()), &output);
-
-	return CompileStatus::SUCCESS;
-}
-
-void JitCompiler::invalid_late_jit_compile([[maybe_unused]] asSVMRegisters* registers, [[maybe_unused]] asPWORD jit_arg)
-{
-	asllvm_assert(
-		false
-		&& "JIT module was not built and late JIT compiles were disabled. application forgot a call to BuildModule().");
-}
-
-void JitCompiler::late_jit_compile([[maybe_unused]] asSVMRegisters* registers, [[maybe_unused]] asPWORD jit_arg)
-{
-	reinterpret_cast<JitCompiler*>(jit_arg)->build_modules();
-
-	// We do not know what module we were missing... but we know it has been built, now.
-	// Returning without affecting registers (and, in particular, the programPointer) means this JIT entry point will be
-	// entered again, but now with the correct pointer.
-}
 
 void JitCompiler::dump_state() const { m_module_map.dump_state(); }
 

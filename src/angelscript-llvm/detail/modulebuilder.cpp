@@ -19,10 +19,7 @@ ModuleBuilder::ModuleBuilder(JitCompiler& compiler, std::string_view angelscript
 	m_internal_functions{setup_internal_functions()}
 {}
 
-void ModuleBuilder::add_jit_function(std::string name, asJITFunction* function)
-{
-	m_jit_functions.emplace_back(std::move(name), function);
-}
+void ModuleBuilder::append(PendingFunction function) { m_pending_functions.push_back(function); }
 
 FunctionBuilder ModuleBuilder::create_function_builder(asCScriptFunction& function)
 {
@@ -131,6 +128,11 @@ llvm::Function* ModuleBuilder::get_system_function(asCScriptFunction& system_fun
 
 void ModuleBuilder::build()
 {
+	for (const auto& pending : m_pending_functions)
+	{
+		build_pending_function(pending);
+	}
+
 	if (m_compiler.config().verbose)
 	{
 		dump_state();
@@ -202,5 +204,20 @@ InternalFunctions ModuleBuilder::setup_internal_functions()
 	}
 
 	return funcs;
+}
+
+void ModuleBuilder::build_pending_function(PendingFunction pending)
+{
+	asCScriptFunction& function = *static_cast<asCScriptFunction*>(pending.function);
+
+	FunctionBuilder builder = create_function_builder(function);
+
+	asUINT   length;
+	asDWORD* bytecode = function.GetByteCode(&length);
+
+	builder.read_bytecode(bytecode, length);
+	builder.create_wrapper_function();
+
+	m_jit_functions.emplace_back(make_function_name(function.GetName(), function.GetNamespace()), pending.jit_function);
 }
 } // namespace asllvm::detail

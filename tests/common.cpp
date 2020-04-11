@@ -79,6 +79,8 @@ asIScriptModule& EngineContext::build(const char* name, const char* script_path)
 
 void EngineContext::run(asIScriptModule& module, const char* entry_point)
 {
+	jit.BuildModules();
+
 	asIScriptFunction* function = module.GetFunctionByDecl(entry_point);
 	asllvm_test_check(function != nullptr);
 

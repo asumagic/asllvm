@@ -22,12 +22,19 @@ struct InternalFunctions
 	llvm::Function *alloc, *script_object_constructor;
 };
 
+struct PendingFunction
+{
+	asIScriptFunction* function;
+	asJITFunction*     jit_function;
+};
+
 class ModuleBuilder
 {
 	public:
 	ModuleBuilder(JitCompiler& compiler, std::string_view angelscript_module_name);
 
-	void            add_jit_function(std::string name, asJITFunction* function);
+	void append(PendingFunction function);
+
 	FunctionBuilder create_function_builder(asCScriptFunction& function);
 	llvm::Function* create_function(asCScriptFunction& function);
 
@@ -43,8 +50,11 @@ class ModuleBuilder
 	private:
 	InternalFunctions setup_internal_functions();
 
+	void build_pending_function(PendingFunction pending);
+
 	JitCompiler&                                        m_compiler;
 	std::unique_ptr<llvm::Module>                       m_module;
+	std::vector<PendingFunction>                        m_pending_functions;
 	std::vector<std::pair<std::string, asJITFunction*>> m_jit_functions;
 	std::map<int, llvm::Function*>                      m_script_functions;
 	std::map<int, llvm::Function*>                      m_system_functions;

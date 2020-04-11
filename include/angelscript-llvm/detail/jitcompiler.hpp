@@ -37,22 +37,6 @@ class JitCompiler
 		asIScriptFunction* compiling_function = nullptr;
 	} m_debug_state;
 
-	enum class CompileStatus
-	{
-		SUCCESS,
-
-		NULL_BYTECODE,
-
-		UNIMPLEMENTED,
-
-		ICE
-	};
-
-	CompileStatus compile(asCScriptFunction& function, asJITFunction& output);
-
-	static void late_jit_compile(asSVMRegisters* registers, asPWORD jit_arg);
-	static void invalid_late_jit_compile(asSVMRegisters* registers, asPWORD jit_arg);
-
 	void dump_state() const;
 
 	[[no_unique_address]] LibraryInitializer m_llvm_initializer;
