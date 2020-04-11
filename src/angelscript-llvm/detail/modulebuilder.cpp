@@ -21,11 +21,6 @@ ModuleBuilder::ModuleBuilder(JitCompiler& compiler, std::string_view angelscript
 
 void ModuleBuilder::append(PendingFunction function) { m_pending_functions.push_back(function); }
 
-FunctionBuilder ModuleBuilder::create_function_builder(asCScriptFunction& function)
-{
-	return {m_compiler, *this, function, create_function(function)};
-}
-
 llvm::Function* ModuleBuilder::create_function(asCScriptFunction& function)
 {
 	if (auto it = m_script_functions.find(function.GetId()); it != m_script_functions.end())
@@ -128,33 +123,16 @@ llvm::Function* ModuleBuilder::get_system_function(asCScriptFunction& system_fun
 
 void ModuleBuilder::build()
 {
-	for (const auto& pending : m_pending_functions)
-	{
-		build_pending_function(pending);
-	}
+	build_functions();
 
 	if (m_compiler.config().verbose)
 	{
 		dump_state();
 	}
 
+	link_symbols();
+
 	m_compiler.builder().optimizer().run(*m_module);
-
-	const auto define_function = [&](auto* address, const std::string& name) {
-		llvm::JITEvaluatedSymbol symbol(llvm::pointerToJITTargetAddress(address), llvm::JITSymbolFlags::Callable);
-
-		ExitOnError(m_compiler.jit().defineAbsolute(name, symbol));
-	};
-
-	for (const auto& it : m_system_functions)
-	{
-		auto& script_func = static_cast<asCScriptFunction&>(*m_compiler.engine().GetFunctionById(it.first));
-		define_function(script_func.sysFuncIntf->func, it.second->getName());
-	}
-
-	// TODO: figure out why func->getName() returns an empty string
-	define_function(*userAlloc, "asllvm.private.alloc");
-	define_function(ScriptObject_Construct, "asllvm.private.script_object_constructor");
 
 	ExitOnError(m_compiler.jit().addIRModule(
 		llvm::orc::ThreadSafeModule(std::move(m_module), m_compiler.builder().extract_old_context())));
@@ -206,18 +184,49 @@ InternalFunctions ModuleBuilder::setup_internal_functions()
 	return funcs;
 }
 
-void ModuleBuilder::build_pending_function(PendingFunction pending)
+void ModuleBuilder::build_functions()
 {
-	asCScriptFunction& function = *static_cast<asCScriptFunction*>(pending.function);
+	for (auto& pending : m_pending_functions)
+	{
+		create_function(*static_cast<asCScriptFunction*>(pending.function));
+	}
 
-	FunctionBuilder builder = create_function_builder(function);
+	for (const auto& pending : m_pending_functions)
+	{
+		FunctionBuilder builder{m_compiler,
+								*this,
+								*static_cast<asCScriptFunction*>(pending.function),
+								m_script_functions.at(pending.function->GetId())};
 
-	asUINT   length;
-	asDWORD* bytecode = function.GetByteCode(&length);
+		asUINT   length;
+		asDWORD* bytecode = pending.function->GetByteCode(&length);
 
-	builder.read_bytecode(bytecode, length);
-	builder.create_wrapper_function();
+		builder.read_bytecode(bytecode, length);
+		builder.create_wrapper_function();
 
-	m_jit_functions.emplace_back(make_function_name(function.GetName(), function.GetNamespace()), pending.jit_function);
+		m_jit_functions.emplace_back(
+			make_function_name(pending.function->GetName(), pending.function->GetNamespace()), pending.jit_function);
+	}
+
+	m_pending_functions.clear();
+}
+
+void ModuleBuilder::link_symbols()
+{
+	const auto define_function = [&](auto* address, const std::string& name) {
+		llvm::JITEvaluatedSymbol symbol(llvm::pointerToJITTargetAddress(address), llvm::JITSymbolFlags::Callable);
+
+		ExitOnError(m_compiler.jit().defineAbsolute(name, symbol));
+	};
+
+	for (const auto& it : m_system_functions)
+	{
+		auto& script_func = static_cast<asCScriptFunction&>(*m_compiler.engine().GetFunctionById(it.first));
+		define_function(script_func.sysFuncIntf->func, it.second->getName());
+	}
+
+	// TODO: figure out why func->getName() returns an empty string
+	define_function(*userAlloc, "asllvm.private.alloc");
+	define_function(ScriptObject_Construct, "asllvm.private.script_object_constructor");
 }
 } // namespace asllvm::detail

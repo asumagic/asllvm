@@ -35,7 +35,6 @@ class ModuleBuilder
 
 	void append(PendingFunction function);
 
-	FunctionBuilder create_function_builder(asCScriptFunction& function);
 	llvm::Function* create_function(asCScriptFunction& function);
 
 	llvm::Function* get_system_function(asCScriptFunction& system_function);
@@ -50,7 +49,8 @@ class ModuleBuilder
 	private:
 	InternalFunctions setup_internal_functions();
 
-	void build_pending_function(PendingFunction pending);
+	void build_functions();
+	void link_symbols();
 
 	JitCompiler&                                        m_compiler;
 	std::unique_ptr<llvm::Module>                       m_module;
