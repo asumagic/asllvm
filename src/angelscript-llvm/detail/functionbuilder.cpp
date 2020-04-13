@@ -730,10 +730,10 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	case asBC_uTOf: unimpl(); break;
 	case asBC_fTOu: unimpl(); break;
 
-	case asBC_sbTOi: emit_stack_integer_sign_extend(instruction, defs.i8, defs.i32); break;
-	case asBC_swTOi: emit_stack_integer_sign_extend(instruction, defs.i16, defs.i32); break;
-	case asBC_ubTOi: emit_stack_integer_zero_extend(instruction, defs.i8, defs.i32); break;
-	case asBC_uwTOi: emit_stack_integer_zero_extend(instruction, defs.i16, defs.i32); break;
+	case asBC_sbTOi: emit_cast(instruction, llvm::Instruction::SExt, defs.i8, defs.i32); break;
+	case asBC_swTOi: emit_cast(instruction, llvm::Instruction::SExt, defs.i16, defs.i32); break;
+	case asBC_ubTOi: emit_cast(instruction, llvm::Instruction::ZExt, defs.i8, defs.i32); break;
+	case asBC_uwTOi: emit_cast(instruction, llvm::Instruction::ZExt, defs.i16, defs.i32); break;
 
 	case asBC_dTOi: unimpl(); break;
 	case asBC_dTOu: unimpl(); break;
@@ -787,14 +787,14 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 		break;
 	}
 
-	case asBC_iTOb: emit_stack_integer_trunc(instruction, defs.i32, defs.i8); break;
-	case asBC_iTOw: emit_stack_integer_trunc(instruction, defs.i32, defs.i16); break;
+	case asBC_iTOb: emit_cast(instruction, llvm::Instruction::Trunc, defs.i32, defs.i8); break;
+	case asBC_iTOw: emit_cast(instruction, llvm::Instruction::Trunc, defs.i32, defs.i16); break;
 
 	case asBC_Cast: unimpl(); break;
 
-	case asBC_i64TOi: emit_stack_integer_trunc(instruction, defs.i64, defs.i32); break;
-	case asBC_uTOi64: emit_stack_integer_zero_extend(instruction, defs.i32, defs.i64); break;
-	case asBC_iTOi64: emit_stack_integer_sign_extend(instruction, defs.i32, defs.i64); break;
+	case asBC_i64TOi: emit_cast(instruction, llvm::Instruction::Trunc, defs.i64, defs.i32); break;
+	case asBC_uTOi64: emit_cast(instruction, llvm::Instruction::ZExt, defs.i32, defs.i64); break;
+	case asBC_iTOi64: emit_cast(instruction, llvm::Instruction::SExt, defs.i32, defs.i64); break;
 
 	case asBC_fTOi64: unimpl(); break;
 	case asBC_dTOi64: unimpl(); break;
@@ -1048,49 +1048,21 @@ void FunctionBuilder::emit_allocate_local_structures()
 	m_stack_pointer = local_storage_size();
 }
 
-void FunctionBuilder::emit_stack_integer_trunc(
-	FunctionBuilder::InstructionContext instruction, llvm::Type* source, llvm::Type* destination)
+void FunctionBuilder::emit_cast(
+	FunctionBuilder::InstructionContext instruction,
+	llvm::Instruction::CastOps          op,
+	llvm::Type*                         source_type,
+	llvm::Type*                         destination_type)
 {
 	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
 	CommonDefinitions& defs = m_compiler.builder().definitions();
 
-	auto stack_offset = (source == defs.i64 || destination == defs.i64) ? asBC_SWORDARG1(instruction.pointer)
-																		: asBC_SWORDARG0(instruction.pointer);
+	auto stack_offset = (source_type == defs.i64 || destination_type == defs.i64) ? asBC_SWORDARG1(instruction.pointer)
+																				  : asBC_SWORDARG0(instruction.pointer);
 
-	llvm::Value* original  = load_stack_value(stack_offset, source);
-	llvm::Value* truncated = ir.CreateTrunc(original, destination);
+	llvm::Value* converted = ir.CreateCast(op, load_stack_value(stack_offset, source_type), destination_type);
 
-	store_stack_value(asBC_SWORDARG0(instruction.pointer), truncated);
-}
-
-void FunctionBuilder::emit_stack_integer_sign_extend(
-	FunctionBuilder::InstructionContext instruction, llvm::Type* source, llvm::Type* destination)
-{
-	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
-	CommonDefinitions& defs = m_compiler.builder().definitions();
-
-	auto stack_offset = (source == defs.i64 || destination == defs.i64) ? asBC_SWORDARG1(instruction.pointer)
-																		: asBC_SWORDARG0(instruction.pointer);
-
-	llvm::Value* original  = load_stack_value(stack_offset, source);
-	llvm::Value* truncated = ir.CreateSExt(original, destination);
-
-	store_stack_value(asBC_SWORDARG0(instruction.pointer), truncated);
-}
-
-void FunctionBuilder::emit_stack_integer_zero_extend(
-	FunctionBuilder::InstructionContext instruction, llvm::Type* source, llvm::Type* destination)
-{
-	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
-	CommonDefinitions& defs = m_compiler.builder().definitions();
-
-	auto stack_offset = (source == defs.i64 || destination == defs.i64) ? asBC_SWORDARG1(instruction.pointer)
-																		: asBC_SWORDARG0(instruction.pointer);
-
-	llvm::Value* original  = load_stack_value(stack_offset, source);
-	llvm::Value* truncated = ir.CreateZExt(original, destination);
-
-	store_stack_value(asBC_SWORDARG0(instruction.pointer), truncated);
+	store_stack_value(asBC_SWORDARG0(instruction.pointer), converted);
 }
 
 void FunctionBuilder::emit_stack_arithmetic(

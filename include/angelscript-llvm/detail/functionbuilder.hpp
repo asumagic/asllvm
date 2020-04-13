@@ -71,14 +71,12 @@ class FunctionBuilder
 	//! \see Populates m_locals and m_registers.
 	void emit_allocate_local_structures();
 
-	//! \brief Implements a stack integer truncation instruction from type \p source to type \p destination.
-	void emit_stack_integer_trunc(InstructionContext instruction, llvm::Type* source, llvm::Type* destination);
-
 	//! \brief Implements a *signed* stack integer extend instruction from type \p source to type \p destination.
-	void emit_stack_integer_sign_extend(InstructionContext instruction, llvm::Type* source, llvm::Type* destination);
-
-	//! \brief Implements an *unsigned* stack integer extend instruction from type \p source to type \p destination.
-	void emit_stack_integer_zero_extend(InstructionContext instruction, llvm::Type* source, llvm::Type* destination);
+	void emit_cast(
+		InstructionContext         instruction,
+		llvm::Instruction::CastOps op,
+		llvm::Type*                source_type,
+		llvm::Type*                destination_type);
 
 	//! \brief Implements an stack arithmetic instruction \p op with of type \p type.
 	void emit_stack_arithmetic(InstructionContext instruction, llvm::Instruction::BinaryOps op, llvm::Type* type);
