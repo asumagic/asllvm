@@ -376,6 +376,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	case asBC_DECi16: unimpl(); break;
 	case asBC_DECi8: unimpl(); break;
 	case asBC_INCi: unimpl(); break;
+	case asBC_DECi: unimpl(); break;
 	case asBC_INCf: unimpl(); break;
 	case asBC_DECf: unimpl(); break;
 	case asBC_INCd: unimpl(); break;
@@ -879,6 +880,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	case asBC_SetListType: unimpl(); break;
 	case asBC_POWi: unimpl(); break;
 	case asBC_POWu: unimpl(); break;
+	case asBC_POWf: unimpl(); break;
 	case asBC_POWd: unimpl(); break;
 	case asBC_POWdi: unimpl(); break;
 	case asBC_POWi64: unimpl(); break;
