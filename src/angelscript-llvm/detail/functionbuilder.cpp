@@ -564,7 +564,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_STOREOBJ:
 	{
-		store_stack_value(asBC_SWORDARG0(instruction.pointer), m_object_register);
+		store_stack_value(asBC_SWORDARG0(instruction.pointer), ir.CreateLoad(defs.pvoid, m_object_register));
 		ir.CreateStore(ir.CreatePtrToInt(llvm::ConstantInt::get(defs.iptr, 0), defs.pvoid), m_object_register);
 		break;
 	}
@@ -775,7 +775,12 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	case asBC_ChkRefS: unimpl(); break;
 	case asBC_ChkNullV: unimpl(); break;
 
-	case asBC_CALLINTF: unimpl(); break;
+	case asBC_CALLINTF:
+	{
+		auto& function = static_cast<asCScriptFunction&>(*engine.GetFunctionById(asBC_INTARG(instruction.pointer)));
+		emit_script_call(function);
+		break;
+	}
 
 	case asBC_iTOb: emit_stack_integer_trunc(instruction, defs.i32, defs.i8); break;
 	case asBC_iTOw:
@@ -1350,18 +1355,65 @@ void FunctionBuilder::emit_script_call(asCScriptFunction& function)
 	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
 	CommonDefinitions& defs = m_compiler.builder().definitions();
 
-	llvm::Value*                new_frame_pointer = get_stack_value_pointer(m_stack_pointer, defs.i32);
-	std::array<llvm::Value*, 1> args{{new_frame_pointer}};
+	// Check supported calls
+	switch (function.funcType)
+	{
+	case asFUNC_VIRTUAL:
+	case asFUNC_SCRIPT: break;
+	default: asllvm_assert(false && "unsupported script type for script function call");
+	}
 
 	llvm::Function* callee = m_module_builder.create_function(function);
 
-	llvm::CallInst* ret = ir.CreateCall(callee->getFunctionType(), callee, args);
+	llvm::CallInst* ret;
+
+	if (function.funcType == asFUNC_VIRTUAL)
+	{
+		// TODO: null pointer access check
+		llvm::Value* script_object = load_stack_value(m_stack_pointer, defs.pvoid);
+		m_stack_pointer -= AS_PTR_SIZE;
+
+		llvm::Value* function_value = ir.CreateIntToPtr(
+			llvm::ConstantInt::get(defs.iptr, reinterpret_cast<asPWORD>(&function)),
+			defs.pvoid,
+			"virtual_script_function");
+
+		llvm::Function*             lookup = m_module_builder.internal_functions().vtable_lookup;
+		std::array<llvm::Value*, 2> lookup_args{{script_object, function_value}};
+
+		llvm::Value* resolved_function = ir.CreateCall(lookup->getFunctionType(), lookup, lookup_args);
+
+		llvm::Value*                new_frame_pointer = get_stack_value_pointer(m_stack_pointer, defs.i32);
+		std::array<llvm::Value*, 1> args{{new_frame_pointer}};
+
+		ret = ir.CreateCall(
+			callee->getFunctionType(),
+			ir.CreateBitCast(resolved_function, callee->getFunctionType()->getPointerTo()),
+			args);
+	}
+	else
+	{
+		llvm::Value*                new_frame_pointer = get_stack_value_pointer(m_stack_pointer, defs.i32);
+		std::array<llvm::Value*, 1> args{{new_frame_pointer}};
+
+		ret = ir.CreateCall(callee->getFunctionType(), callee, args);
+	}
+
+	{
+		asCDataType& r = function.returnType;
+		asllvm_assert(r.IsPrimitive() || r.IsObjectHandle());
+	}
 
 	if (function.returnType.GetTokenType() != ttVoid)
 	{
 		if (function.DoesReturnOnStack())
 		{
 			m_stack_pointer -= function.GetSpaceNeededForReturnValue();
+		}
+		else if (function.returnType.IsObjectHandle())
+		{
+			// Store to the object register
+			ir.CreateStore(ret, m_object_register);
 		}
 		else
 		{

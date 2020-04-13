@@ -8,15 +8,17 @@ namespace asllvm::detail
 {
 ModuleMap::ModuleMap(JitCompiler& compiler) : m_compiler{compiler} {}
 
-ModuleBuilder& ModuleMap::operator[](std::string_view name)
+ModuleBuilder& ModuleMap::operator[](asIScriptModule& module)
 {
+	const char* name = module.GetName();
+
 	// TODO: this string conversion should not be necessary
-	if (auto it = m_map.find(std::string(name)); it != m_map.end())
+	if (auto it = m_map.find(name); it != m_map.end())
 	{
 		return it->second;
 	}
 
-	const auto [it, success] = m_map.emplace(std::string(name), ModuleBuilder{m_compiler, name});
+	const auto [it, success] = m_map.emplace(std::string(name), ModuleBuilder{m_compiler, module});
 
 	return it->second;
 }

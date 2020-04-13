@@ -15,7 +15,7 @@ class ModuleMap
 	public:
 	ModuleMap(JitCompiler& compiler);
 
-	ModuleBuilder& operator[](std::string_view name);
+	ModuleBuilder& operator[](asIScriptModule& module);
 
 	void build_modules();
 

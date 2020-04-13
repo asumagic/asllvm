@@ -19,7 +19,7 @@ namespace asllvm::detail
 {
 struct InternalFunctions
 {
-	llvm::Function *alloc, *script_object_constructor;
+	llvm::Function *alloc, *script_object_constructor, *vtable_lookup;
 };
 
 struct PendingFunction
@@ -31,29 +31,32 @@ struct PendingFunction
 class ModuleBuilder
 {
 	public:
-	ModuleBuilder(JitCompiler& compiler, std::string_view angelscript_module_name);
+	ModuleBuilder(JitCompiler& compiler, asIScriptModule& module);
 
 	void append(PendingFunction function);
 
 	llvm::Function* create_function(asCScriptFunction& function);
-
 	llvm::Function* get_system_function(asCScriptFunction& system_function);
 
 	void build();
 
-	llvm::Module&      module() { return *m_module; }
+	llvm::Module&      module() { return *m_llvm_module; }
 	InternalFunctions& internal_functions() { return m_internal_functions; }
 
 	void dump_state() const;
 
 	private:
+	// TODO: move this elsewhere, potentially
+	static void* virtual_table_lookup(asCScriptObject* object, asCScriptFunction* function);
+
 	InternalFunctions setup_internal_functions();
 
 	void build_functions();
 	void link_symbols();
 
 	JitCompiler&                                        m_compiler;
-	std::unique_ptr<llvm::Module>                       m_module;
+	asIScriptModule*                                    m_script_module;
+	std::unique_ptr<llvm::Module>                       m_llvm_module;
 	std::vector<PendingFunction>                        m_pending_functions;
 	std::vector<std::pair<std::string, asJITFunction*>> m_jit_functions;
 	std::map<int, llvm::Function*>                      m_script_functions;

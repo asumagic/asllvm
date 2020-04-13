@@ -12,4 +12,8 @@ TEST_CASE("string handling", "[str]")
 	REQUIRE(run_string(R"(print(parseInt("ABCD", 16)))") == "43981\n");
 }
 
-TEST_CASE("user classes", "[userclass]") { REQUIRE(run("userclasses.as", "void test()") == "hello\n"); }
+TEST_CASE("user classes", "[userclass]")
+{
+	REQUIRE(run("userclasses.as", "void test()") == "hello\n");
+	REQUIRE(run("userclasses.as", "void method_test()") == "hello\nworld\n");
+}

@@ -13,9 +13,10 @@
 
 namespace asllvm::detail
 {
-ModuleBuilder::ModuleBuilder(JitCompiler& compiler, std::string_view angelscript_module_name) :
+ModuleBuilder::ModuleBuilder(JitCompiler& compiler, asIScriptModule& module) :
 	m_compiler{compiler},
-	m_module{std::make_unique<llvm::Module>(make_module_name(angelscript_module_name), compiler.builder().context())},
+	m_script_module{&module},
+	m_llvm_module{std::make_unique<llvm::Module>(make_module_name(module.GetName()), compiler.builder().context())},
 	m_internal_functions{setup_internal_functions()}
 {}
 
@@ -39,7 +40,7 @@ llvm::Function* ModuleBuilder::create_function(asCScriptFunction& function)
 	const std::string name = make_function_name(function.GetName(), function.GetNamespace());
 
 	llvm::Function* llvm_function
-		= llvm::Function::Create(function_type, llvm::Function::InternalLinkage, name, *m_module.get());
+		= llvm::Function::Create(function_type, llvm::Function::InternalLinkage, name, *m_llvm_module.get());
 
 	(llvm_function->arg_begin() + 0)->setName("params");
 
@@ -109,7 +110,11 @@ llvm::Function* ModuleBuilder::get_system_function(asCScriptFunction& system_fun
 	llvm::FunctionType* function_type = llvm::FunctionType::get(return_type, types, false);
 
 	llvm::Function* function = llvm::Function::Create(
-		function_type, llvm::Function::ExternalLinkage, 0, make_system_function_name(system_function), m_module.get());
+		function_type,
+		llvm::Function::ExternalLinkage,
+		0,
+		make_system_function_name(system_function),
+		m_llvm_module.get());
 
 	if (intf.hostReturnInMemory)
 	{
@@ -132,10 +137,10 @@ void ModuleBuilder::build()
 
 	link_symbols();
 
-	m_compiler.builder().optimizer().run(*m_module);
+	m_compiler.builder().optimizer().run(*m_llvm_module);
 
 	ExitOnError(m_compiler.jit().addIRModule(
-		llvm::orc::ThreadSafeModule(std::move(m_module), m_compiler.builder().extract_old_context())));
+		llvm::orc::ThreadSafeModule(std::move(m_llvm_module), m_compiler.builder().extract_old_context())));
 
 	for (auto& pair : m_jit_functions)
 	{
@@ -146,12 +151,18 @@ void ModuleBuilder::build()
 
 void ModuleBuilder::dump_state() const
 {
-	for (const auto& function : m_module->functions())
+	for (const auto& function : m_llvm_module->functions())
 	{
 		fmt::print(stderr, "Function '{}'\n", function.getName().str());
 	}
 
-	m_module->print(llvm::errs(), nullptr);
+	m_llvm_module->print(llvm::errs(), nullptr);
+}
+
+void* ModuleBuilder::virtual_table_lookup(asCScriptObject* object, asCScriptFunction* function)
+{
+	auto& object_type = *static_cast<asCObjectType*>(object->GetObjectType());
+	return reinterpret_cast<void*>(object_type.virtualFunctionTable[function->vfTableIdx]->scriptData->jitFunction);
 }
 
 InternalFunctions ModuleBuilder::setup_internal_functions()
@@ -166,7 +177,7 @@ InternalFunctions ModuleBuilder::setup_internal_functions()
 
 		llvm::FunctionType* function_type = llvm::FunctionType::get(return_type, types, false);
 		funcs.alloc                       = llvm::Function::Create(
-			function_type, llvm::Function::ExternalLinkage, 0, "asllvm.private.alloc", m_module.get());
+			function_type, llvm::Function::ExternalLinkage, 0, "asllvm.private.alloc", m_llvm_module.get());
 	}
 
 	{
@@ -178,7 +189,19 @@ InternalFunctions ModuleBuilder::setup_internal_functions()
 			llvm::Function::ExternalLinkage,
 			0,
 			"asllvm.private.script_object_constructor",
-			m_module.get());
+			m_llvm_module.get());
+	}
+
+	{
+		std::array<llvm::Type*, 2> types{{defs.pvoid, defs.pvoid}};
+
+		llvm::FunctionType* function_type = llvm::FunctionType::get(defs.pvoid, types, false);
+		funcs.vtable_lookup               = llvm::Function::Create(
+			function_type,
+			llvm::Function::ExternalLinkage,
+			0,
+			"asllvm.private.virtual_table_lookup",
+			m_llvm_module.get());
 	}
 
 	return funcs;
@@ -228,5 +251,6 @@ void ModuleBuilder::link_symbols()
 	// TODO: figure out why func->getName() returns an empty string
 	define_function(*userAlloc, "asllvm.private.alloc");
 	define_function(ScriptObject_Construct, "asllvm.private.script_object_constructor");
+	define_function(virtual_table_lookup, "asllvm.private.virtual_table_lookup");
 }
 } // namespace asllvm::detail
