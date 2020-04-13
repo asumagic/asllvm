@@ -112,6 +112,8 @@ class FunctionBuilder
 	//! \brief Get a pointer to a stack value of type i32* and identifier \p i.
 	llvm::Value* get_stack_value_pointer(StackVariableIdentifier i);
 
+	void push_stack_value(llvm::Value* value, std::size_t bytes);
+
 	//! \brief Store \p value into the value register.
 	//! \details
 	//!		Any data can be stored in the value register as long as it is less than 64-bit, otherwise, UB will occur.

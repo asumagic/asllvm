@@ -237,23 +237,19 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_PshC4:
 	{
-		++m_stack_pointer;
-		store_stack_value(m_stack_pointer, llvm::ConstantInt::get(defs.i32, asBC_DWORDARG(instruction.pointer)));
+		push_stack_value(llvm::ConstantInt::get(defs.i32, asBC_DWORDARG(instruction.pointer)), 1);
 		break;
 	}
 
 	case asBC_PshV4:
 	{
-		++m_stack_pointer;
-		store_stack_value(m_stack_pointer, load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32));
+		push_stack_value(load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32), 1);
 		break;
 	}
 
 	case asBC_PSF:
 	{
-		m_stack_pointer += AS_PTR_SIZE;
-		llvm::Value* ptr = get_stack_value_pointer(asBC_SWORDARG0(instruction.pointer), defs.iptr);
-		store_stack_value(m_stack_pointer, ptr);
+		push_stack_value(get_stack_value_pointer(asBC_SWORDARG0(instruction.pointer), defs.iptr), AS_PTR_SIZE);
 		break;
 	}
 
@@ -261,12 +257,12 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	case asBC_NOT: unimpl(); break;
 	case asBC_PshG4:
 	{
-		++m_stack_pointer;
 		// TODO: common code for global_ptr
 		llvm::Value* global_ptr
 			= ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, asBC_PTRARG(instruction.pointer)), defs.pi32);
 		llvm::Value* global = ir.CreateLoad(defs.i32, global_ptr);
-		store_stack_value(m_stack_pointer, global);
+
+		push_stack_value(global, 1);
 		break;
 	}
 
@@ -414,15 +410,13 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_PshC8:
 	{
-		m_stack_pointer += 2;
-		store_stack_value(m_stack_pointer, llvm::ConstantInt::get(defs.i64, asBC_QWORDARG(instruction.pointer)));
+		push_stack_value(llvm::ConstantInt::get(defs.i64, asBC_QWORDARG(instruction.pointer)), 2);
 		break;
 	}
 
 	case asBC_PshVPtr:
 	{
-		m_stack_pointer += AS_PTR_SIZE;
-		store_stack_value(m_stack_pointer, load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.iptr));
+		push_stack_value(load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.iptr), AS_PTR_SIZE);
 		break;
 	}
 
@@ -719,8 +713,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_PGA:
 	{
-		m_stack_pointer += AS_PTR_SIZE;
-		store_stack_value(m_stack_pointer, llvm::ConstantInt::get(defs.i64, asBC_PTRARG(instruction.pointer)));
+		push_stack_value(llvm::ConstantInt::get(defs.i64, asBC_PTRARG(instruction.pointer)), AS_PTR_SIZE);
 		break;
 	}
 
@@ -728,8 +721,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_VAR:
 	{
-		m_stack_pointer += AS_PTR_SIZE;
-		store_stack_value(m_stack_pointer, llvm::ConstantInt::get(defs.i64, asBC_SWORDARG0(instruction.pointer)));
+		push_stack_value(llvm::ConstantInt::get(defs.i64, asBC_SWORDARG0(instruction.pointer)), AS_PTR_SIZE);
 		break;
 	}
 
@@ -868,12 +860,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 		break;
 	}
 
-	case asBC_PshV8:
-	{
-		m_stack_pointer += 2;
-		store_stack_value(m_stack_pointer, load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i64));
-		break;
-	}
+	case asBC_PshV8: push_stack_value(load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i64), 2); break;
 
 	case asBC_DIVu: emit_stack_arithmetic(instruction, llvm::Instruction::UDiv, defs.i32); break;
 	case asBC_MODu: emit_stack_arithmetic(instruction, llvm::Instruction::URem, defs.i32); break;
@@ -1418,6 +1405,12 @@ llvm::Value* FunctionBuilder::get_stack_value_pointer(FunctionBuilder::StackVari
 
 		return ir.CreateGEP(m_locals, indices);
 	}
+}
+
+void FunctionBuilder::push_stack_value(llvm::Value* value, std::size_t bytes)
+{
+	m_stack_pointer += bytes;
+	store_stack_value(m_stack_pointer, value);
 }
 
 void FunctionBuilder::store_value_register_value(llvm::Value* value)
