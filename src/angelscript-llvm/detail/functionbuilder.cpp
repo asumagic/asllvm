@@ -223,7 +223,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	const auto unimpl = [] { asllvm_assert(false && "unimplemented instruction while translating bytecode"); };
 
-	// TODO: handle division by zero by setting an exception on the context
+	// TODO: handle division by zero by setting an exception on the context for ALL div AND rem ops
 
 	switch (instruction.info->bc)
 	{
@@ -403,41 +403,12 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_BNOT: unimpl(); break;
 
-	case asBC_BAND:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::And, defs.i32);
-		break;
-	}
-
-	case asBC_BOR:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::Or, defs.i32);
-		break;
-	}
-
-	case asBC_BXOR:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::Xor, defs.i32);
-		break;
-	}
-
-	case asBC_BSLL:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::Shl, defs.i32);
-		break;
-	}
-
-	case asBC_BSRL:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::LShr, defs.i32);
-		break;
-	}
-
-	case asBC_BSRA:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::AShr, defs.i32);
-		break;
-	}
+	case asBC_BAND: emit_stack_arithmetic(instruction, llvm::Instruction::And, defs.i32); break;
+	case asBC_BOR: emit_stack_arithmetic(instruction, llvm::Instruction::Or, defs.i32); break;
+	case asBC_BXOR: emit_stack_arithmetic(instruction, llvm::Instruction::Xor, defs.i32); break;
+	case asBC_BSLL: emit_stack_arithmetic(instruction, llvm::Instruction::Shl, defs.i32); break;
+	case asBC_BSRL: emit_stack_arithmetic(instruction, llvm::Instruction::LShr, defs.i32); break;
+	case asBC_BSRA: emit_stack_arithmetic(instruction, llvm::Instruction::AShr, defs.i32); break;
 
 	case asBC_COPY: unimpl(); break;
 
@@ -780,98 +751,23 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	case asBC_uTOd: unimpl(); break;
 	case asBC_fTOd: unimpl(); break;
 
-	case asBC_ADDi:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::Add, defs.i32);
-		break;
-	}
+	case asBC_ADDi: emit_stack_arithmetic(instruction, llvm::Instruction::Add, defs.i32); break;
+	case asBC_SUBi: emit_stack_arithmetic(instruction, llvm::Instruction::Sub, defs.i32); break;
+	case asBC_MULi: emit_stack_arithmetic(instruction, llvm::Instruction::Mul, defs.i32); break;
+	case asBC_DIVi: emit_stack_arithmetic(instruction, llvm::Instruction::SDiv, defs.i32); break;
+	case asBC_MODi: emit_stack_arithmetic(instruction, llvm::Instruction::SRem, defs.i32); break;
 
-	case asBC_SUBi:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::Sub, defs.i32);
-		break;
-	}
+	case asBC_ADDf: emit_stack_arithmetic(instruction, llvm::Instruction::FAdd, defs.f32); break;
+	case asBC_SUBf: emit_stack_arithmetic(instruction, llvm::Instruction::FSub, defs.f32); break;
+	case asBC_MULf: emit_stack_arithmetic(instruction, llvm::Instruction::FMul, defs.f32); break;
+	case asBC_DIVf: emit_stack_arithmetic(instruction, llvm::Instruction::FDiv, defs.f32); break;
+	case asBC_MODf: emit_stack_arithmetic(instruction, llvm::Instruction::FRem, defs.f32); break;
 
-	case asBC_MULi:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::Mul, defs.i32);
-		break;
-	}
-
-	case asBC_DIVi:
-	{
-		// TODO: handle division by zero
-		emit_stack_arithmetic(instruction, llvm::Instruction::SDiv, defs.i32);
-		break;
-	}
-
-	case asBC_MODi:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::SRem, defs.i32);
-		break;
-	}
-
-	case asBC_ADDf:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::FAdd, defs.f32);
-		break;
-	}
-
-	case asBC_SUBf:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::FSub, defs.f32);
-		break;
-	}
-
-	case asBC_MULf:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::FMul, defs.f32);
-		break;
-	}
-
-	case asBC_DIVf:
-	{
-		// TODO: handle division by zero
-		emit_stack_arithmetic(instruction, llvm::Instruction::FDiv, defs.f32);
-		break;
-	}
-
-	case asBC_MODf:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::FRem, defs.f32);
-		break;
-	}
-
-	case asBC_ADDd:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::FAdd, defs.f64);
-		break;
-	}
-
-	case asBC_SUBd:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::FSub, defs.f64);
-		break;
-	}
-
-	case asBC_MULd:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::FMul, defs.f64);
-		break;
-	}
-
-	case asBC_DIVd:
-	{
-		// TODO: handle division by zero
-		emit_stack_arithmetic(instruction, llvm::Instruction::FDiv, defs.f64);
-		break;
-	}
-
-	case asBC_MODd:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::FRem, defs.f64);
-		break;
-	}
+	case asBC_ADDd: emit_stack_arithmetic(instruction, llvm::Instruction::FAdd, defs.f64); break;
+	case asBC_SUBd: emit_stack_arithmetic(instruction, llvm::Instruction::FSub, defs.f64); break;
+	case asBC_MULd: emit_stack_arithmetic(instruction, llvm::Instruction::FMul, defs.f64); break;
+	case asBC_DIVd: emit_stack_arithmetic(instruction, llvm::Instruction::FDiv, defs.f64); break;
+	case asBC_MODd: emit_stack_arithmetic(instruction, llvm::Instruction::FRem, defs.f64); break;
 
 	case asBC_ADDIi: unimpl(); break;
 
@@ -900,11 +796,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	}
 
 	case asBC_iTOb: emit_stack_integer_trunc(instruction, defs.i32, defs.i8); break;
-	case asBC_iTOw:
-		emit_stack_integer_trunc(instruction, defs.i32, defs.i16);
-		break;
-
-		// SetV1/V2 grouped with V4 further up
+	case asBC_iTOw: emit_stack_integer_trunc(instruction, defs.i32, defs.i16); break;
 
 	case asBC_Cast: unimpl(); break;
 
@@ -927,72 +819,18 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	case asBC_DECi64: unimpl(); break;
 	case asBC_BNOT64: unimpl(); break;
 
-	case asBC_ADDi64:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::Add, defs.i64);
-		break;
-	}
+	case asBC_ADDi64: emit_stack_arithmetic(instruction, llvm::Instruction::Add, defs.i64); break;
+	case asBC_SUBi64: emit_stack_arithmetic(instruction, llvm::Instruction::Sub, defs.i64); break;
+	case asBC_MULi64: emit_stack_arithmetic(instruction, llvm::Instruction::Mul, defs.i64); break;
+	case asBC_DIVi64: emit_stack_arithmetic(instruction, llvm::Instruction::SDiv, defs.i64); break;
+	case asBC_MODi64: emit_stack_arithmetic(instruction, llvm::Instruction::SRem, defs.i64); break;
 
-	case asBC_SUBi64:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::Sub, defs.i64);
-		break;
-	}
-
-	case asBC_MULi64:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::Mul, defs.i64);
-		break;
-	}
-
-	case asBC_DIVi64:
-	{
-		// TODO: handle division by zero
-		emit_stack_arithmetic(instruction, llvm::Instruction::SDiv, defs.i64);
-		break;
-	}
-
-	case asBC_MODi64:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::SRem, defs.i64);
-		break;
-	}
-
-	case asBC_BAND64:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::And, defs.i64);
-		break;
-	}
-
-	case asBC_BOR64:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::Or, defs.i64);
-		break;
-	}
-
-	case asBC_BXOR64:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::Xor, defs.i64);
-		break;
-	}
-
-	case asBC_BSLL64:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::Shl, defs.i64);
-		break;
-	}
-
-	case asBC_BSRL64:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::LShr, defs.i64);
-		break;
-	}
-
-	case asBC_BSRA64:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::AShr, defs.i64);
-		break;
-	}
+	case asBC_BAND64: emit_stack_arithmetic(instruction, llvm::Instruction::And, defs.i64); break;
+	case asBC_BOR64: emit_stack_arithmetic(instruction, llvm::Instruction::Or, defs.i64); break;
+	case asBC_BXOR64: emit_stack_arithmetic(instruction, llvm::Instruction::Xor, defs.i64); break;
+	case asBC_BSLL64: emit_stack_arithmetic(instruction, llvm::Instruction::Shl, defs.i64); break;
+	case asBC_BSRL64: emit_stack_arithmetic(instruction, llvm::Instruction::LShr, defs.i64); break;
+	case asBC_BSRA64: emit_stack_arithmetic(instruction, llvm::Instruction::AShr, defs.i64); break;
 
 	case asBC_CMPi64: unimpl(); break;
 	case asBC_CMPu64: unimpl(); break;
@@ -1037,18 +875,8 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 		break;
 	}
 
-	case asBC_DIVu:
-	{
-		// TODO: handle division by zero
-		emit_stack_arithmetic(instruction, llvm::Instruction::UDiv, defs.i32);
-		break;
-	}
-
-	case asBC_MODu:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::URem, defs.i32);
-		break;
-	}
+	case asBC_DIVu: emit_stack_arithmetic(instruction, llvm::Instruction::UDiv, defs.i32); break;
+	case asBC_MODu: emit_stack_arithmetic(instruction, llvm::Instruction::URem, defs.i32); break;
 
 	case asBC_DIVu64:
 	{
