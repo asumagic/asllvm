@@ -16,7 +16,7 @@ namespace asllvm::detail
 ModuleBuilder::ModuleBuilder(JitCompiler& compiler, asIScriptModule& module) :
 	m_compiler{compiler},
 	m_script_module{&module},
-	m_llvm_module{std::make_unique<llvm::Module>(make_module_name(module.GetName()), compiler.builder().context())},
+	m_llvm_module{std::make_unique<llvm::Module>(make_module_name(module), compiler.builder().context())},
 	m_internal_functions{setup_internal_functions()}
 {}
 
