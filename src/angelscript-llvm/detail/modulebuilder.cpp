@@ -45,7 +45,9 @@ llvm::Function* ModuleBuilder::create_function(asCScriptFunction& function)
 		name,
 		*m_llvm_module.get());
 
+	// i8* noalias %params
 	(llvm_function->arg_begin() + 0)->setName("params");
+	llvm_function->addParamAttr(0, llvm::Attribute::NoAlias);
 
 	m_script_functions.emplace(function.GetId(), llvm_function);
 
