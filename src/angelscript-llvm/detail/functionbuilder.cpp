@@ -679,12 +679,28 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_WRTV1: unimpl(); break;
 	case asBC_WRTV2: unimpl(); break;
-	case asBC_WRTV4: unimpl(); break;
+
+	case asBC_WRTV4:
+	{
+		llvm::Value* value  = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32);
+		llvm::Value* target = load_value_register_value(defs.pi32);
+		ir.CreateStore(value, target);
+		break;
+	}
+
 	case asBC_WRTV8: unimpl(); break;
+
 	case asBC_RDR1: unimpl(); break;
 	case asBC_RDR2: unimpl(); break;
-	case asBC_RDR4: unimpl(); break;
+	case asBC_RDR4:
+	{
+		llvm::Value* source_pointer = load_value_register_value(defs.pi32);
+		llvm::Value* source         = ir.CreateLoad(defs.i32, source_pointer);
+		store_stack_value(asBC_SWORDARG0(instruction.pointer), source);
+		break;
+	}
 	case asBC_RDR8: unimpl(); break;
+
 	case asBC_LDG: unimpl(); break;
 	case asBC_LDV: unimpl(); break;
 
@@ -903,7 +919,19 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_CallPtr: unimpl(); break;
 	case asBC_FuncPtr: unimpl(); break;
-	case asBC_LoadThisR: unimpl(); break;
+	case asBC_LoadThisR:
+	{
+		llvm::Value* object = load_stack_value(0, defs.pvoid);
+
+		// TODO: check for null object
+
+		std::array<llvm::Value*, 1> indices{{llvm::ConstantInt::get(defs.iptr, asBC_SWORDARG0(instruction.pointer))}};
+		llvm::Value*                field = ir.CreateGEP(object, indices);
+
+		store_value_register_value(field);
+
+		break;
+	}
 
 	case asBC_PshV8:
 	{
