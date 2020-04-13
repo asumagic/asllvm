@@ -106,6 +106,12 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 
 llvm::Function* FunctionBuilder::create_wrapper_function()
 {
+	// No wrapper functions generated for methods
+	if (m_script_function.GetObjectType() != nullptr)
+	{
+		return m_llvm_function;
+	}
+
 	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
 	llvm::LLVMContext& context = m_compiler.builder().context();
 	CommonDefinitions& defs    = m_compiler.builder().definitions();

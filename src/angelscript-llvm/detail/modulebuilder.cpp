@@ -39,8 +39,11 @@ llvm::Function* ModuleBuilder::create_function(asCScriptFunction& function)
 
 	const std::string name = make_function_name(function);
 
-	llvm::Function* llvm_function
-		= llvm::Function::Create(function_type, llvm::Function::InternalLinkage, name, *m_llvm_module.get());
+	llvm::Function* llvm_function = llvm::Function::Create(
+		function_type,
+		is_exposed_directly(function) ? llvm::Function::ExternalLinkage : llvm::Function::InternalLinkage,
+		name,
+		*m_llvm_module.get());
 
 	(llvm_function->arg_begin() + 0)->setName("params");
 
@@ -142,10 +145,10 @@ void ModuleBuilder::build()
 	ExitOnError(m_compiler.jit().addIRModule(
 		llvm::orc::ThreadSafeModule(std::move(m_llvm_module), m_compiler.builder().extract_old_context())));
 
-	for (auto& pair : m_jit_functions)
+	for (auto& symbol : m_jit_functions)
 	{
-		auto entry   = ExitOnError(m_compiler.jit().lookup(pair.first + ".jitentry"));
-		*pair.second = reinterpret_cast<asJITFunction>(entry.getAddress());
+		auto entry           = ExitOnError(m_compiler.jit().lookup(symbol.name));
+		*symbol.jit_function = reinterpret_cast<asJITFunction>(entry.getAddress());
 	}
 }
 
@@ -163,6 +166,11 @@ void* ModuleBuilder::virtual_table_lookup(asCScriptObject* object, asCScriptFunc
 {
 	auto& object_type = *static_cast<asCObjectType*>(object->GetObjectType());
 	return reinterpret_cast<void*>(object_type.virtualFunctionTable[function->vfTableIdx]->scriptData->jitFunction);
+}
+
+bool ModuleBuilder::is_exposed_directly(asIScriptFunction& function) const
+{
+	return function.GetObjectType() != nullptr;
 }
 
 InternalFunctions ModuleBuilder::setup_internal_functions()
@@ -225,9 +233,9 @@ void ModuleBuilder::build_functions()
 		asDWORD* bytecode = pending.function->GetByteCode(&length);
 
 		builder.read_bytecode(bytecode, length);
-		builder.create_wrapper_function();
 
-		m_jit_functions.emplace_back(make_function_name(*pending.function), pending.jit_function);
+		llvm::Function* entry = builder.create_wrapper_function();
+		m_jit_functions.push_back({entry->getName().str(), pending.jit_function});
 	}
 
 	m_pending_functions.clear();

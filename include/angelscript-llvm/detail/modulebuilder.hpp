@@ -28,6 +28,12 @@ struct PendingFunction
 	asJITFunction*     jit_function;
 };
 
+struct JitSymbol
+{
+	std::string    name;
+	asJITFunction* jit_function;
+};
+
 class ModuleBuilder
 {
 	public:
@@ -49,19 +55,21 @@ class ModuleBuilder
 	// TODO: move this elsewhere, potentially
 	static void* virtual_table_lookup(asCScriptObject* object, asCScriptFunction* function);
 
+	bool is_exposed_directly(asIScriptFunction& function) const;
+
 	InternalFunctions setup_internal_functions();
 
 	void build_functions();
 	void link_symbols();
 
-	JitCompiler&                                        m_compiler;
-	asIScriptModule*                                    m_script_module;
-	std::unique_ptr<llvm::Module>                       m_llvm_module;
-	std::vector<PendingFunction>                        m_pending_functions;
-	std::vector<std::pair<std::string, asJITFunction*>> m_jit_functions;
-	std::map<int, llvm::Function*>                      m_script_functions;
-	std::map<int, llvm::Function*>                      m_system_functions;
-	InternalFunctions                                   m_internal_functions;
+	JitCompiler&                   m_compiler;
+	asIScriptModule*               m_script_module;
+	std::unique_ptr<llvm::Module>  m_llvm_module;
+	std::vector<PendingFunction>   m_pending_functions;
+	std::vector<JitSymbol>         m_jit_functions;
+	std::map<int, llvm::Function*> m_script_functions;
+	std::map<int, llvm::Function*> m_system_functions;
+	InternalFunctions              m_internal_functions;
 };
 
 } // namespace asllvm::detail
