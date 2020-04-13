@@ -371,16 +371,16 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	case asBC_NEGi: unimpl(); break;
 	case asBC_NEGf: unimpl(); break;
 	case asBC_NEGd: unimpl(); break;
-	case asBC_INCi16: unimpl(); break;
-	case asBC_INCi8: unimpl(); break;
-	case asBC_DECi16: unimpl(); break;
-	case asBC_DECi8: unimpl(); break;
-	case asBC_INCi: unimpl(); break;
-	case asBC_DECi: unimpl(); break;
-	case asBC_INCf: unimpl(); break;
-	case asBC_DECf: unimpl(); break;
-	case asBC_INCd: unimpl(); break;
-	case asBC_DECd: unimpl(); break;
+	case asBC_INCi16: emit_increment(defs.i16, 1); break;
+	case asBC_INCi8: emit_increment(defs.i8, 1); break;
+	case asBC_DECi16: emit_increment(defs.i16, -1); break;
+	case asBC_DECi8: emit_increment(defs.i8, -1); break;
+	case asBC_INCi: emit_increment(defs.i32, 1); break;
+	case asBC_DECi: emit_increment(defs.i32, -1); break;
+	case asBC_INCf: emit_increment(defs.f32, 1); break;
+	case asBC_DECf: emit_increment(defs.f32, -1); break;
+	case asBC_INCd: emit_increment(defs.f64, 1); break;
+	case asBC_DECd: emit_increment(defs.f64, -1); break;
 
 	case asBC_IncVi:
 	{
@@ -710,7 +710,11 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	}
 
 	case asBC_LDG: unimpl(); break;
-	case asBC_LDV: unimpl(); break;
+	case asBC_LDV:
+	{
+		store_value_register_value(get_stack_value_pointer(asBC_SWORDARG0(instruction.pointer), defs.pvoid));
+		break;
+	}
 
 	case asBC_PGA:
 	{
@@ -808,8 +812,8 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	case asBC_u64TOd: emit_cast(instruction, llvm::Instruction::UIToFP, defs.i64, defs.f64); break;
 
 	case asBC_NEGi64: unimpl(); break;
-	case asBC_INCi64: unimpl(); break;
-	case asBC_DECi64: unimpl(); break;
+	case asBC_INCi64: emit_increment(defs.i64, 1); break;
+	case asBC_DECi64: emit_increment(defs.i64, -1); break;
 	case asBC_BNOT64: unimpl(); break;
 
 	case asBC_ADDi64: emit_stack_arithmetic(instruction, llvm::Instruction::Add, defs.i64); break;
@@ -1092,6 +1096,21 @@ void FunctionBuilder::emit_stack_arithmetic_imm(
 	llvm::Value* rhs    = llvm::ConstantInt::get(defs.i32, asBC_INTARG(instruction.pointer + 1));
 	llvm::Value* result = ir.CreateBinOp(op, lhs, rhs);
 	store_stack_value(asBC_SWORDARG0(instruction.pointer), result);
+}
+
+void FunctionBuilder::emit_increment(llvm::Type* value_type, long by)
+{
+	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
+
+	const bool is_float = value_type->isFloatingPointTy();
+
+	llvm::Value* increment = is_float ? llvm::ConstantFP::get(value_type, by) : llvm::ConstantInt::get(value_type, by);
+	llvm::Instruction::BinaryOps op = is_float ? llvm::Instruction::FAdd : llvm::Instruction::Add;
+
+	llvm::Value* value_pointer = load_value_register_value(value_type->getPointerTo());
+	llvm::Value* value         = ir.CreateLoad(value_type, value_pointer);
+	llvm::Value* incremented   = ir.CreateBinOp(op, value, increment);
+	ir.CreateStore(incremented, value_pointer);
 }
 
 void FunctionBuilder::emit_integral_compare(llvm::Value* lhs, llvm::Value* rhs)

@@ -84,6 +84,8 @@ class FunctionBuilder
 	//! \brief Implements an stack arithmetic instruction (immediate variant) \p op with of type \p type.
 	void emit_stack_arithmetic_imm(InstructionContext instruction, llvm::Instruction::BinaryOps op, llvm::Type* type);
 
+	void emit_increment(llvm::Type* value_type, long by);
+
 	//! \brief Implements an integral comparison instruction.
 	//! \details
 	//!		Stores compare(lhs, rhs) to the value register, with compare being:
