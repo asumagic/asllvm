@@ -1,10 +1,12 @@
 class Foo
 {
+    // Make sure the constructeur is called correctly, and that stuff is correctly executed inside
     Foo()
     {
         print("hello");
     }
 
+    // Test virtual function calls and parameters inside of methods
     void foo(int a, int b, int c)
     {
         print(a);
@@ -12,18 +14,19 @@ class Foo
         print(c);
     }
 
+    // Somewhat random field organization and writes to test for potential writes overlapping with other members.
     void use_field()
     {
-        m1 = 10;
         m2 = 20;
         m3 = 30;
-        m4 = 40;
         m5 = 50;
-        m6 = 60;
         m7 = 70;
+        m6 = 60;
         m8 = 80;
-        m9 = 90;
         m10 = 100;
+        m9 = 90;
+        m4 = 40;
+        m1 = 10;
 
         print(m1);
         print(m2);
@@ -37,7 +40,6 @@ class Foo
         print(m10);
     }
 
-    // Bunch of different fields organized differently to make sure our writes don't override things
     int8 m1, m2;
     int16 m3;
     int32 m4;
