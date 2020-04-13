@@ -20,3 +20,9 @@ TEST_CASE("64-bit float math", "[floatmath32]")
 	REQUIRE(run_string("double a = 5.0, b = 2.0; print(''+(a / b));") == "2.5\n");
 	REQUIRE(run_string("double a = 10.0, b = 6.0 ; print(''+(a % b));") == "4\n");
 }
+
+TEST_CASE("Floating-point to floating-point conversions", "[castfpfp]")
+{
+	REQUIRE(run_string("double a = 3.141; print(''+float(a))") == "3.141\n");
+	REQUIRE(run_string("float a = 3.141; print(''+double(a))") == "3.141\n");
+}

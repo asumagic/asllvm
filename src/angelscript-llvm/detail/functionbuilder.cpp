@@ -738,11 +738,11 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_dTOi: unimpl(); break;
 	case asBC_dTOu: unimpl(); break;
-	case asBC_dTOf: unimpl(); break;
+	case asBC_dTOf: emit_cast(instruction, llvm::Instruction::FPTrunc, defs.f64, defs.f32); break;
 
 	case asBC_iTOd: unimpl(); break;
 	case asBC_uTOd: unimpl(); break;
-	case asBC_fTOd: unimpl(); break;
+	case asBC_fTOd: emit_cast(instruction, llvm::Instruction::FPExt, defs.f32, defs.f64); break;
 
 	case asBC_ADDi: emit_stack_arithmetic(instruction, llvm::Instruction::Add, defs.i32); break;
 	case asBC_SUBi: emit_stack_arithmetic(instruction, llvm::Instruction::Sub, defs.i32); break;
@@ -1059,8 +1059,11 @@ void FunctionBuilder::emit_cast(
 	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
 	CommonDefinitions& defs = m_compiler.builder().definitions();
 
-	auto stack_offset = (source_type == defs.i64 || destination_type == defs.i64) ? asBC_SWORDARG1(instruction.pointer)
-																				  : asBC_SWORDARG0(instruction.pointer);
+	// TODO: more robust check for this
+	const auto stack_offset = (source_type == defs.i64 || destination_type == defs.i64 || source_type == defs.f64
+							   || destination_type == defs.f64)
+		? asBC_SWORDARG1(instruction.pointer)
+		: asBC_SWORDARG0(instruction.pointer);
 
 	llvm::Value* converted = ir.CreateCast(op, load_stack_value(stack_offset, source_type), destination_type);
 
