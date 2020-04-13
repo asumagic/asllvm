@@ -677,8 +677,21 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 		break;
 	}
 
-	case asBC_WRTV1: unimpl(); break;
-	case asBC_WRTV2: unimpl(); break;
+	case asBC_WRTV1:
+	{
+		llvm::Value* value  = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i8);
+		llvm::Value* target = load_value_register_value(defs.pi8);
+		ir.CreateStore(value, target);
+		break;
+	}
+
+	case asBC_WRTV2:
+	{
+		llvm::Value* value  = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i16);
+		llvm::Value* target = load_value_register_value(defs.pi16);
+		ir.CreateStore(value, target);
+		break;
+	}
 
 	case asBC_WRTV4:
 	{
@@ -688,10 +701,32 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 		break;
 	}
 
-	case asBC_WRTV8: unimpl(); break;
+	case asBC_WRTV8:
+	{
+		llvm::Value* value  = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i64);
+		llvm::Value* target = load_value_register_value(defs.pi64);
+		ir.CreateStore(value, target);
+		break;
+	}
 
-	case asBC_RDR1: unimpl(); break;
-	case asBC_RDR2: unimpl(); break;
+	case asBC_RDR1:
+	{
+		llvm::Value* source_pointer = load_value_register_value(defs.pi8);
+		llvm::Value* source_word    = ir.CreateLoad(defs.i8, source_pointer);
+		llvm::Value* source         = ir.CreateZExt(source_word, defs.i32);
+		store_stack_value(asBC_SWORDARG0(instruction.pointer), source);
+		break;
+	}
+
+	case asBC_RDR2:
+	{
+		llvm::Value* source_pointer = load_value_register_value(defs.pi16);
+		llvm::Value* source_word    = ir.CreateLoad(defs.i16, source_pointer);
+		llvm::Value* source         = ir.CreateZExt(source_word, defs.i32);
+		store_stack_value(asBC_SWORDARG0(instruction.pointer), source);
+		break;
+	}
+
 	case asBC_RDR4:
 	{
 		llvm::Value* source_pointer = load_value_register_value(defs.pi32);
@@ -699,7 +734,14 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 		store_stack_value(asBC_SWORDARG0(instruction.pointer), source);
 		break;
 	}
-	case asBC_RDR8: unimpl(); break;
+
+	case asBC_RDR8:
+	{
+		llvm::Value* source_pointer = load_value_register_value(defs.pi64);
+		llvm::Value* source         = ir.CreateLoad(defs.i64, source_pointer);
+		store_stack_value(asBC_SWORDARG0(instruction.pointer), source);
+		break;
+	}
 
 	case asBC_LDG: unimpl(); break;
 	case asBC_LDV: unimpl(); break;
@@ -919,6 +961,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_CallPtr: unimpl(); break;
 	case asBC_FuncPtr: unimpl(); break;
+
 	case asBC_LoadThisR:
 	{
 		llvm::Value* object = load_stack_value(0, defs.pvoid);
