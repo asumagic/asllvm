@@ -800,6 +800,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_DIVi:
 	{
+		// TODO: handle division by zero
 		emit_stack_arithmetic(instruction, llvm::Instruction::SDiv, defs.i32);
 		break;
 	}
@@ -810,15 +811,67 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 		break;
 	}
 
-	case asBC_ADDf: unimpl(); break;
-	case asBC_SUBf: unimpl(); break;
-	case asBC_MULf: unimpl(); break;
-	case asBC_MODf: unimpl(); break;
+	case asBC_ADDf:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::FAdd, defs.f32);
+		break;
+	}
 
-	case asBC_ADDd: unimpl(); break;
-	case asBC_SUBd: unimpl(); break;
-	case asBC_MULd: unimpl(); break;
-	case asBC_MODd: unimpl(); break;
+	case asBC_SUBf:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::FSub, defs.f32);
+		break;
+	}
+
+	case asBC_MULf:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::FMul, defs.f32);
+		break;
+	}
+
+	case asBC_DIVf:
+	{
+		// TODO: handle division by zero
+		emit_stack_arithmetic(instruction, llvm::Instruction::FDiv, defs.f32);
+		break;
+	}
+
+	case asBC_MODf:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::FRem, defs.f32);
+		break;
+	}
+
+	case asBC_ADDd:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::FAdd, defs.f64);
+		break;
+	}
+
+	case asBC_SUBd:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::FSub, defs.f64);
+		break;
+	}
+
+	case asBC_MULd:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::FMul, defs.f64);
+		break;
+	}
+
+	case asBC_DIVd:
+	{
+		// TODO: handle division by zero
+		emit_stack_arithmetic(instruction, llvm::Instruction::FDiv, defs.f64);
+		break;
+	}
+
+	case asBC_MODd:
+	{
+		emit_stack_arithmetic(instruction, llvm::Instruction::FRem, defs.f64);
+		break;
+	}
 
 	case asBC_ADDIi: unimpl(); break;
 
@@ -894,6 +947,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_DIVi64:
 	{
+		// TODO: handle division by zero
 		emit_stack_arithmetic(instruction, llvm::Instruction::SDiv, defs.i64);
 		break;
 	}
@@ -985,6 +1039,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_DIVu:
 	{
+		// TODO: handle division by zero
 		emit_stack_arithmetic(instruction, llvm::Instruction::UDiv, defs.i32);
 		break;
 	}
@@ -997,6 +1052,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_DIVu64:
 	{
+		// TODO: handle division by zero
 		emit_stack_arithmetic(instruction, llvm::Instruction::UDiv, defs.i64);
 		break;
 	}

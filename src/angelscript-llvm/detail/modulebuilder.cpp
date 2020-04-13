@@ -261,5 +261,8 @@ void ModuleBuilder::link_symbols()
 	define_function(*userAlloc, "asllvm.private.alloc");
 	define_function(ScriptObject_Construct, "asllvm.private.script_object_constructor");
 	define_function(virtual_table_lookup, "asllvm.private.virtual_table_lookup");
+
+	define_function(fmodf, "fmodf");
+	define_function(fmod, "fmod");
 }
 } // namespace asllvm::detail

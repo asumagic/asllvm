@@ -38,6 +38,8 @@ llvm::Type* Builder::to_llvm_type(asCDataType& type) const
 		case ttUInt: base_type = m_defs.i32; break;
 		case ttInt64:
 		case ttUInt64: base_type = m_defs.i64; break;
+		case ttFloat: base_type = m_defs.f32; break;
+		case ttDouble: base_type = m_defs.f64; break;
 		default: asllvm_assert(false && "provided primitive type not supported");
 		}
 
@@ -95,12 +97,16 @@ CommonDefinitions Builder::setup_common_definitions()
 	defs.i32   = llvm::Type::getInt32Ty(*m_context);
 	defs.i64   = llvm::Type::getInt64Ty(*m_context);
 	defs.iptr  = llvm::Type::getInt64Ty(*m_context); // TODO: determine pointer type from target machine
+	defs.f32   = llvm::Type::getFloatTy(*m_context);
+	defs.f64   = llvm::Type::getDoubleTy(*m_context);
 
 	defs.pvoid = llvm::Type::getInt8PtrTy(*m_context);
 	defs.pi8   = llvm::Type::getInt8PtrTy(*m_context);
 	defs.pi16  = llvm::Type::getInt16PtrTy(*m_context);
 	defs.pi32  = llvm::Type::getInt32PtrTy(*m_context);
 	defs.pi64  = llvm::Type::getInt64PtrTy(*m_context);
+	defs.pf32  = llvm::Type::getFloatPtrTy(*m_context);
+	defs.pf64  = llvm::Type::getDoublePtrTy(*m_context);
 
 	{
 		std::array<llvm::Type*, 8> types{{
