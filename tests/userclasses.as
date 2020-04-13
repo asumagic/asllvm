@@ -5,9 +5,11 @@ class Foo
         print("hello");
     }
 
-    void foo()
+    void foo(int a, int b, int c)
     {
-        print("world");
+        print(a);
+        print(b);
+        print(c);
     }
 };
 
@@ -19,5 +21,5 @@ void test()
 void method_test()
 {
     Foo f;
-    f.foo();
+    f.foo(123, 456, 789);
 }

@@ -1377,7 +1377,6 @@ void FunctionBuilder::emit_script_call(asCScriptFunction& function)
 	{
 		// TODO: null pointer access check
 		llvm::Value* script_object = load_stack_value(m_stack_pointer, defs.pvoid);
-		m_stack_pointer -= AS_PTR_SIZE;
 
 		llvm::Value* function_value = ir.CreateIntToPtr(
 			llvm::ConstantInt::get(defs.iptr, reinterpret_cast<asPWORD>(&function)),
@@ -1391,6 +1390,8 @@ void FunctionBuilder::emit_script_call(asCScriptFunction& function)
 
 		llvm::Value*                new_frame_pointer = get_stack_value_pointer(m_stack_pointer, defs.i32);
 		std::array<llvm::Value*, 1> args{{new_frame_pointer}};
+
+		m_stack_pointer -= AS_PTR_SIZE;
 
 		ret = ir.CreateCall(
 			callee->getFunctionType(),

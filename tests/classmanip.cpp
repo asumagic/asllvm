@@ -15,5 +15,5 @@ TEST_CASE("string handling", "[str]")
 TEST_CASE("user classes", "[userclass]")
 {
 	REQUIRE(run("userclasses.as", "void test()") == "hello\n");
-	REQUIRE(run("userclasses.as", "void method_test()") == "hello\nworld\n");
+	REQUIRE(run("userclasses.as", "void method_test()") == "hello\n123\n456\n789\n");
 }
