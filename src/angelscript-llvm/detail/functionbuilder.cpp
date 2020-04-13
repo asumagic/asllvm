@@ -93,7 +93,7 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 			}
 		});
 
-		asllvm_assert(m_stack_pointer == m_locals_size);
+		asllvm_assert(m_stack_pointer == local_storage_size());
 	}
 	catch (std::exception& exception)
 	{
@@ -213,13 +213,13 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	if (auto it = m_jump_map.find(instruction.offset); it != m_jump_map.end())
 	{
-		asllvm_assert(m_stack_pointer == m_locals_size);
+		asllvm_assert(m_stack_pointer == local_storage_size());
 		switch_to_block(it->second);
 	}
 
 	// Ensure that the stack pointer is within bounds
-	asllvm_assert(m_stack_pointer >= m_locals_size);
-	asllvm_assert(m_stack_pointer <= m_locals_size + m_max_extra_stack_size);
+	asllvm_assert(m_stack_pointer >= local_storage_size());
+	asllvm_assert(m_stack_pointer <= local_storage_size() + stack_size());
 
 	const auto unimpl = [] { asllvm_assert(false && "unimplemented instruction while translating bytecode"); };
 
@@ -1064,15 +1064,11 @@ void FunctionBuilder::emit_allocate_local_structures()
 	CommonDefinitions& defs        = m_compiler.builder().definitions();
 	auto&              script_data = *m_script_function.scriptData;
 
-	// TODO: use scriptData instead of having redundant fields for this
-	m_locals_size          = script_data.variableSpace;
-	m_max_extra_stack_size = script_data.stackNeeded - m_locals_size;
-
 	m_locals          = ir.CreateAlloca(llvm::ArrayType::get(defs.i32, script_data.stackNeeded), 0, "locals");
 	m_value_register  = ir.CreateAlloca(defs.i64, 0, "valuereg");
 	m_object_register = ir.CreateAlloca(defs.pvoid, 0, "objreg");
 
-	m_stack_pointer = m_locals_size;
+	m_stack_pointer = local_storage_size();
 }
 
 void FunctionBuilder::emit_stack_integer_trunc(
@@ -1421,10 +1417,10 @@ llvm::Value* FunctionBuilder::get_stack_value_pointer(FunctionBuilder::StackVari
 
 	// Get a pointer to that value on the local stack
 	{
-		const long local_offset = m_locals_size + m_max_extra_stack_size - i;
+		const long local_offset = local_storage_size() + stack_size() - i;
 
 		// Ensure offset is within alloca boundaries
-		asllvm_assert(local_offset >= 0 && local_offset < m_locals_size + m_max_extra_stack_size);
+		asllvm_assert(local_offset >= 0 && local_offset < local_storage_size() + stack_size());
 
 		std::array<llvm::Value*, 2> indices{
 			{llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(context), 0),
@@ -1505,4 +1501,8 @@ void FunctionBuilder::switch_to_block(llvm::BasicBlock* block)
 
 	ir.SetInsertPoint(block);
 }
+
+long FunctionBuilder::local_storage_size() const { return m_script_function.scriptData->variableSpace; }
+long FunctionBuilder::stack_size() const { return m_script_function.scriptData->stackNeeded - local_storage_size(); }
+
 } // namespace asllvm::detail

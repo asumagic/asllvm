@@ -150,6 +150,9 @@ class FunctionBuilder
 	//!		\p block from the old one if necessary.
 	void switch_to_block(llvm::BasicBlock* block);
 
+	long local_storage_size() const;
+	long stack_size() const;
+
 	JitCompiler&   m_compiler;
 	ModuleBuilder& m_module_builder;
 
@@ -159,7 +162,7 @@ class FunctionBuilder
 	//! \see read_bytecode(asDWORD*, asUINT)
 	llvm::Function* m_llvm_function;
 
-	long m_locals_size = 0, m_max_extra_stack_size = 0, m_stack_pointer = 0;
+	long m_stack_pointer = 0;
 
 	//! \brief Array of DWORDs used as a local stack for bytecode operations.
 	//! \details
