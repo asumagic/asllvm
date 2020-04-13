@@ -185,6 +185,9 @@ InternalFunctions ModuleBuilder::setup_internal_functions()
 		llvm::FunctionType* function_type = llvm::FunctionType::get(return_type, types, false);
 		funcs.alloc                       = llvm::Function::Create(
 			function_type, llvm::Function::ExternalLinkage, 0, "asllvm.private.alloc", m_llvm_module.get());
+
+		// The object we created is unique as it was dynamically allocated
+		funcs.alloc->addAttribute(0, llvm::Attribute::NoAlias);
 	}
 
 	{
