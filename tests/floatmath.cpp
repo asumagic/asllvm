@@ -26,3 +26,26 @@ TEST_CASE("Floating-point to floating-point conversions", "[castfpfp]")
 	REQUIRE(run_string("double a = 3.141; print(''+float(a))") == "3.141\n");
 	REQUIRE(run_string("float a = 3.141; print(''+double(a))") == "3.141\n");
 }
+
+TEST_CASE("Floating-point <-> integral conversions", "[castfpint]")
+{
+	REQUIRE(run_string("int a = -123; print(''+float(a))") == "-123\n");
+	REQUIRE(run_string("float a = -123.456; print(''+int(a))") == "-123\n");
+	REQUIRE(run_string("uint a = 123; print(''+float(a))") == "123\n");
+	REQUIRE(run_string("float a = 123.456; print(''+uint(a))") == "123\n");
+
+	REQUIRE(run_string("int a = -123; print(''+double(a))") == "-123\n");
+	REQUIRE(run_string("double a = -123.456; print(''+int(a))") == "-123\n");
+	REQUIRE(run_string("uint a = 123; print(''+double(a))") == "123\n");
+	REQUIRE(run_string("double a = 123.456; print(''+uint(a))") == "123\n");
+
+	REQUIRE(run_string("float a = -123.456; print(''+int64(a))") == "-123\n");
+	REQUIRE(run_string("double a = -123.456; print(''+int64(a))") == "-123\n");
+	REQUIRE(run_string("float a = 123.456; print(''+uint64(a))") == "123\n");
+	REQUIRE(run_string("double a = 123.456; print(''+uint64(a))") == "123\n");
+
+	REQUIRE(run_string("int64 a = -123; print(''+float(a))") == "-123\n");
+	REQUIRE(run_string("uint64 a = 123; print(''+float(a))") == "123\n");
+	REQUIRE(run_string("int64 a = -123; print(''+double(a))") == "-123\n");
+	REQUIRE(run_string("uint64 a = 123; print(''+double(a))") == "123\n");
+}

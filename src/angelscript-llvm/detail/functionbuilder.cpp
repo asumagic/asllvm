@@ -726,22 +726,22 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 		break;
 	}
 
-	case asBC_iTOf: unimpl(); break;
-	case asBC_fTOi: unimpl(); break;
-	case asBC_uTOf: unimpl(); break;
-	case asBC_fTOu: unimpl(); break;
+	case asBC_iTOf: emit_cast(instruction, llvm::Instruction::SIToFP, defs.i32, defs.f32); break;
+	case asBC_fTOi: emit_cast(instruction, llvm::Instruction::FPToSI, defs.f32, defs.i32); break;
+	case asBC_uTOf: emit_cast(instruction, llvm::Instruction::UIToFP, defs.i32, defs.f32); break;
+	case asBC_fTOu: emit_cast(instruction, llvm::Instruction::FPToUI, defs.f32, defs.i32); break;
 
 	case asBC_sbTOi: emit_cast(instruction, llvm::Instruction::SExt, defs.i8, defs.i32); break;
 	case asBC_swTOi: emit_cast(instruction, llvm::Instruction::SExt, defs.i16, defs.i32); break;
 	case asBC_ubTOi: emit_cast(instruction, llvm::Instruction::ZExt, defs.i8, defs.i32); break;
 	case asBC_uwTOi: emit_cast(instruction, llvm::Instruction::ZExt, defs.i16, defs.i32); break;
 
-	case asBC_dTOi: unimpl(); break;
-	case asBC_dTOu: unimpl(); break;
+	case asBC_dTOi: emit_cast(instruction, llvm::Instruction::FPToSI, defs.f64, defs.i32); break;
+	case asBC_dTOu: emit_cast(instruction, llvm::Instruction::FPToUI, defs.f64, defs.i32); break;
 	case asBC_dTOf: emit_cast(instruction, llvm::Instruction::FPTrunc, defs.f64, defs.f32); break;
 
-	case asBC_iTOd: unimpl(); break;
-	case asBC_uTOd: unimpl(); break;
+	case asBC_iTOd: emit_cast(instruction, llvm::Instruction::SIToFP, defs.i32, defs.f64); break;
+	case asBC_uTOd: emit_cast(instruction, llvm::Instruction::UIToFP, defs.i32, defs.f64); break;
 	case asBC_fTOd: emit_cast(instruction, llvm::Instruction::FPExt, defs.f32, defs.f64); break;
 
 	case asBC_ADDi: emit_stack_arithmetic(instruction, llvm::Instruction::Add, defs.i32); break;
@@ -797,15 +797,15 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	case asBC_uTOi64: emit_cast(instruction, llvm::Instruction::ZExt, defs.i32, defs.i64); break;
 	case asBC_iTOi64: emit_cast(instruction, llvm::Instruction::SExt, defs.i32, defs.i64); break;
 
-	case asBC_fTOi64: unimpl(); break;
-	case asBC_dTOi64: unimpl(); break;
-	case asBC_fTOu64: unimpl(); break;
-	case asBC_dTOu64: unimpl(); break;
+	case asBC_fTOi64: emit_cast(instruction, llvm::Instruction::FPToSI, defs.f32, defs.i64); break;
+	case asBC_dTOi64: emit_cast(instruction, llvm::Instruction::FPToSI, defs.f64, defs.i64); break;
+	case asBC_fTOu64: emit_cast(instruction, llvm::Instruction::FPToUI, defs.f32, defs.i64); break;
+	case asBC_dTOu64: emit_cast(instruction, llvm::Instruction::FPToUI, defs.f64, defs.i64); break;
 
-	case asBC_i64TOf: unimpl(); break;
-	case asBC_u64TOf: unimpl(); break;
-	case asBC_i64TOd: unimpl(); break;
-	case asBC_u64TOd: unimpl(); break;
+	case asBC_i64TOf: emit_cast(instruction, llvm::Instruction::SIToFP, defs.i64, defs.f32); break;
+	case asBC_u64TOf: emit_cast(instruction, llvm::Instruction::UIToFP, defs.i64, defs.f32); break;
+	case asBC_i64TOd: emit_cast(instruction, llvm::Instruction::SIToFP, defs.i64, defs.f64); break;
+	case asBC_u64TOd: emit_cast(instruction, llvm::Instruction::UIToFP, defs.i64, defs.f64); break;
 
 	case asBC_NEGi64: unimpl(); break;
 	case asBC_INCi64: unimpl(); break;
@@ -1059,11 +1059,12 @@ void FunctionBuilder::emit_cast(
 	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
 	CommonDefinitions& defs = m_compiler.builder().definitions();
 
+	const bool source_64      = source_type == defs.i64 || source_type == defs.f64;
+	const bool destination_64 = destination_type == defs.i64 || destination_type == defs.f64;
+
 	// TODO: more robust check for this
-	const auto stack_offset = (source_type == defs.i64 || destination_type == defs.i64 || source_type == defs.f64
-							   || destination_type == defs.f64)
-		? asBC_SWORDARG1(instruction.pointer)
-		: asBC_SWORDARG0(instruction.pointer);
+	const auto stack_offset
+		= (source_64 != destination_64) ? asBC_SWORDARG1(instruction.pointer) : asBC_SWORDARG0(instruction.pointer);
 
 	llvm::Value* converted = ir.CreateCast(op, load_stack_value(stack_offset, source_type), destination_type);
 
