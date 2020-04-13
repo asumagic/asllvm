@@ -47,9 +47,6 @@ llvm::Function* ModuleBuilder::create_function(asCScriptFunction& function)
 
 	(llvm_function->arg_begin() + 0)->setName("params");
 
-	// TODO: fix this, but how to CreateCall with this convention?! in functionbuilder.cpp
-	// llvm_function->setCallingConv(llvm::CallingConv::Fast);
-
 	m_script_functions.emplace(function.GetId(), llvm_function);
 
 	return llvm_function;
