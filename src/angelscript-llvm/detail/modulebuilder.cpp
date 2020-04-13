@@ -37,7 +37,7 @@ llvm::Function* ModuleBuilder::create_function(asCScriptFunction& function)
 
 	llvm::FunctionType* function_type = llvm::FunctionType::get(return_type, types, false);
 
-	const std::string name = make_function_name(function.GetName(), function.GetNamespace());
+	const std::string name = make_function_name(function);
 
 	llvm::Function* llvm_function
 		= llvm::Function::Create(function_type, llvm::Function::InternalLinkage, name, *m_llvm_module.get());
@@ -227,8 +227,7 @@ void ModuleBuilder::build_functions()
 		builder.read_bytecode(bytecode, length);
 		builder.create_wrapper_function();
 
-		m_jit_functions.emplace_back(
-			make_function_name(pending.function->GetName(), pending.function->GetNamespace()), pending.jit_function);
+		m_jit_functions.emplace_back(make_function_name(*pending.function), pending.jit_function);
 	}
 
 	m_pending_functions.clear();
