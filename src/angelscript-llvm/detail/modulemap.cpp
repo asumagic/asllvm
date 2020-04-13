@@ -12,7 +12,6 @@ ModuleBuilder& ModuleMap::operator[](asIScriptModule& module)
 {
 	const char* name = module.GetName();
 
-	// TODO: this string conversion should not be necessary
 	if (auto it = m_map.find(name); it != m_map.end())
 	{
 		return it->second;
