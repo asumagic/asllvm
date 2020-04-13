@@ -878,18 +878,8 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	case asBC_DIVu: emit_stack_arithmetic(instruction, llvm::Instruction::UDiv, defs.i32); break;
 	case asBC_MODu: emit_stack_arithmetic(instruction, llvm::Instruction::URem, defs.i32); break;
 
-	case asBC_DIVu64:
-	{
-		// TODO: handle division by zero
-		emit_stack_arithmetic(instruction, llvm::Instruction::UDiv, defs.i64);
-		break;
-	}
-
-	case asBC_MODu64:
-	{
-		emit_stack_arithmetic(instruction, llvm::Instruction::URem, defs.i64);
-		break;
-	}
+	case asBC_DIVu64: emit_stack_arithmetic(instruction, llvm::Instruction::UDiv, defs.i64); break;
+	case asBC_MODu64: emit_stack_arithmetic(instruction, llvm::Instruction::URem, defs.i64); break;
 
 	case asBC_LoadRObjR: unimpl(); break;
 	case asBC_LoadVObjR: unimpl(); break;
