@@ -67,3 +67,11 @@ void method_field_test()
     Foo f;
     f.use_field();
 }
+/*
+void handle_test()
+{
+    Foo f1;
+    Foo@ f2 = @f1;
+    f2.foo(123, 456, 789);
+}
+*/
