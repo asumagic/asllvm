@@ -702,7 +702,13 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 		break;
 	}
 
-	case asBC_LDG: unimpl(); break;
+	case asBC_LDG:
+	{
+		store_value_register_value(
+			ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, instruction.arg_pword()), defs.pvoid));
+		break;
+	}
+
 	case asBC_LDV:
 	{
 		store_value_register_value(get_stack_value_pointer(instruction.arg_sword0(), defs.pvoid));
@@ -773,7 +779,13 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 	case asBC_SUBIf: unimpl(); break;
 	case asBC_MULIf: unimpl(); break;
 
-	case asBC_SetG4: unimpl(); break;
+	case asBC_SetG4:
+	{
+		llvm::Value* pointer = ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, instruction.arg_pword()), defs.pi32);
+		llvm::Value* value   = llvm::ConstantInt::get(defs.i32, instruction.arg_dword(AS_PTR_SIZE));
+		ir.CreateStore(value, pointer);
+		break;
+	}
 
 	case asBC_ChkRefS: unimpl(); break;
 	case asBC_ChkNullV: unimpl(); break;
