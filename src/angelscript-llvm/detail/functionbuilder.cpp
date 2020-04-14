@@ -1204,7 +1204,7 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 	for (std::size_t i = 0, insert_index = 0, script_param_index = 0; i < argument_count; ++i)
 	{
 		const auto pop_param = [&] {
-			llvm::Argument* llvm_argument = &*(callee->arg_begin() + i);
+			llvm::Argument* llvm_argument = &*(callee->arg_begin() + insert_index);
 
 			args[insert_index] = load_stack_value(m_stack_pointer, llvm_argument->getType());
 			m_stack_pointer -= function.parameterTypes[script_param_index].GetSizeOnStackDWords();
@@ -1256,34 +1256,20 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 
 		case ICC_CDECL_OBJLAST:
 		{
-			if (intf.hostReturnInMemory)
+			// 'this' pointer
+			if (i == 0)
 			{
-				// 'this' pointer
-				if (i == 0)
-				{
-					llvm::Argument* llvm_argument = &*(callee->arg_begin() + 1);
-					args.back()                   = load_stack_value(m_stack_pointer, llvm_argument->getType());
-					m_stack_pointer -= AS_PTR_SIZE;
-					break;
-				}
-
-				if (i == 1)
-				{
-					args[0]      = pop_sret_pointer();
-					insert_index = 1;
-					break;
-				}
+				llvm::Argument* llvm_argument = &*(callee->arg_end() - 1);
+				args.back()                   = load_stack_value(m_stack_pointer, llvm_argument->getType());
+				m_stack_pointer -= AS_PTR_SIZE;
+				break;
 			}
-			else
+
+			if (intf.hostReturnInMemory && i == 1)
 			{
-				// 'this' pointer
-				if (i == 0)
-				{
-					llvm::Argument* llvm_argument = &*(callee->arg_begin() + 0);
-					args.back()                   = load_stack_value(m_stack_pointer, llvm_argument->getType());
-					m_stack_pointer -= AS_PTR_SIZE;
-					break;
-				}
+				args[0]      = pop_sret_pointer();
+				insert_index = 1;
+				break;
 			}
 
 			pop_param();
