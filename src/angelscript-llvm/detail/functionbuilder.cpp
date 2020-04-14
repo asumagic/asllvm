@@ -54,7 +54,15 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 	{
 		if (m_compiler.config().verbose)
 		{
-			fmt::print(stderr, "Bytecode disassembly: \n");
+			fmt::print(stderr, "Function {}\n", m_script_function.GetDeclaration(true, true, true));
+			fmt::print(
+				stderr,
+				"scriptData.variableSpace: {}\n"
+				"scriptData.stackNeeded: {}\n",
+				m_script_function.scriptData->variableSpace,
+				m_script_function.scriptData->stackNeeded);
+
+			fmt::print(stderr, "Disassembly:\n");
 			walk_bytecode([this](BytecodeInstruction instruction) {
 				const std::string op = disassemble(instruction);
 				if (!op.empty())
