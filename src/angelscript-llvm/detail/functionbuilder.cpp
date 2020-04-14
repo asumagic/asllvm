@@ -39,7 +39,7 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 			const asSBCInfo&  info             = asBCInfo[*reinterpret_cast<const asBYTE*>(bytecode_current)];
 			const std::size_t instruction_size = asBCTypeSize[info.type];
 
-			InstructionContext context{};
+			BytecodeInstruction context{};
 			context.pointer = bytecode_current;
 			context.info    = &info;
 			context.offset  = std::distance(bytecode, bytecode_current);
@@ -55,7 +55,7 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 		if (m_compiler.config().verbose)
 		{
 			fmt::print(stderr, "Bytecode disassembly: \n");
-			walk_bytecode([this](InstructionContext instruction) {
+			walk_bytecode([this](BytecodeInstruction instruction) {
 				const std::string op = disassemble(instruction);
 				if (!op.empty())
 				{
@@ -65,11 +65,11 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 			fmt::print(stderr, "\n");
 		}
 
-		walk_bytecode([this](InstructionContext instruction) { preprocess_instruction(instruction); });
+		walk_bytecode([this](BytecodeInstruction instruction) { preprocess_instruction(instruction); });
 
 		emit_allocate_local_structures();
 
-		walk_bytecode([&](InstructionContext instruction) {
+		walk_bytecode([&](BytecodeInstruction instruction) {
 			process_instruction(instruction);
 
 			// Emit metadata on last inserted instruction for debugging
@@ -175,18 +175,16 @@ llvm::Function* FunctionBuilder::create_wrapper_function()
 	return wrapper_function;
 }
 
-void FunctionBuilder::preprocess_instruction(InstructionContext instruction)
+void FunctionBuilder::preprocess_instruction(BytecodeInstruction instruction)
 {
 	switch (instruction.info->bc)
 	{
-	// Inconditional jump
 	case asBC_JMP:
 	{
 		preprocess_unconditional_branch(instruction);
 		break;
 	}
 
-	// Conditional jump instructions
 	case asBC_JZ:
 	case asBC_JNZ:
 	case asBC_JS:
@@ -202,7 +200,7 @@ void FunctionBuilder::preprocess_instruction(InstructionContext instruction)
 	}
 }
 
-void FunctionBuilder::process_instruction(InstructionContext instruction)
+void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 {
 	asIScriptEngine&   engine         = m_compiler.engine();
 	llvm::IRBuilder<>& ir             = m_compiler.builder().ir();
@@ -898,7 +896,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	}
 }
 
-std::string FunctionBuilder::disassemble(FunctionBuilder::InstructionContext instruction)
+std::string FunctionBuilder::disassemble(BytecodeInstruction instruction)
 {
 	// Handle certain instructions specifically
 	switch (instruction.info->bc)
@@ -1034,10 +1032,10 @@ void FunctionBuilder::emit_allocate_local_structures()
 }
 
 void FunctionBuilder::emit_cast(
-	FunctionBuilder::InstructionContext instruction,
-	llvm::Instruction::CastOps          op,
-	llvm::Type*                         source_type,
-	llvm::Type*                         destination_type)
+	BytecodeInstruction        instruction,
+	llvm::Instruction::CastOps op,
+	llvm::Type*                source_type,
+	llvm::Type*                destination_type)
 {
 	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
 	CommonDefinitions& defs = m_compiler.builder().definitions();
@@ -1054,7 +1052,7 @@ void FunctionBuilder::emit_cast(
 }
 
 void FunctionBuilder::emit_stack_arithmetic(
-	InstructionContext instruction, llvm::Instruction::BinaryOps op, llvm::Type* type)
+	BytecodeInstruction instruction, llvm::Instruction::BinaryOps op, llvm::Type* type)
 {
 	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
 
@@ -1065,7 +1063,7 @@ void FunctionBuilder::emit_stack_arithmetic(
 }
 
 void FunctionBuilder::emit_stack_arithmetic_imm(
-	FunctionBuilder::InstructionContext instruction, llvm::Instruction::BinaryOps op, llvm::Type* type)
+	BytecodeInstruction instruction, llvm::Instruction::BinaryOps op, llvm::Type* type)
 {
 	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
 	CommonDefinitions& defs = m_compiler.builder().definitions();
@@ -1426,23 +1424,23 @@ void FunctionBuilder::insert_label(long offset)
 	it->second = llvm::BasicBlock::Create(context, fmt::format("branch_to_{:04x}", offset), m_llvm_function);
 }
 
-void FunctionBuilder::preprocess_conditional_branch(FunctionBuilder::InstructionContext instruction)
+void FunctionBuilder::preprocess_conditional_branch(BytecodeInstruction instruction)
 {
 	insert_label(instruction.offset + 2);
 	preprocess_unconditional_branch(instruction);
 }
 
-void FunctionBuilder::preprocess_unconditional_branch(FunctionBuilder::InstructionContext instruction)
+void FunctionBuilder::preprocess_unconditional_branch(BytecodeInstruction instruction)
 {
 	insert_label(instruction.offset + 2 + instruction.arg_int());
 }
 
-llvm::BasicBlock* FunctionBuilder::get_branch_target(FunctionBuilder::InstructionContext instruction)
+llvm::BasicBlock* FunctionBuilder::get_branch_target(BytecodeInstruction instruction)
 {
 	return m_jump_map.at(instruction.offset + 2 + instruction.arg_int());
 }
 
-llvm::BasicBlock* FunctionBuilder::get_conditional_fail_branch_target(FunctionBuilder::InstructionContext instruction)
+llvm::BasicBlock* FunctionBuilder::get_conditional_fail_branch_target(BytecodeInstruction instruction)
 {
 	return m_jump_map.at(instruction.offset + 2);
 }

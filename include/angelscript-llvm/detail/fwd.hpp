@@ -7,6 +7,7 @@ class JitInterface;
 
 namespace detail
 {
+struct BytecodeInstruction;
 struct LibraryInitializer;
 struct CommonDefinitions;
 class JitCompiler;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <angelscript-llvm/detail/asinternalheaders.hpp>
+#include <angelscript-llvm/detail/bytecodeinstruction.hpp>
 #include <angelscript-llvm/detail/fwd.hpp>
 #include <angelscript.h>
 #include <llvm/IR/BasicBlock.h>
@@ -12,24 +13,6 @@ namespace asllvm::detail
 {
 class FunctionBuilder
 {
-	struct InstructionContext
-	{
-		asDWORD*         pointer;
-		const asSBCInfo* info;
-		std::size_t      offset;
-
-		asDWORD& arg_dword(std::size_t offset = 0) { return asBC_DWORDARG(pointer + offset); }
-		int&     arg_int(std::size_t offset = 0) { return asBC_INTARG(pointer + offset); }
-		asQWORD& arg_qword(std::size_t offset = 0) { return asBC_QWORDARG(pointer + offset); }
-		float&   arg_float(std::size_t offset = 0) { return asBC_FLOATARG(pointer + offset); }
-		asPWORD& arg_pword(std::size_t offset = 0) { return asBC_PTRARG(pointer + offset); }
-		asWORD&  arg_word0(std::size_t offset = 0) { return asBC_WORDARG0(pointer + offset); }
-		asWORD&  arg_word1(std::size_t offset = 0) { return asBC_WORDARG1(pointer + offset); }
-		short&   arg_sword0(std::size_t offset = 0) { return asBC_SWORDARG0(pointer + offset); }
-		short&   arg_sword1(std::size_t offset = 0) { return asBC_SWORDARG1(pointer + offset); }
-		short&   arg_sword2(std::size_t offset = 0) { return asBC_SWORDARG2(pointer + offset); }
-	};
-
 	public:
 	//! \brief Constructor for FunctionBuilder, usually called by ModuleBuilder::create_function_builder().
 	FunctionBuilder(
@@ -64,7 +47,7 @@ class FunctionBuilder
 	//!		further processing stage.
 	//!		In particular, this creates labels that are used for branching instructions.
 	//! \see read_bytecode()
-	void preprocess_instruction(InstructionContext instruction);
+	void preprocess_instruction(BytecodeInstruction instruction);
 
 	//! \brief Do the dirty work for the current bytecode instruction.
 	//! \details
@@ -73,10 +56,10 @@ class FunctionBuilder
 	//! \warning
 	//!		This requires preprocess_instruction() to have been used beforehand.
 	//! \see read_bytecode()
-	void process_instruction(InstructionContext instruction);
+	void process_instruction(BytecodeInstruction instruction);
 
 	//! \brief Get a human-readable disassembly for a given bytecode instruction.
-	std::string disassemble(InstructionContext instruction);
+	std::string disassemble(BytecodeInstruction instruction);
 
 	//! \brief Emit stack allocations for structures used locally within the current function.
 	//! \see Populates m_locals and m_registers.
@@ -84,16 +67,16 @@ class FunctionBuilder
 
 	//! \brief Implements a *signed* stack integer extend instruction from type \p source to type \p destination.
 	void emit_cast(
-		InstructionContext         instruction,
+		BytecodeInstruction        instruction,
 		llvm::Instruction::CastOps op,
 		llvm::Type*                source_type,
 		llvm::Type*                destination_type);
 
 	//! \brief Implements an stack arithmetic instruction \p op with of type \p type.
-	void emit_stack_arithmetic(InstructionContext instruction, llvm::Instruction::BinaryOps op, llvm::Type* type);
+	void emit_stack_arithmetic(BytecodeInstruction instruction, llvm::Instruction::BinaryOps op, llvm::Type* type);
 
 	//! \brief Implements an stack arithmetic instruction (immediate variant) \p op with of type \p type.
-	void emit_stack_arithmetic_imm(InstructionContext instruction, llvm::Instruction::BinaryOps op, llvm::Type* type);
+	void emit_stack_arithmetic_imm(BytecodeInstruction instruction, llvm::Instruction::BinaryOps op, llvm::Type* type);
 
 	void emit_increment(llvm::Type* value_type, long by);
 
@@ -143,20 +126,20 @@ class FunctionBuilder
 	void insert_label(long offset);
 
 	//! \brief Insert labels for the conditional jump bytecode instruction \p instruction.
-	void preprocess_conditional_branch(InstructionContext instruction);
+	void preprocess_conditional_branch(BytecodeInstruction instruction);
 
 	//! \brief Insert labels for the unconditional jump bytecode instruction \p instruction.
-	void preprocess_unconditional_branch(InstructionContext instruction);
+	void preprocess_unconditional_branch(BytecodeInstruction instruction);
 
 	//! \brief
 	//!		Determine the llvm::BasicBlock that should be branched to for a successful conditional branch or for an
 	//!		unconditional branch of the jump instruction \p instruction.
-	llvm::BasicBlock* get_branch_target(InstructionContext instruction);
+	llvm::BasicBlock* get_branch_target(BytecodeInstruction instruction);
 
 	//! \brief
 	//!		Determine the llvm::BasicBlock that should be branched to for a false conditional branch for the conditional
 	//!		jump instruction \p instruction.
-	llvm::BasicBlock* get_conditional_fail_branch_target(InstructionContext instruction);
+	llvm::BasicBlock* get_conditional_fail_branch_target(BytecodeInstruction instruction);
 
 	//! \brief
 	//!		Changes the insert point of the IR generator to the new \p block and emit an unconditional branch to
