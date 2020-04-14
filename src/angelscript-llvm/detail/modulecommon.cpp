@@ -15,7 +15,7 @@ std::string make_jit_entry_name(asIScriptFunction& function) { return make_funct
 
 std::string make_system_function_name(asIScriptFunction& function)
 {
-	return fmt::format("asllvm.external.{}", function.GetName());
+	return fmt::format("asllvm.external.{}", function.GetDeclaration(true, true, true));
 }
 
 } // namespace asllvm::detail
