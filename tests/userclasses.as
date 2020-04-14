@@ -40,6 +40,12 @@ class Foo
         print(m10);
     }
 
+    /*string return_string_field()
+    {
+        str_field = "world";
+        return str_field;
+    }*/
+
     int8 m1, m2;
     int16 m3;
     int32 m4;
@@ -49,6 +55,8 @@ class Foo
     int16 m8;
     int8 m9;
     int64 m10;
+
+   // string str_field;
 };
 
 void test()
@@ -67,6 +75,13 @@ void method_field_test()
     Foo f;
     f.use_field();
 }
+/*
+void object_field_test()
+{
+    Foo f;
+    print(f.return_string_field());
+}
+*/
 /*
 void handle_test()
 {
