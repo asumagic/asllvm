@@ -1506,6 +1506,17 @@ void FunctionBuilder::switch_to_block(llvm::BasicBlock* block)
 }
 
 long FunctionBuilder::local_storage_size() const { return m_script_function.scriptData->variableSpace; }
-long FunctionBuilder::stack_size() const { return m_script_function.scriptData->stackNeeded - local_storage_size(); }
+
+long FunctionBuilder::stack_size() const
+{
+	// TODO: stackNeeded does not appear to be correct when asBC_ALLOC pushes the pointer to the allocated variable on
+	// the stack. As far as I am aware allocating AS_PTR_SIZE extra bytes to the stack unconditionally should work
+	// around the problem. It would be better if asllvm did not require pushing to the stack _at all_ but this implies
+	// some refactoring. See also:
+	// https://www.gamedev.net/forums/topic/706619-scriptfunctiondatastackneeded-does-not-account-for-asbc_alloc-potential-stack-push/
+	constexpr long extra_stack_space_workaround = AS_PTR_SIZE;
+
+	return m_script_function.scriptData->stackNeeded - local_storage_size() + extra_stack_space_workaround;
+}
 
 } // namespace asllvm::detail
