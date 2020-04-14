@@ -573,7 +573,18 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 		break;
 	}
 
-	case asBC_ADDSi: unimpl(); break;
+	case asBC_ADDSi:
+	{
+		llvm::Value* stack_pointer = get_stack_value_pointer(m_stack_pointer, defs.iptr->getPointerTo());
+
+		// TODO: Check for null pointer
+		llvm::Value* original_value = ir.CreateLoad(defs.iptr, stack_pointer);
+		llvm::Value* incremented_value
+			= ir.CreateAdd(original_value, llvm::ConstantInt::get(defs.i16, instruction.arg_sword0()));
+
+		ir.CreateStore(incremented_value, stack_pointer);
+		break;
+	}
 
 	case asBC_CpyVtoV4:
 	{
