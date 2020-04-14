@@ -56,7 +56,7 @@ class Foo
     int8 m9;
     int64 m10;
 
-   // string str_field;
+    string str_field;
 };
 
 void test()
