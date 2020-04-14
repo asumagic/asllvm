@@ -23,23 +23,22 @@ void string_manylocals_concat()
     print(a + b + c + d + e + f + "world");
 }
 
-void takes_string_reference(const string &in a)
+void takes_string_reference(const string &in a, const string &in b, const string &in c)
 {
-    print(a);
+    print(a + b + c);
 }
 
 void string_function_reference()
 {
-    takes_string_reference("hello");
+    takes_string_reference("hello", " world", "!");
 }
-/*
-void takes_string_value(string a)
+
+void takes_string_value(string a, string b, string c)
 {
-    print(a);
+    print(a + b + c);
 }
 
 void string_function_value()
 {
-    takes_string_value("hello");
+    takes_string_value("hello", " world", "!");
 }
-*/

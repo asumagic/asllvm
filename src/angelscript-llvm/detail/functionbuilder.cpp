@@ -450,9 +450,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 	case asBC_CALLSYS:
 	{
 		asCScriptFunction* function = static_cast<asCScriptFunction*>(engine.GetFunctionById(instruction.arg_int()));
-
 		asllvm_assert(function != nullptr);
-
 		emit_system_call(*function);
 
 		break;
@@ -475,16 +473,16 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 		auto&     type           = *reinterpret_cast<asCObjectType*>(instruction.arg_pword());
 		const int constructor_id = instruction.arg_int(AS_PTR_SIZE);
 
+		// Allocate memory for the object
+		std::array<llvm::Value*, 1> alloc_args{{
+			llvm::ConstantInt::get(defs.iptr, type.size) // TODO: align type.size to 4 bytes
+		}};
+
+		llvm::Value* object_memory_pointer
+			= ir.CreateCall(internal_funcs.alloc->getFunctionType(), internal_funcs.alloc, alloc_args);
+
 		if (type.flags & asOBJ_SCRIPT_OBJECT)
 		{
-			// Allocate memory for the object
-			std::array<llvm::Value*, 1> alloc_args{{
-				llvm::ConstantInt::get(defs.iptr, type.size) // TODO: align type.size to 4 bytes
-			}};
-
-			llvm::Value* object_memory_pointer
-				= ir.CreateCall(internal_funcs.alloc->getFunctionType(), internal_funcs.alloc, alloc_args);
-
 			// Initialize stuff using the scriptobject constructor
 			std::array<llvm::Value*, 2> scriptobject_constructor_args{
 				{ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, reinterpret_cast<asPWORD>(&type)), defs.pvoid),
@@ -511,8 +509,21 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 		}
 		else
 		{
-			asllvm_assert(false && "unsupported object category for script allocation");
+			if (constructor_id != 0)
+			{
+				push_stack_value(object_memory_pointer, AS_PTR_SIZE);
+				emit_system_call(*static_cast<asCScriptEngine&>(engine).scriptFunctions[constructor_id]);
+			}
+
+			llvm::Value* target_address = load_stack_value(m_stack_pointer, defs.pvoid->getPointerTo());
+			m_stack_pointer -= AS_PTR_SIZE;
+			// TODO: check for null
+			ir.CreateStore(object_memory_pointer, target_address);
+
+			// TODO: check for suspend?
 		}
+
+		break;
 	}
 
 	case asBC_FREE:
@@ -538,7 +549,27 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 		break;
 	}
 
-	case asBC_GETOBJ: unimpl(); break;
+	case asBC_GETOBJ:
+	{
+		// Replace a variable index by a pointer to the value
+
+		llvm::Value* offset_pointer = get_stack_value_pointer(m_stack_pointer - instruction.arg_word0(), defs.iptr);
+		llvm::Value* offset         = ir.CreateLoad(defs.iptr, offset_pointer);
+
+		// Get pointer to where the pointer value on the stack is
+		std::array<llvm::Value*, 2> gep_offset{
+			llvm::ConstantInt::get(defs.iptr, 0),
+			ir.CreateSub(
+				llvm::ConstantInt::get(defs.iptr, local_storage_size() + stack_size()), offset, "addr", true, true)};
+
+		llvm::Value* variable_pointer = ir.CreateBitCast(ir.CreateGEP(m_locals, gep_offset), defs.iptr->getPointerTo());
+		llvm::Value* variable         = ir.CreateLoad(defs.iptr, variable_pointer);
+
+		ir.CreateStore(variable, offset_pointer);
+		ir.CreateStore(llvm::ConstantInt::get(defs.iptr, 0), variable_pointer);
+		break;
+	}
+
 	case asBC_REFCPY: unimpl(); break;
 	case asBC_CHKREF: unimpl(); break;
 	case asBC_GETOBJREF: unimpl(); break;
