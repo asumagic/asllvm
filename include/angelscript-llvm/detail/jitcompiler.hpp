@@ -17,7 +17,7 @@ struct LibraryInitializer
 class JitCompiler
 {
 	public:
-	JitCompiler(JitConfig flags = {});
+	JitCompiler(JitConfig config = {});
 
 	int  jit_compile(asIScriptFunction* function, asJITFunction* output);
 	void jit_free(asJITFunction function);
@@ -27,7 +27,7 @@ class JitCompiler
 	const JitConfig&  config() const { return m_config; }
 	Builder&          builder() { return m_builder; }
 
-	void diagnostic(const std::string& message, asEMsgType message_type = asMSGTYPE_INFORMATION) const;
+	void diagnostic(const std::string& text, asEMsgType message_type = asMSGTYPE_INFORMATION) const;
 
 	void build_modules();
 

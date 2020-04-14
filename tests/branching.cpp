@@ -4,7 +4,7 @@
 TEST_CASE("basic integral comparisons and 'if'", "[ifcmp]")
 {
 	REQUIRE(run_string("int a = 0; if (a >= 0) { print(1); }") == "1\n");
-	REQUIRE(run_string("int a = 0; if (a < 0) { print(1); }") == "");
+	REQUIRE(run_string("int a = 0; if (a < 0) { print(1); }").empty());
 }
 
 TEST_CASE("simple 'for' looping", "[forloop]")

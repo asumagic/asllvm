@@ -43,7 +43,7 @@ llvm::Function* ModuleBuilder::create_function(asCScriptFunction& function)
 		function_type,
 		is_exposed_directly(function) ? llvm::Function::ExternalLinkage : llvm::Function::InternalLinkage,
 		name,
-		*m_llvm_module.get());
+		*m_llvm_module);
 
 	// i8* noalias %params
 	(llvm_function->arg_begin() + 0)->setName("params");
@@ -176,7 +176,7 @@ InternalFunctions ModuleBuilder::setup_internal_functions()
 {
 	CommonDefinitions& defs = m_compiler.builder().definitions();
 
-	InternalFunctions funcs;
+	InternalFunctions funcs{};
 
 	{
 		std::array<llvm::Type*, 1> types{{defs.iptr}};

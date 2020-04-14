@@ -88,7 +88,7 @@ std::unique_ptr<llvm::LLVMContext> Builder::extract_old_context()
 
 CommonDefinitions Builder::setup_common_definitions()
 {
-	CommonDefinitions defs;
+	CommonDefinitions defs{};
 
 	defs.tvoid = llvm::Type::getVoidTy(*m_context);
 	defs.i1    = llvm::Type::getInt1Ty(*m_context);
@@ -109,7 +109,7 @@ CommonDefinitions Builder::setup_common_definitions()
 	defs.pf64  = llvm::Type::getDoublePtrTy(*m_context);
 
 	{
-		std::array<llvm::Type*, 8> types{{
+		std::array types{
 			defs.pi32,  // programPointer
 			defs.pi32,  // stackFramePointer
 			defs.pi32,  // stackPointer
@@ -118,7 +118,7 @@ CommonDefinitions Builder::setup_common_definitions()
 			defs.pvoid, // objectType - todo asITypeInfo
 			defs.i1,    // doProcessSuspend
 			defs.pvoid, // ctx - todo asIScriptContext
-		}};
+		};
 
 		defs.vm_registers = llvm::StructType::create(types, "asSVMRegisters");
 	}
@@ -130,9 +130,11 @@ std::unique_ptr<llvm::LLVMContext> Builder::setup_context() { return std::make_u
 
 llvm::legacy::PassManager Builder::setup_pass_manager()
 {
+	constexpr int inlining_threshold = 275;
+
 	llvm::PassManagerBuilder pmb;
 	pmb.OptLevel           = 3;
-	pmb.Inliner            = llvm::createFunctionInliningPass(275);
+	pmb.Inliner            = llvm::createFunctionInliningPass(inlining_threshold);
 	pmb.DisableUnrollLoops = false;
 	pmb.LoopVectorize      = true;
 	pmb.SLPVectorize       = true;

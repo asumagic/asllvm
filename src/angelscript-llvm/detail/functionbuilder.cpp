@@ -39,7 +39,7 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 			const asSBCInfo&  info             = asBCInfo[*reinterpret_cast<const asBYTE*>(bytecode_current)];
 			const std::size_t instruction_size = asBCTypeSize[info.type];
 
-			InstructionContext context;
+			InstructionContext context{};
 			context.pointer = bytecode_current;
 			context.info    = &info;
 			context.offset  = std::distance(bytecode, bytecode_current);
@@ -1047,9 +1047,9 @@ void FunctionBuilder::emit_allocate_local_structures()
 	CommonDefinitions& defs        = m_compiler.builder().definitions();
 	auto&              script_data = *m_script_function.scriptData;
 
-	m_locals          = ir.CreateAlloca(llvm::ArrayType::get(defs.i32, script_data.stackNeeded), 0, "locals");
-	m_value_register  = ir.CreateAlloca(defs.i64, 0, "valuereg");
-	m_object_register = ir.CreateAlloca(defs.pvoid, 0, "objreg");
+	m_locals          = ir.CreateAlloca(llvm::ArrayType::get(defs.i32, script_data.stackNeeded), nullptr, "locals");
+	m_value_register  = ir.CreateAlloca(defs.i64, nullptr, "valuereg");
+	m_object_register = ir.CreateAlloca(defs.pvoid, nullptr, "objreg");
 
 	m_stack_pointer = local_storage_size();
 }
