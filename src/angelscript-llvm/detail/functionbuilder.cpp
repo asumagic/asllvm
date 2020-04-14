@@ -1082,11 +1082,10 @@ std::string FunctionBuilder::disassemble(BytecodeInstruction instruction)
 
 void FunctionBuilder::emit_allocate_local_structures()
 {
-	llvm::IRBuilder<>& ir          = m_compiler.builder().ir();
-	CommonDefinitions& defs        = m_compiler.builder().definitions();
-	auto&              script_data = *m_script_function.scriptData;
+	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
+	CommonDefinitions& defs = m_compiler.builder().definitions();
 
-	m_locals          = ir.CreateAlloca(llvm::ArrayType::get(defs.i32, script_data.stackNeeded), nullptr, "locals");
+	m_locals = ir.CreateAlloca(llvm::ArrayType::get(defs.i32, stack_size() + local_storage_size()), nullptr, "stack");
 	m_value_register  = ir.CreateAlloca(defs.i64, nullptr, "valuereg");
 	m_object_register = ir.CreateAlloca(defs.pvoid, nullptr, "objreg");
 
