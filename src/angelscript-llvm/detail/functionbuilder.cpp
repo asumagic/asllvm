@@ -571,7 +571,13 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 	}
 
 	case asBC_REFCPY: unimpl(); break;
-	case asBC_CHKREF: unimpl(); break;
+
+	case asBC_CHKREF:
+	{
+		// TODO: check if pointer is null
+		break;
+	}
+
 	case asBC_GETOBJREF: unimpl(); break;
 	case asBC_GETREF:
 	{
