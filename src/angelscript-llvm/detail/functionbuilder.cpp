@@ -765,19 +765,13 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 	case asBC_DIVd: emit_stack_arithmetic(instruction, llvm::Instruction::FDiv, defs.f64); break;
 	case asBC_MODd: emit_stack_arithmetic(instruction, llvm::Instruction::FRem, defs.f64); break;
 
-	case asBC_ADDIi: unimpl(); break;
+	case asBC_ADDIi: emit_stack_arithmetic_imm(instruction, llvm::Instruction::Add, defs.i32); break;
+	case asBC_SUBIi: emit_stack_arithmetic_imm(instruction, llvm::Instruction::Sub, defs.i32); break;
+	case asBC_MULIi: emit_stack_arithmetic_imm(instruction, llvm::Instruction::Mul, defs.i32); break;
 
-	case asBC_SUBIi:
-	{
-		emit_stack_arithmetic_imm(instruction, llvm::Instruction::Sub, defs.i32);
-		break;
-	}
-
-	case asBC_MULIi: unimpl(); break;
-
-	case asBC_ADDIf: unimpl(); break;
-	case asBC_SUBIf: unimpl(); break;
-	case asBC_MULIf: unimpl(); break;
+	case asBC_ADDIf: emit_stack_arithmetic_imm(instruction, llvm::Instruction::FAdd, defs.f32); break;
+	case asBC_SUBIf: emit_stack_arithmetic_imm(instruction, llvm::Instruction::FSub, defs.f32); break;
+	case asBC_MULIf: emit_stack_arithmetic_imm(instruction, llvm::Instruction::FMul, defs.f32); break;
 
 	case asBC_SetG4:
 	{
