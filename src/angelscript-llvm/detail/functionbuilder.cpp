@@ -237,19 +237,19 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_PshC4:
 	{
-		push_stack_value(llvm::ConstantInt::get(defs.i32, asBC_DWORDARG(instruction.pointer)), 1);
+		push_stack_value(llvm::ConstantInt::get(defs.i32, instruction.arg_dword()), 1);
 		break;
 	}
 
 	case asBC_PshV4:
 	{
-		push_stack_value(load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32), 1);
+		push_stack_value(load_stack_value(instruction.arg_sword0(), defs.i32), 1);
 		break;
 	}
 
 	case asBC_PSF:
 	{
-		push_stack_value(get_stack_value_pointer(asBC_SWORDARG0(instruction.pointer), defs.iptr), AS_PTR_SIZE);
+		push_stack_value(get_stack_value_pointer(instruction.arg_sword0(), defs.iptr), AS_PTR_SIZE);
 		break;
 	}
 
@@ -259,7 +259,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	{
 		// TODO: common code for global_ptr
 		llvm::Value* global_ptr
-			= ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, asBC_PTRARG(instruction.pointer)), defs.pi32);
+			= ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, instruction.arg_pword()), defs.pi32);
 		llvm::Value* global = ir.CreateLoad(defs.i32, global_ptr);
 
 		push_stack_value(global, 1);
@@ -270,7 +270,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_CALL:
 	{
-		auto& function = static_cast<asCScriptFunction&>(*engine.GetFunctionById(asBC_INTARG(instruction.pointer)));
+		auto& function = static_cast<asCScriptFunction&>(*engine.GetFunctionById(instruction.arg_int()));
 		emit_script_call(function);
 		break;
 	}
@@ -384,17 +384,17 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_IncVi:
 	{
-		llvm::Value* value  = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32);
+		llvm::Value* value  = load_stack_value(instruction.arg_sword0(), defs.i32);
 		llvm::Value* result = ir.CreateAdd(value, llvm::ConstantInt::get(defs.i32, 1));
-		store_stack_value(asBC_SWORDARG0(instruction.pointer), result);
+		store_stack_value(instruction.arg_sword0(), result);
 		break;
 	}
 
 	case asBC_DecVi:
 	{
-		llvm::Value* value  = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32);
+		llvm::Value* value  = load_stack_value(instruction.arg_sword0(), defs.i32);
 		llvm::Value* result = ir.CreateSub(value, llvm::ConstantInt::get(defs.i32, 1));
-		store_stack_value(asBC_SWORDARG0(instruction.pointer), result);
+		store_stack_value(instruction.arg_sword0(), result);
 		break;
 	}
 
@@ -411,13 +411,13 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_PshC8:
 	{
-		push_stack_value(llvm::ConstantInt::get(defs.i64, asBC_QWORDARG(instruction.pointer)), 2);
+		push_stack_value(llvm::ConstantInt::get(defs.i64, instruction.arg_qword()), 2);
 		break;
 	}
 
 	case asBC_PshVPtr:
 	{
-		push_stack_value(load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.iptr), AS_PTR_SIZE);
+		push_stack_value(load_stack_value(instruction.arg_sword0(), defs.iptr), AS_PTR_SIZE);
 		break;
 	}
 
@@ -428,16 +428,16 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_CMPi:
 	{
-		llvm::Value* lhs = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32);
-		llvm::Value* rhs = load_stack_value(asBC_SWORDARG1(instruction.pointer), defs.i32);
+		llvm::Value* lhs = load_stack_value(instruction.arg_sword0(), defs.i32);
+		llvm::Value* rhs = load_stack_value(instruction.arg_sword1(), defs.i32);
 		emit_integral_compare(lhs, rhs);
 		break;
 	}
 
 	case asBC_CMPIi:
 	{
-		llvm::Value* lhs = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32);
-		llvm::Value* rhs = llvm::ConstantInt::get(defs.i32, asBC_INTARG(instruction.pointer));
+		llvm::Value* lhs = load_stack_value(instruction.arg_sword0(), defs.i32);
+		llvm::Value* rhs = llvm::ConstantInt::get(defs.i32, instruction.arg_int());
 		emit_integral_compare(lhs, rhs);
 		break;
 	}
@@ -451,8 +451,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_CALLSYS:
 	{
-		asCScriptFunction* function
-			= static_cast<asCScriptFunction*>(engine.GetFunctionById(asBC_INTARG(instruction.pointer)));
+		asCScriptFunction* function = static_cast<asCScriptFunction*>(engine.GetFunctionById(instruction.arg_int()));
 
 		asllvm_assert(function != nullptr);
 
@@ -475,8 +474,8 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_ALLOC:
 	{
-		auto&     type           = *reinterpret_cast<asCObjectType*>(asBC_PTRARG(instruction.pointer));
-		const int constructor_id = asBC_INTARG(instruction.pointer + AS_PTR_SIZE);
+		auto&     type           = *reinterpret_cast<asCObjectType*>(instruction.arg_pword());
+		const int constructor_id = instruction.arg_int(AS_PTR_SIZE);
 
 		if (type.flags & asOBJ_SCRIPT_OBJECT)
 		{
@@ -526,17 +525,17 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_LOADOBJ:
 	{
-		llvm::Value* pointer_to_object = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.pvoid);
+		llvm::Value* pointer_to_object = load_stack_value(instruction.arg_sword0(), defs.pvoid);
 		ir.CreateStore(pointer_to_object, m_object_register);
 		store_stack_value(
-			asBC_SWORDARG0(instruction.pointer), ir.CreatePtrToInt(llvm::ConstantInt::get(defs.iptr, 0), defs.pvoid));
+			instruction.arg_sword0(), ir.CreatePtrToInt(llvm::ConstantInt::get(defs.iptr, 0), defs.pvoid));
 
 		break;
 	}
 
 	case asBC_STOREOBJ:
 	{
-		store_stack_value(asBC_SWORDARG0(instruction.pointer), ir.CreateLoad(defs.pvoid, m_object_register));
+		store_stack_value(instruction.arg_sword0(), ir.CreateLoad(defs.pvoid, m_object_register));
 		ir.CreateStore(ir.CreatePtrToInt(llvm::ConstantInt::get(defs.iptr, 0), defs.pvoid), m_object_register);
 		break;
 	}
@@ -547,7 +546,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	case asBC_GETOBJREF: unimpl(); break;
 	case asBC_GETREF:
 	{
-		llvm::Value* pointer = get_stack_value_pointer(m_stack_pointer - asBC_WORDARG0(instruction.pointer), defs.pi32);
+		llvm::Value* pointer = get_stack_value_pointer(m_stack_pointer - instruction.arg_word0(), defs.pi32);
 
 		llvm::Value*                      index = ir.CreateLoad(defs.i32, ir.CreateBitCast(pointer, defs.pi32));
 		const std::array<llvm::Value*, 2> indices{{llvm::ConstantInt::get(defs.i64, 0), index}};
@@ -566,17 +565,13 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	case asBC_SetV2:
 	case asBC_SetV4:
 	{
-		store_stack_value(
-			asBC_SWORDARG0(instruction.pointer), llvm::ConstantInt::get(defs.i32, asBC_DWORDARG(instruction.pointer)));
-
+		store_stack_value(instruction.arg_sword0(), llvm::ConstantInt::get(defs.i32, instruction.arg_dword()));
 		break;
 	}
 
 	case asBC_SetV8:
 	{
-		store_stack_value(
-			asBC_SWORDARG0(instruction.pointer), llvm::ConstantInt::get(defs.i64, asBC_QWORDARG(instruction.pointer)));
-
+		store_stack_value(instruction.arg_sword0(), llvm::ConstantInt::get(defs.i64, instruction.arg_qword()));
 		break;
 	}
 
@@ -584,8 +579,8 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_CpyVtoV4:
 	{
-		auto target = asBC_SWORDARG0(instruction.pointer);
-		auto source = asBC_SWORDARG1(instruction.pointer);
+		auto target = instruction.arg_sword0();
+		auto source = instruction.arg_sword1();
 
 		store_stack_value(target, load_stack_value(source, defs.i32));
 
@@ -594,8 +589,8 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_CpyVtoV8:
 	{
-		auto target = asBC_SWORDARG0(instruction.pointer);
-		auto source = asBC_SWORDARG1(instruction.pointer);
+		auto target = instruction.arg_sword0();
+		auto source = instruction.arg_sword1();
 
 		store_stack_value(target, load_stack_value(source, defs.i64));
 
@@ -604,48 +599,48 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_CpyVtoR4:
 	{
-		store_value_register_value(load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32));
+		store_value_register_value(load_stack_value(instruction.arg_sword0(), defs.i32));
 		break;
 	}
 
 	case asBC_CpyVtoR8:
 	{
-		store_value_register_value(load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i64));
+		store_value_register_value(load_stack_value(instruction.arg_sword0(), defs.i64));
 		break;
 	}
 
 	case asBC_CpyVtoG4:
 	{
 		llvm::Value* global_ptr
-			= ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, asBC_PTRARG(instruction.pointer)), defs.pi32);
-		llvm::Value* value = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32);
+			= ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, instruction.arg_pword()), defs.pi32);
+		llvm::Value* value = load_stack_value(instruction.arg_sword0(), defs.i32);
 		ir.CreateStore(value, global_ptr);
 		break;
 	}
 
 	case asBC_CpyRtoV4:
 	{
-		store_stack_value(asBC_SWORDARG0(instruction.pointer), load_value_register_value(defs.i32));
+		store_stack_value(instruction.arg_sword0(), load_value_register_value(defs.i32));
 		break;
 	}
 
 	case asBC_CpyRtoV8:
 	{
-		store_stack_value(asBC_SWORDARG0(instruction.pointer), load_value_register_value(defs.i64));
+		store_stack_value(instruction.arg_sword0(), load_value_register_value(defs.i64));
 		break;
 	}
 
 	case asBC_CpyGtoV4:
 	{
 		llvm::Value* global_ptr
-			= ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, asBC_PTRARG(instruction.pointer)), defs.pi32);
-		store_stack_value(asBC_SWORDARG0(instruction.pointer), ir.CreateLoad(global_ptr, defs.i32));
+			= ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, instruction.arg_pword()), defs.pi32);
+		store_stack_value(instruction.arg_sword0(), ir.CreateLoad(global_ptr, defs.i32));
 		break;
 	}
 
 	case asBC_WRTV1:
 	{
-		llvm::Value* value  = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i8);
+		llvm::Value* value  = load_stack_value(instruction.arg_sword0(), defs.i8);
 		llvm::Value* target = load_value_register_value(defs.pi8);
 		ir.CreateStore(value, target);
 		break;
@@ -653,7 +648,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_WRTV2:
 	{
-		llvm::Value* value  = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i16);
+		llvm::Value* value  = load_stack_value(instruction.arg_sword0(), defs.i16);
 		llvm::Value* target = load_value_register_value(defs.pi16);
 		ir.CreateStore(value, target);
 		break;
@@ -661,7 +656,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_WRTV4:
 	{
-		llvm::Value* value  = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i32);
+		llvm::Value* value  = load_stack_value(instruction.arg_sword0(), defs.i32);
 		llvm::Value* target = load_value_register_value(defs.pi32);
 		ir.CreateStore(value, target);
 		break;
@@ -669,7 +664,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_WRTV8:
 	{
-		llvm::Value* value  = load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i64);
+		llvm::Value* value  = load_stack_value(instruction.arg_sword0(), defs.i64);
 		llvm::Value* target = load_value_register_value(defs.pi64);
 		ir.CreateStore(value, target);
 		break;
@@ -680,7 +675,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 		llvm::Value* source_pointer = load_value_register_value(defs.pi8);
 		llvm::Value* source_word    = ir.CreateLoad(defs.i8, source_pointer);
 		llvm::Value* source         = ir.CreateZExt(source_word, defs.i32);
-		store_stack_value(asBC_SWORDARG0(instruction.pointer), source);
+		store_stack_value(instruction.arg_sword0(), source);
 		break;
 	}
 
@@ -689,7 +684,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 		llvm::Value* source_pointer = load_value_register_value(defs.pi16);
 		llvm::Value* source_word    = ir.CreateLoad(defs.i16, source_pointer);
 		llvm::Value* source         = ir.CreateZExt(source_word, defs.i32);
-		store_stack_value(asBC_SWORDARG0(instruction.pointer), source);
+		store_stack_value(instruction.arg_sword0(), source);
 		break;
 	}
 
@@ -697,7 +692,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	{
 		llvm::Value* source_pointer = load_value_register_value(defs.pi32);
 		llvm::Value* source         = ir.CreateLoad(defs.i32, source_pointer);
-		store_stack_value(asBC_SWORDARG0(instruction.pointer), source);
+		store_stack_value(instruction.arg_sword0(), source);
 		break;
 	}
 
@@ -705,20 +700,20 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 	{
 		llvm::Value* source_pointer = load_value_register_value(defs.pi64);
 		llvm::Value* source         = ir.CreateLoad(defs.i64, source_pointer);
-		store_stack_value(asBC_SWORDARG0(instruction.pointer), source);
+		store_stack_value(instruction.arg_sword0(), source);
 		break;
 	}
 
 	case asBC_LDG: unimpl(); break;
 	case asBC_LDV:
 	{
-		store_value_register_value(get_stack_value_pointer(asBC_SWORDARG0(instruction.pointer), defs.pvoid));
+		store_value_register_value(get_stack_value_pointer(instruction.arg_sword0(), defs.pvoid));
 		break;
 	}
 
 	case asBC_PGA:
 	{
-		push_stack_value(llvm::ConstantInt::get(defs.i64, asBC_PTRARG(instruction.pointer)), AS_PTR_SIZE);
+		push_stack_value(llvm::ConstantInt::get(defs.i64, instruction.arg_pword()), AS_PTR_SIZE);
 		break;
 	}
 
@@ -726,7 +721,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_VAR:
 	{
-		push_stack_value(llvm::ConstantInt::get(defs.i64, asBC_SWORDARG0(instruction.pointer)), AS_PTR_SIZE);
+		push_stack_value(llvm::ConstantInt::get(defs.i64, instruction.arg_sword0()), AS_PTR_SIZE);
 		break;
 	}
 
@@ -787,7 +782,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 	case asBC_CALLINTF:
 	{
-		auto& function = static_cast<asCScriptFunction&>(*engine.GetFunctionById(asBC_INTARG(instruction.pointer)));
+		auto& function = static_cast<asCScriptFunction&>(*engine.GetFunctionById(instruction.arg_int()));
 		emit_script_call(function);
 		break;
 	}
@@ -843,7 +838,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 		// Pass the JitCompiler as the jitArg value, which can be used by lazy_jit_compiler().
 		// TODO: this is probably UB
-		asBC_PTRARG(instruction.pointer) = reinterpret_cast<asPWORD>(&m_compiler);
+		instruction.arg_pword() = reinterpret_cast<asPWORD>(&m_compiler);
 
 		break;
 	}
@@ -857,7 +852,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 
 		// TODO: check for null object
 
-		std::array<llvm::Value*, 1> indices{{llvm::ConstantInt::get(defs.iptr, asBC_SWORDARG0(instruction.pointer))}};
+		std::array<llvm::Value*, 1> indices{{llvm::ConstantInt::get(defs.iptr, instruction.arg_sword0())}};
 		llvm::Value*                field = ir.CreateGEP(object, indices);
 
 		store_value_register_value(field);
@@ -865,7 +860,7 @@ void FunctionBuilder::process_instruction(InstructionContext instruction)
 		break;
 	}
 
-	case asBC_PshV8: push_stack_value(load_stack_value(asBC_SWORDARG0(instruction.pointer), defs.i64), 2); break;
+	case asBC_PshV8: push_stack_value(load_stack_value(instruction.arg_sword0(), defs.i64), 2); break;
 
 	case asBC_DIVu: emit_stack_arithmetic(instruction, llvm::Instruction::UDiv, defs.i32); break;
 	case asBC_MODu: emit_stack_arithmetic(instruction, llvm::Instruction::URem, defs.i32); break;
@@ -916,8 +911,7 @@ std::string FunctionBuilder::disassemble(FunctionBuilder::InstructionContext ins
 
 	case asBC_CALLSYS:
 	{
-		auto* func
-			= static_cast<asCScriptFunction*>(m_compiler.engine().GetFunctionById(asBC_INTARG(instruction.pointer)));
+		auto* func = static_cast<asCScriptFunction*>(m_compiler.engine().GetFunctionById(instruction.arg_int()));
 
 		asllvm_assert(func != nullptr);
 
@@ -940,32 +934,30 @@ std::string FunctionBuilder::disassemble(FunctionBuilder::InstructionContext ins
 	case asBCTYPE_wW_ARG:
 	case asBCTYPE_rW_ARG:
 	{
-		return fmt::format("{} {}", instruction.info->name, asBC_SWORDARG0(instruction.pointer));
+		return fmt::format("{} {}", instruction.info->name, instruction.arg_sword0());
 	}
 
 	case asBCTYPE_DW_ARG:
 	{
-		return fmt::format("{} {}", instruction.info->name, asBC_INTARG(instruction.pointer));
+		return fmt::format("{} {}", instruction.info->name, instruction.arg_int());
 	}
 
 	case asBCTYPE_rW_DW_ARG:
 	case asBCTYPE_wW_DW_ARG:
 	case asBCTYPE_W_DW_ARG:
 	{
-		return fmt::format(
-			"{} {} {}", instruction.info->name, asBC_SWORDARG0(instruction.pointer), asBC_INTARG(instruction.pointer));
+		return fmt::format("{} {} {}", instruction.info->name, instruction.arg_sword0(), instruction.arg_int());
 	}
 
 	case asBCTYPE_QW_ARG:
 	{
-		return fmt::format("{} {}", instruction.info->name, asBC_PTRARG(instruction.pointer));
+		return fmt::format("{} {}", instruction.info->name, instruction.arg_pword());
 	}
 
 	case asBCTYPE_DW_DW_ARG:
 	{
 		// TODO: double check this
-		return fmt::format(
-			"{} {} {}", instruction.info->name, asBC_INTARG(instruction.pointer), asBC_INTARG(instruction.pointer + 1));
+		return fmt::format("{} {} {}", instruction.info->name, instruction.arg_int(), instruction.arg_int(1));
 	}
 
 	case asBCTYPE_wW_rW_rW_ARG:
@@ -973,29 +965,21 @@ std::string FunctionBuilder::disassemble(FunctionBuilder::InstructionContext ins
 		return fmt::format(
 			"{} {} {} {}",
 			instruction.info->name,
-			asBC_SWORDARG0(instruction.pointer),
-			asBC_SWORDARG1(instruction.pointer),
-			asBC_SWORDARG2(instruction.pointer));
+			instruction.arg_sword0(),
+			instruction.arg_sword1(),
+			instruction.arg_sword2());
 	}
 
 	case asBCTYPE_wW_QW_ARG:
 	{
-		return fmt::format(
-			"{} {} {}",
-			instruction.info->name,
-			asBC_SWORDARG0(instruction.pointer),
-			asBC_PTRARG(instruction.pointer + 1));
+		return fmt::format("{} {} {}", instruction.info->name, instruction.arg_sword0(), instruction.arg_pword(1));
 	}
 
 	case asBCTYPE_wW_rW_ARG:
 	case asBCTYPE_rW_rW_ARG:
 	case asBCTYPE_wW_W_ARG:
 	{
-		return fmt::format(
-			"{} {} {}",
-			instruction.info->name,
-			asBC_SWORDARG0(instruction.pointer),
-			asBC_SWORDARG1(instruction.pointer));
+		return fmt::format("{} {} {}", instruction.info->name, instruction.arg_sword0(), instruction.arg_sword1());
 	}
 
 	case asBCTYPE_wW_rW_DW_ARG:
@@ -1004,24 +988,19 @@ std::string FunctionBuilder::disassemble(FunctionBuilder::InstructionContext ins
 		return fmt::format(
 			"{} {} {} {}",
 			instruction.info->name,
-			asBC_SWORDARG0(instruction.pointer),
-			asBC_SWORDARG1(instruction.pointer),
-			asBC_INTARG(instruction.pointer + 1));
+			instruction.arg_sword0(),
+			instruction.arg_sword1(),
+			instruction.arg_int(1));
 	}
 
 	case asBCTYPE_QW_DW_ARG:
 	{
-		return fmt::format(
-			"{} {} {}", instruction.info->name, asBC_PTRARG(instruction.pointer), asBC_INTARG(instruction.pointer + 2));
+		return fmt::format("{} {} {}", instruction.info->name, instruction.arg_pword(), instruction.arg_int(2));
 	}
 
 	case asBCTYPE_rW_QW_ARG:
 	{
-		return fmt::format(
-			"{} {} {}",
-			instruction.info->name,
-			asBC_SWORDARG0(instruction.pointer),
-			asBC_PTRARG(instruction.pointer + 1));
+		return fmt::format("{} {} {}", instruction.info->name, instruction.arg_sword0(), instruction.arg_pword(1));
 	}
 
 	case asBCTYPE_rW_DW_DW_ARG:
@@ -1029,9 +1008,9 @@ std::string FunctionBuilder::disassemble(FunctionBuilder::InstructionContext ins
 		return fmt::format(
 			"{} {} {} {}",
 			instruction.info->name,
-			asBC_SWORDARG0(instruction.pointer),
-			asBC_INTARG(instruction.pointer + 1),
-			asBC_INTARG(instruction.pointer + 2));
+			instruction.arg_sword0(),
+			instruction.arg_int(1),
+			instruction.arg_int(2));
 	}
 
 	default:
@@ -1067,12 +1046,11 @@ void FunctionBuilder::emit_cast(
 	const bool destination_64 = destination_type == defs.i64 || destination_type == defs.f64;
 
 	// TODO: more robust check for this
-	const auto stack_offset
-		= (source_64 != destination_64) ? asBC_SWORDARG1(instruction.pointer) : asBC_SWORDARG0(instruction.pointer);
+	const auto stack_offset = (source_64 != destination_64) ? instruction.arg_sword1() : instruction.arg_sword0();
 
 	llvm::Value* converted = ir.CreateCast(op, load_stack_value(stack_offset, source_type), destination_type);
 
-	store_stack_value(asBC_SWORDARG0(instruction.pointer), converted);
+	store_stack_value(instruction.arg_sword0(), converted);
 }
 
 void FunctionBuilder::emit_stack_arithmetic(
@@ -1080,10 +1058,10 @@ void FunctionBuilder::emit_stack_arithmetic(
 {
 	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
 
-	llvm::Value* lhs    = load_stack_value(asBC_SWORDARG1(instruction.pointer), type);
-	llvm::Value* rhs    = load_stack_value(asBC_SWORDARG2(instruction.pointer), type);
+	llvm::Value* lhs    = load_stack_value(instruction.arg_sword1(), type);
+	llvm::Value* rhs    = load_stack_value(instruction.arg_sword2(), type);
 	llvm::Value* result = ir.CreateBinOp(op, lhs, rhs);
-	store_stack_value(asBC_SWORDARG0(instruction.pointer), result);
+	store_stack_value(instruction.arg_sword0(), result);
 }
 
 void FunctionBuilder::emit_stack_arithmetic_imm(
@@ -1092,10 +1070,10 @@ void FunctionBuilder::emit_stack_arithmetic_imm(
 	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
 	CommonDefinitions& defs = m_compiler.builder().definitions();
 
-	llvm::Value* lhs    = load_stack_value(asBC_SWORDARG1(instruction.pointer), type);
-	llvm::Value* rhs    = llvm::ConstantInt::get(defs.i32, asBC_INTARG(instruction.pointer + 1));
+	llvm::Value* lhs    = load_stack_value(instruction.arg_sword1(), type);
+	llvm::Value* rhs    = llvm::ConstantInt::get(defs.i32, instruction.arg_int(1));
 	llvm::Value* result = ir.CreateBinOp(op, lhs, rhs);
-	store_stack_value(asBC_SWORDARG0(instruction.pointer), result);
+	store_stack_value(instruction.arg_sword0(), result);
 }
 
 void FunctionBuilder::emit_increment(llvm::Type* value_type, long by)
@@ -1456,12 +1434,12 @@ void FunctionBuilder::preprocess_conditional_branch(FunctionBuilder::Instruction
 
 void FunctionBuilder::preprocess_unconditional_branch(FunctionBuilder::InstructionContext instruction)
 {
-	insert_label(instruction.offset + 2 + asBC_INTARG(instruction.pointer));
+	insert_label(instruction.offset + 2 + instruction.arg_int());
 }
 
 llvm::BasicBlock* FunctionBuilder::get_branch_target(FunctionBuilder::InstructionContext instruction)
 {
-	return m_jump_map.at(instruction.offset + 2 + asBC_INTARG(instruction.pointer));
+	return m_jump_map.at(instruction.offset + 2 + instruction.arg_int());
 }
 
 llvm::BasicBlock* FunctionBuilder::get_conditional_fail_branch_target(FunctionBuilder::InstructionContext instruction)
