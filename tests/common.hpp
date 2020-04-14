@@ -3,6 +3,7 @@
 #include <angelscript-llvm/detail/assert.hpp>
 #include <angelscript-llvm/jit.hpp>
 #include <angelscript.h>
+#include <catch2/catch.hpp>
 #include <sstream>
 #include <string>
 

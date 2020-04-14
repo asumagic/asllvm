@@ -1,5 +1,4 @@
 #include "common.hpp"
-#include <catch2/catch.hpp>
 
 // Note that _some_ of the 8-bit and 16-bit arithmetic checks are somewhat redundant: operations over these types
 // usually get promoted to 32-bit. Checking for this potentially helps detecting bugs related to sign extension and
