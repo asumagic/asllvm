@@ -90,3 +90,14 @@ void handle_test()
     f2.foo(123, 456, 789);
 }
 */
+
+void take_by_value(Foo foo)
+{
+    foo.use_field();
+}
+
+void pass_by_value_test()
+{
+    Foo f;
+    take_by_value(f);
+}
