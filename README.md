@@ -15,7 +15,7 @@ current support.
 
 ## Comparison
 
-An existing AngelScript from BlindMindStudios exist. Here are some differences you should expect.
+An existing AngelScript JIT compiler from BlindMindStudios exist. Here are some differences you should expect.
 
 - asllvm should be significantly easier to port to non-x86 CPU architectures and/or other OSes.
 - asllvm will likely be slower at compiling, but may generate significantly more efficient code. There are two reasons
