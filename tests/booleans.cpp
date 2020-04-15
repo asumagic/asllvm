@@ -147,3 +147,12 @@ TEST_CASE("floating-point comparisons", "[fpcmp]")
 	REQUIRE(run_string("double a = 15, b = 15; print(''+bool(a == b))") == "true\n");
 	REQUIRE(run_string("double a = 15, b = 14; print(''+bool(a == b))") == "false\n");
 }
+
+TEST_CASE("misc. boolean logic", "[boolmisc]")
+{
+	// Emits JLowZ
+	REQUIRE(run_string("bool a = true; if (a) { print('good'); } else { print('bad'); }") == "good\n");
+
+	// Emits JLowNZ
+	REQUIRE(run_string("bool a = true, b = false; if (a || b) { print('good'); } else { print('bad'); }") == "good\n");
+}

@@ -199,6 +199,8 @@ void FunctionBuilder::preprocess_instruction(BytecodeInstruction instruction)
 	case asBC_JNS:
 	case asBC_JP:
 	case asBC_JNP:
+	case asBC_JLowZ:
+	case asBC_JLowNZ:
 	{
 		preprocess_conditional_branch(instruction);
 		break;
@@ -992,8 +994,26 @@ void FunctionBuilder::process_instruction(BytecodeInstruction ins)
 		break;
 	}
 
-	case asBC_JLowZ: unimpl(); break;
-	case asBC_JLowNZ: unimpl(); break;
+	case asBC_JLowZ:
+	{
+		llvm::Value* condition = ir.CreateICmp(
+			llvm::CmpInst::ICMP_EQ, load_value_register_value(defs.i8), llvm::ConstantInt::get(defs.i8, 0));
+
+		ir.CreateCondBr(condition, get_branch_target(ins), get_conditional_fail_branch_target(ins));
+
+		break;
+	}
+
+	case asBC_JLowNZ:
+	{
+		llvm::Value* condition = ir.CreateICmp(
+			llvm::CmpInst::ICMP_NE, load_value_register_value(defs.i8), llvm::ConstantInt::get(defs.i8, 0));
+
+		ir.CreateCondBr(condition, get_branch_target(ins), get_conditional_fail_branch_target(ins));
+
+		break;
+	}
+
 	case asBC_AllocMem: unimpl(); break;
 	case asBC_SetListSize: unimpl(); break;
 	case asBC_PshListElmnt: unimpl(); break;
@@ -1618,10 +1638,10 @@ long FunctionBuilder::local_storage_size() const { return m_script_function.scri
 
 long FunctionBuilder::stack_size() const
 {
-	// TODO: stackNeeded does not appear to be correct when asBC_ALLOC pushes the pointer to the allocated variable on
-	// the stack. As far as I am aware allocating AS_PTR_SIZE extra bytes to the stack unconditionally should work
-	// around the problem. It would be better if asllvm did not require pushing to the stack _at all_ but this implies
-	// some refactoring. See also:
+	// TODO: stackNeeded does not appear to be correct when asBC_ALLOC pushes the pointer to the allocated variable
+	// on the stack. As far as I am aware allocating AS_PTR_SIZE extra bytes to the stack unconditionally should
+	// work around the problem. It would be better if asllvm did not require pushing to the stack _at all_ but this
+	// implies some refactoring. See also:
 	// https://www.gamedev.net/forums/topic/706619-scriptfunctiondatastackneeded-does-not-account-for-asbc_alloc-potential-stack-push/
 	constexpr long extra_stack_space_workaround = AS_PTR_SIZE;
 
