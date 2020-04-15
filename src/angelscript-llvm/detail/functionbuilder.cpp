@@ -820,13 +820,31 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 	case asBC_DIVd: emit_stack_arithmetic(instruction, llvm::Instruction::FDiv, defs.f64); break;
 	case asBC_MODd: emit_stack_arithmetic(instruction, llvm::Instruction::FRem, defs.f64); break;
 
-	case asBC_ADDIi: emit_stack_arithmetic_imm(instruction, llvm::Instruction::Add, defs.i32); break;
-	case asBC_SUBIi: emit_stack_arithmetic_imm(instruction, llvm::Instruction::Sub, defs.i32); break;
-	case asBC_MULIi: emit_stack_arithmetic_imm(instruction, llvm::Instruction::Mul, defs.i32); break;
+	case asBC_ADDIi:
+		emit_stack_arithmetic_imm(
+			instruction, llvm::Instruction::Add, defs.i32, llvm::ConstantInt::get(defs.i32, instruction.arg_int(1)));
+		break;
+	case asBC_SUBIi:
+		emit_stack_arithmetic_imm(
+			instruction, llvm::Instruction::Sub, defs.i32, llvm::ConstantInt::get(defs.i32, instruction.arg_int(1)));
+		break;
+	case asBC_MULIi:
+		emit_stack_arithmetic_imm(
+			instruction, llvm::Instruction::Mul, defs.i32, llvm::ConstantInt::get(defs.i32, instruction.arg_int(1)));
+		break;
 
-	case asBC_ADDIf: emit_stack_arithmetic_imm(instruction, llvm::Instruction::FAdd, defs.f32); break;
-	case asBC_SUBIf: emit_stack_arithmetic_imm(instruction, llvm::Instruction::FSub, defs.f32); break;
-	case asBC_MULIf: emit_stack_arithmetic_imm(instruction, llvm::Instruction::FMul, defs.f32); break;
+	case asBC_ADDIf:
+		emit_stack_arithmetic_imm(
+			instruction, llvm::Instruction::FAdd, defs.f32, llvm::ConstantFP::get(defs.f32, instruction.arg_float(1)));
+		break;
+	case asBC_SUBIf:
+		emit_stack_arithmetic_imm(
+			instruction, llvm::Instruction::FSub, defs.f32, llvm::ConstantFP::get(defs.f32, instruction.arg_float(1)));
+		break;
+	case asBC_MULIf:
+		emit_stack_arithmetic_imm(
+			instruction, llvm::Instruction::FMul, defs.f32, llvm::ConstantFP::get(defs.f32, instruction.arg_float(1)));
+		break;
 
 	case asBC_SetG4:
 	{
@@ -1141,14 +1159,12 @@ void FunctionBuilder::emit_stack_arithmetic(
 }
 
 void FunctionBuilder::emit_stack_arithmetic_imm(
-	BytecodeInstruction instruction, llvm::Instruction::BinaryOps op, llvm::Type* type)
+	BytecodeInstruction instruction, llvm::Instruction::BinaryOps op, llvm::Type* type, llvm::Value* immediate)
 {
-	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
-	CommonDefinitions& defs = m_compiler.builder().definitions();
+	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
 
 	llvm::Value* lhs    = load_stack_value(instruction.arg_sword1(), type);
-	llvm::Value* rhs    = llvm::ConstantInt::get(defs.i32, instruction.arg_int(1)); // TODO: only works on ints
-	llvm::Value* result = ir.CreateBinOp(op, lhs, rhs);
+	llvm::Value* result = ir.CreateBinOp(op, lhs, immediate);
 	store_stack_value(instruction.arg_sword0(), result);
 }
 
