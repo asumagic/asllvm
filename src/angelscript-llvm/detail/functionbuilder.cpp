@@ -375,8 +375,8 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 	case asBC_TP: unimpl(); break;
 	case asBC_TNP: unimpl(); break;
 	case asBC_NEGi: emit_neg(instruction, defs.i32); break;
-	case asBC_NEGf: unimpl(); break;
-	case asBC_NEGd: unimpl(); break;
+	case asBC_NEGf: emit_neg(instruction, defs.f32); break;
+	case asBC_NEGd: emit_neg(instruction, defs.f64); break;
 	case asBC_INCi16: emit_increment(defs.i16, 1); break;
 	case asBC_INCi8: emit_increment(defs.i8, 1); break;
 	case asBC_DECi16: emit_increment(defs.i16, -1); break;
@@ -1164,9 +1164,11 @@ void FunctionBuilder::emit_neg(BytecodeInstruction instruction, llvm::Type* type
 {
 	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
 
-	llvm::Value* lhs    = llvm::ConstantInt::get(type, 0);
+	const bool is_float = type->isFloatingPointTy();
+
+	llvm::Value* lhs    = is_float ? llvm::ConstantFP::get(type, 0.0) : llvm::ConstantInt::get(type, 0);
 	llvm::Value* rhs    = load_stack_value(instruction.arg_sword0(), type);
-	llvm::Value* result = ir.CreateSub(lhs, rhs);
+	llvm::Value* result = ir.CreateBinOp(is_float ? llvm::Instruction::FSub : llvm::Instruction::Sub, lhs, rhs);
 	store_stack_value(instruction.arg_sword0(), result);
 }
 
