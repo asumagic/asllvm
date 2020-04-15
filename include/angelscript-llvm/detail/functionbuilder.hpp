@@ -85,6 +85,7 @@ class FunctionBuilder
 
 	void emit_neg(BytecodeInstruction instruction, llvm::Type* type);
 	void emit_bit_not(BytecodeInstruction instruction, llvm::Type* type);
+	void emit_condition(llvm::CmpInst::Predicate pred);
 
 	void emit_increment(llvm::Type* value_type, long by);
 

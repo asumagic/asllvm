@@ -367,12 +367,12 @@ void FunctionBuilder::process_instruction(BytecodeInstruction ins)
 		break;
 	}
 
-	case asBC_TZ: unimpl(); break;
-	case asBC_TNZ: unimpl(); break;
-	case asBC_TS: unimpl(); break;
-	case asBC_TNS: unimpl(); break;
-	case asBC_TP: unimpl(); break;
-	case asBC_TNP: unimpl(); break;
+	case asBC_TZ: emit_condition(llvm::CmpInst::ICMP_EQ); break;
+	case asBC_TNZ: emit_condition(llvm::CmpInst::ICMP_NE); break;
+	case asBC_TS: emit_condition(llvm::CmpInst::ICMP_SLT); break;
+	case asBC_TNS: emit_condition(llvm::CmpInst::ICMP_SGE); break;
+	case asBC_TP: emit_condition(llvm::CmpInst::ICMP_SGT); break;
+	case asBC_TNP: emit_condition(llvm::CmpInst::ICMP_SLE); break;
 	case asBC_NEGi: emit_neg(ins, defs.i32); break;
 	case asBC_NEGf: emit_neg(ins, defs.f32); break;
 	case asBC_NEGd: emit_neg(ins, defs.f64); break;
@@ -1163,6 +1163,17 @@ void FunctionBuilder::emit_bit_not(BytecodeInstruction instruction, llvm::Type* 
 	llvm::Value* rhs    = load_stack_value(instruction.arg_sword0(), type);
 	llvm::Value* result = ir.CreateXor(lhs, rhs);
 	store_stack_value(instruction.arg_sword0(), result);
+}
+
+void FunctionBuilder::emit_condition(llvm::CmpInst::Predicate pred)
+{
+	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
+	CommonDefinitions& defs = m_compiler.builder().definitions();
+
+	llvm::Value* lhs    = load_value_register_value(defs.i32);
+	llvm::Value* rhs    = llvm::ConstantInt::get(defs.i32, 0);
+	llvm::Value* result = ir.CreateICmp(pred, lhs, rhs);
+	store_value_register_value(ir.CreateZExt(result, defs.i64));
 }
 
 void FunctionBuilder::emit_increment(llvm::Type* value_type, long by)
