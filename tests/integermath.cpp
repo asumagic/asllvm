@@ -33,6 +33,9 @@ TEST_CASE("32-bit signed math", "[signedmath32]")
 	REQUIRE(run_string("int a = 10, b = -5; print(a * b)") == "-50\n");
 	REQUIRE(run_string("int a = 10, b = -2; print(a / b)") == "-5\n");
 	REQUIRE(run_string("int a = 7, b = 4; print(a % b)") == "3\n");
+
+	REQUIRE(run_string("int a = 10; print(-a)") == "-10\n");
+
 	REQUIRE(run_string("int a = 10; print(++a)") == "11\n");
 	REQUIRE(run_string("int a = 10; print(--a)") == "9\n");
 }
@@ -44,6 +47,9 @@ TEST_CASE("64-bit signed math", "[signedmath64]")
 	REQUIRE(run_string("int64 a = 10, b = -5; print(a * b)") == "-50\n");
 	REQUIRE(run_string("int64 a = 10, b = -2; print(a / b)") == "-5\n");
 	REQUIRE(run_string("int64 a = 7, b = 4; print(a % b)") == "3\n");
+
+	REQUIRE(run_string("int64 a = 10; print(-a)") == "-10\n");
+
 	REQUIRE(run_string("int64 a = 10; print(++a)") == "11\n");
 	REQUIRE(run_string("int64 a = 10; print(--a)") == "9\n");
 }

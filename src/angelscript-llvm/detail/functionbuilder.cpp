@@ -374,7 +374,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 	case asBC_TNS: unimpl(); break;
 	case asBC_TP: unimpl(); break;
 	case asBC_TNP: unimpl(); break;
-	case asBC_NEGi: unimpl(); break;
+	case asBC_NEGi: emit_neg(instruction, defs.i32); break;
 	case asBC_NEGf: unimpl(); break;
 	case asBC_NEGd: unimpl(); break;
 	case asBC_INCi16: emit_increment(defs.i16, 1); break;
@@ -404,13 +404,13 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 		break;
 	}
 
-	case asBC_BNOT: emit_stack_bit_not(instruction, defs.i32); break;
-	case asBC_BAND: emit_stack_arithmetic(instruction, llvm::Instruction::And, defs.i32); break;
-	case asBC_BOR: emit_stack_arithmetic(instruction, llvm::Instruction::Or, defs.i32); break;
-	case asBC_BXOR: emit_stack_arithmetic(instruction, llvm::Instruction::Xor, defs.i32); break;
-	case asBC_BSLL: emit_stack_arithmetic(instruction, llvm::Instruction::Shl, defs.i32); break;
-	case asBC_BSRL: emit_stack_arithmetic(instruction, llvm::Instruction::LShr, defs.i32); break;
-	case asBC_BSRA: emit_stack_arithmetic(instruction, llvm::Instruction::AShr, defs.i32); break;
+	case asBC_BNOT: emit_bit_not(instruction, defs.i32); break;
+	case asBC_BAND: emit_binop(instruction, llvm::Instruction::And, defs.i32); break;
+	case asBC_BOR: emit_binop(instruction, llvm::Instruction::Or, defs.i32); break;
+	case asBC_BXOR: emit_binop(instruction, llvm::Instruction::Xor, defs.i32); break;
+	case asBC_BSLL: emit_binop(instruction, llvm::Instruction::Shl, defs.i32); break;
+	case asBC_BSRL: emit_binop(instruction, llvm::Instruction::LShr, defs.i32); break;
+	case asBC_BSRA: emit_binop(instruction, llvm::Instruction::AShr, defs.i32); break;
 
 	case asBC_COPY: unimpl(); break;
 
@@ -802,48 +802,42 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 	case asBC_uTOd: emit_cast(instruction, llvm::Instruction::UIToFP, defs.i32, defs.f64); break;
 	case asBC_fTOd: emit_cast(instruction, llvm::Instruction::FPExt, defs.f32, defs.f64); break;
 
-	case asBC_ADDi: emit_stack_arithmetic(instruction, llvm::Instruction::Add, defs.i32); break;
-	case asBC_SUBi: emit_stack_arithmetic(instruction, llvm::Instruction::Sub, defs.i32); break;
-	case asBC_MULi: emit_stack_arithmetic(instruction, llvm::Instruction::Mul, defs.i32); break;
-	case asBC_DIVi: emit_stack_arithmetic(instruction, llvm::Instruction::SDiv, defs.i32); break;
-	case asBC_MODi: emit_stack_arithmetic(instruction, llvm::Instruction::SRem, defs.i32); break;
+	case asBC_ADDi: emit_binop(instruction, llvm::Instruction::Add, defs.i32); break;
+	case asBC_SUBi: emit_binop(instruction, llvm::Instruction::Sub, defs.i32); break;
+	case asBC_MULi: emit_binop(instruction, llvm::Instruction::Mul, defs.i32); break;
+	case asBC_DIVi: emit_binop(instruction, llvm::Instruction::SDiv, defs.i32); break;
+	case asBC_MODi: emit_binop(instruction, llvm::Instruction::SRem, defs.i32); break;
 
-	case asBC_ADDf: emit_stack_arithmetic(instruction, llvm::Instruction::FAdd, defs.f32); break;
-	case asBC_SUBf: emit_stack_arithmetic(instruction, llvm::Instruction::FSub, defs.f32); break;
-	case asBC_MULf: emit_stack_arithmetic(instruction, llvm::Instruction::FMul, defs.f32); break;
-	case asBC_DIVf: emit_stack_arithmetic(instruction, llvm::Instruction::FDiv, defs.f32); break;
-	case asBC_MODf: emit_stack_arithmetic(instruction, llvm::Instruction::FRem, defs.f32); break;
+	case asBC_ADDf: emit_binop(instruction, llvm::Instruction::FAdd, defs.f32); break;
+	case asBC_SUBf: emit_binop(instruction, llvm::Instruction::FSub, defs.f32); break;
+	case asBC_MULf: emit_binop(instruction, llvm::Instruction::FMul, defs.f32); break;
+	case asBC_DIVf: emit_binop(instruction, llvm::Instruction::FDiv, defs.f32); break;
+	case asBC_MODf: emit_binop(instruction, llvm::Instruction::FRem, defs.f32); break;
 
-	case asBC_ADDd: emit_stack_arithmetic(instruction, llvm::Instruction::FAdd, defs.f64); break;
-	case asBC_SUBd: emit_stack_arithmetic(instruction, llvm::Instruction::FSub, defs.f64); break;
-	case asBC_MULd: emit_stack_arithmetic(instruction, llvm::Instruction::FMul, defs.f64); break;
-	case asBC_DIVd: emit_stack_arithmetic(instruction, llvm::Instruction::FDiv, defs.f64); break;
-	case asBC_MODd: emit_stack_arithmetic(instruction, llvm::Instruction::FRem, defs.f64); break;
+	case asBC_ADDd: emit_binop(instruction, llvm::Instruction::FAdd, defs.f64); break;
+	case asBC_SUBd: emit_binop(instruction, llvm::Instruction::FSub, defs.f64); break;
+	case asBC_MULd: emit_binop(instruction, llvm::Instruction::FMul, defs.f64); break;
+	case asBC_DIVd: emit_binop(instruction, llvm::Instruction::FDiv, defs.f64); break;
+	case asBC_MODd: emit_binop(instruction, llvm::Instruction::FRem, defs.f64); break;
 
 	case asBC_ADDIi:
-		emit_stack_arithmetic_imm(
-			instruction, llvm::Instruction::Add, defs.i32, llvm::ConstantInt::get(defs.i32, instruction.arg_int(1)));
+		emit_binop(instruction, llvm::Instruction::Add, llvm::ConstantInt::get(defs.i32, instruction.arg_int(1)));
 		break;
 	case asBC_SUBIi:
-		emit_stack_arithmetic_imm(
-			instruction, llvm::Instruction::Sub, defs.i32, llvm::ConstantInt::get(defs.i32, instruction.arg_int(1)));
+		emit_binop(instruction, llvm::Instruction::Sub, llvm::ConstantInt::get(defs.i32, instruction.arg_int(1)));
 		break;
 	case asBC_MULIi:
-		emit_stack_arithmetic_imm(
-			instruction, llvm::Instruction::Mul, defs.i32, llvm::ConstantInt::get(defs.i32, instruction.arg_int(1)));
+		emit_binop(instruction, llvm::Instruction::Mul, llvm::ConstantInt::get(defs.i32, instruction.arg_int(1)));
 		break;
 
 	case asBC_ADDIf:
-		emit_stack_arithmetic_imm(
-			instruction, llvm::Instruction::FAdd, defs.f32, llvm::ConstantFP::get(defs.f32, instruction.arg_float(1)));
+		emit_binop(instruction, llvm::Instruction::FAdd, llvm::ConstantFP::get(defs.f32, instruction.arg_float(1)));
 		break;
 	case asBC_SUBIf:
-		emit_stack_arithmetic_imm(
-			instruction, llvm::Instruction::FSub, defs.f32, llvm::ConstantFP::get(defs.f32, instruction.arg_float(1)));
+		emit_binop(instruction, llvm::Instruction::FSub, llvm::ConstantFP::get(defs.f32, instruction.arg_float(1)));
 		break;
 	case asBC_MULIf:
-		emit_stack_arithmetic_imm(
-			instruction, llvm::Instruction::FMul, defs.f32, llvm::ConstantFP::get(defs.f32, instruction.arg_float(1)));
+		emit_binop(instruction, llvm::Instruction::FMul, llvm::ConstantFP::get(defs.f32, instruction.arg_float(1)));
 		break;
 
 	case asBC_SetG4:
@@ -883,23 +877,23 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 	case asBC_i64TOd: emit_cast(instruction, llvm::Instruction::SIToFP, defs.i64, defs.f64); break;
 	case asBC_u64TOd: emit_cast(instruction, llvm::Instruction::UIToFP, defs.i64, defs.f64); break;
 
-	case asBC_NEGi64: unimpl(); break;
+	case asBC_NEGi64: emit_neg(instruction, defs.i64); break;
 	case asBC_INCi64: emit_increment(defs.i64, 1); break;
 	case asBC_DECi64: emit_increment(defs.i64, -1); break;
-	case asBC_BNOT64: emit_stack_bit_not(instruction, defs.i64); break;
+	case asBC_BNOT64: emit_bit_not(instruction, defs.i64); break;
 
-	case asBC_ADDi64: emit_stack_arithmetic(instruction, llvm::Instruction::Add, defs.i64); break;
-	case asBC_SUBi64: emit_stack_arithmetic(instruction, llvm::Instruction::Sub, defs.i64); break;
-	case asBC_MULi64: emit_stack_arithmetic(instruction, llvm::Instruction::Mul, defs.i64); break;
-	case asBC_DIVi64: emit_stack_arithmetic(instruction, llvm::Instruction::SDiv, defs.i64); break;
-	case asBC_MODi64: emit_stack_arithmetic(instruction, llvm::Instruction::SRem, defs.i64); break;
+	case asBC_ADDi64: emit_binop(instruction, llvm::Instruction::Add, defs.i64); break;
+	case asBC_SUBi64: emit_binop(instruction, llvm::Instruction::Sub, defs.i64); break;
+	case asBC_MULi64: emit_binop(instruction, llvm::Instruction::Mul, defs.i64); break;
+	case asBC_DIVi64: emit_binop(instruction, llvm::Instruction::SDiv, defs.i64); break;
+	case asBC_MODi64: emit_binop(instruction, llvm::Instruction::SRem, defs.i64); break;
 
-	case asBC_BAND64: emit_stack_arithmetic(instruction, llvm::Instruction::And, defs.i64); break;
-	case asBC_BOR64: emit_stack_arithmetic(instruction, llvm::Instruction::Or, defs.i64); break;
-	case asBC_BXOR64: emit_stack_arithmetic(instruction, llvm::Instruction::Xor, defs.i64); break;
-	case asBC_BSLL64: emit_stack_arithmetic(instruction, llvm::Instruction::Shl, defs.i64); break;
-	case asBC_BSRL64: emit_stack_arithmetic(instruction, llvm::Instruction::LShr, defs.i64); break;
-	case asBC_BSRA64: emit_stack_arithmetic(instruction, llvm::Instruction::AShr, defs.i64); break;
+	case asBC_BAND64: emit_binop(instruction, llvm::Instruction::And, defs.i64); break;
+	case asBC_BOR64: emit_binop(instruction, llvm::Instruction::Or, defs.i64); break;
+	case asBC_BXOR64: emit_binop(instruction, llvm::Instruction::Xor, defs.i64); break;
+	case asBC_BSLL64: emit_binop(instruction, llvm::Instruction::Shl, defs.i64); break;
+	case asBC_BSRL64: emit_binop(instruction, llvm::Instruction::LShr, defs.i64); break;
+	case asBC_BSRA64: emit_binop(instruction, llvm::Instruction::AShr, defs.i64); break;
 
 	case asBC_CMPi64: unimpl(); break;
 	case asBC_CMPu64: unimpl(); break;
@@ -939,11 +933,11 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 
 	case asBC_PshV8: push_stack_value(load_stack_value(instruction.arg_sword0(), defs.i64), 2); break;
 
-	case asBC_DIVu: emit_stack_arithmetic(instruction, llvm::Instruction::UDiv, defs.i32); break;
-	case asBC_MODu: emit_stack_arithmetic(instruction, llvm::Instruction::URem, defs.i32); break;
+	case asBC_DIVu: emit_binop(instruction, llvm::Instruction::UDiv, defs.i32); break;
+	case asBC_MODu: emit_binop(instruction, llvm::Instruction::URem, defs.i32); break;
 
-	case asBC_DIVu64: emit_stack_arithmetic(instruction, llvm::Instruction::UDiv, defs.i64); break;
-	case asBC_MODu64: emit_stack_arithmetic(instruction, llvm::Instruction::URem, defs.i64); break;
+	case asBC_DIVu64: emit_binop(instruction, llvm::Instruction::UDiv, defs.i64); break;
+	case asBC_MODu64: emit_binop(instruction, llvm::Instruction::URem, defs.i64); break;
 
 	case asBC_LoadRObjR: unimpl(); break;
 	case asBC_LoadVObjR: unimpl(); break;
@@ -1147,43 +1141,42 @@ void FunctionBuilder::emit_cast(
 	store_stack_value(instruction.arg_sword0(), converted);
 }
 
-void FunctionBuilder::emit_stack_arithmetic(
-	BytecodeInstruction instruction, llvm::Instruction::BinaryOps op, llvm::Type* type)
+void FunctionBuilder::emit_binop(BytecodeInstruction instruction, llvm::Instruction::BinaryOps op, llvm::Type* type)
+{
+	return emit_binop(instruction, op, load_stack_value(instruction.arg_sword2(), type));
+}
+
+void FunctionBuilder::emit_binop(BytecodeInstruction instruction, llvm::Instruction::BinaryOps op, llvm::Value* rhs)
+{
+	llvm::Type* type = rhs->getType();
+	return emit_binop(instruction, op, load_stack_value(instruction.arg_sword1(), type), rhs);
+}
+
+void FunctionBuilder::emit_binop(
+	BytecodeInstruction instruction, llvm::Instruction::BinaryOps op, llvm::Value* lhs, llvm::Value* rhs)
 {
 	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
 
-	llvm::Value* lhs    = load_stack_value(instruction.arg_sword1(), type);
-	llvm::Value* rhs    = load_stack_value(instruction.arg_sword2(), type);
-	llvm::Value* result = ir.CreateBinOp(op, lhs, rhs);
+	store_stack_value(instruction.arg_sword0(), ir.CreateBinOp(op, lhs, rhs));
+}
+
+void FunctionBuilder::emit_neg(BytecodeInstruction instruction, llvm::Type* type)
+{
+	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
+
+	llvm::Value* lhs    = llvm::ConstantInt::get(type, 0);
+	llvm::Value* rhs    = load_stack_value(instruction.arg_sword0(), type);
+	llvm::Value* result = ir.CreateSub(lhs, rhs);
 	store_stack_value(instruction.arg_sword0(), result);
 }
 
-void FunctionBuilder::emit_stack_arithmetic_imm(
-	BytecodeInstruction instruction, llvm::Instruction::BinaryOps op, llvm::Type* type, llvm::Value* immediate)
+void FunctionBuilder::emit_bit_not(BytecodeInstruction instruction, llvm::Type* type)
 {
 	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
 
-	llvm::Value* lhs    = load_stack_value(instruction.arg_sword1(), type);
-	llvm::Value* result = ir.CreateBinOp(op, lhs, immediate);
-	store_stack_value(instruction.arg_sword0(), result);
-}
-
-void FunctionBuilder::emit_stack_unary_arithmetic(
-	BytecodeInstruction instruction, llvm::Instruction::UnaryOps op, llvm::Type* type)
-{
-	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
-
-	llvm::Value* operand = load_stack_value(instruction.arg_sword0(), type);
-	llvm::Value* result  = ir.CreateUnOp(op, operand);
-	store_stack_value(instruction.arg_sword0(), result);
-}
-
-void FunctionBuilder::emit_stack_bit_not(BytecodeInstruction instruction, llvm::Type* type)
-{
-	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
-
-	llvm::Value* operand = load_stack_value(instruction.arg_sword0(), type);
-	llvm::Value* result  = ir.CreateXor(operand, llvm::ConstantInt::get(type, -1));
+	llvm::Value* lhs    = llvm::ConstantInt::get(type, -1);
+	llvm::Value* rhs    = load_stack_value(instruction.arg_sword0(), type);
+	llvm::Value* result = ir.CreateXor(lhs, rhs);
 	store_stack_value(instruction.arg_sword0(), result);
 }
 
