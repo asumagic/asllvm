@@ -3,6 +3,7 @@ add_executable(tests
 	common.cpp
 	integermath.cpp
 	floatmath.cpp
+	booleans.cpp
 	globals.cpp
 	branching.cpp
 	recursion.cpp
