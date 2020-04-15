@@ -82,14 +82,13 @@ void object_field_test()
     print(f.return_string_field());
 }
 */
-/*
+
 void handle_test()
 {
     Foo f1;
     Foo@ f2 = @f1;
     f2.foo(123, 456, 789);
 }
-*/
 
 void take_by_value(Foo foo)
 {

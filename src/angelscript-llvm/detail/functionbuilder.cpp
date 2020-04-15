@@ -930,7 +930,25 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 
 	case asBC_LoadRObjR: unimpl(); break;
 	case asBC_LoadVObjR: unimpl(); break;
-	case asBC_RefCpyV: unimpl(); break;
+
+	case asBC_RefCpyV:
+	{
+		auto& object_type = *reinterpret_cast<asCObjectType*>(instruction.arg_pword());
+		// asSTypeBehaviour& beh         = object_type.beh;
+
+		llvm::Value* destination = get_stack_value_pointer(instruction.arg_sword0(), defs.pvoid);
+		llvm::Value* s           = load_stack_value(m_stack_pointer, defs.pvoid);
+
+		if ((object_type.flags & asOBJ_NOCOUNT) == 0)
+		{
+			m_compiler.diagnostic("STUB: asBC_RefCpyV not updating refcount!");
+		}
+
+		ir.CreateStore(s, destination);
+
+		break;
+	}
+
 	case asBC_JLowZ: unimpl(); break;
 	case asBC_JLowNZ: unimpl(); break;
 	case asBC_AllocMem: unimpl(); break;

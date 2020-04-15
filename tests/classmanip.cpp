@@ -16,7 +16,7 @@ TEST_CASE("user classes", "[userclass]")
 	REQUIRE(run("userclasses.as", "void test()") == "hello\n");
 	REQUIRE(run("userclasses.as", "void method_test()") == "hello\n123\n456\n789\n");
 	REQUIRE(run("userclasses.as", "void method_field_test()") == "hello\n10\n20\n30\n40\n50\n60\n70\n80\n90\n100\n");
-	// REQUIRE(run("userclasses.as", "void handle_test()") == "hello\n123\n456\n789\n");
+	REQUIRE(run("userclasses.as", "void handle_test()") == "hello\n123\n456\n789\n");
 	// REQUIRE(run("userclasses.as", "void return_string_field()") == "world\n");
 
 	// 'hello' displayed twice because of the copy construction
