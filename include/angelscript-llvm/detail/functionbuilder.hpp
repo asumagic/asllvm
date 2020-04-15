@@ -95,7 +95,7 @@ class FunctionBuilder
 	//!		- `1` if `lhs > rhs`
 	//!		- `0` if `lhs == rhs`
 	//!		- `-1` if `lhs < rhs`
-	void emit_integral_compare(llvm::Value* lhs, llvm::Value* rhs);
+	void emit_compare(llvm::Value* lhs, llvm::Value* rhs, bool is_signed = true);
 
 	//! \brief Performs the call to a non-script function \p function with parameters read from the stack.
 	void emit_system_call(asCScriptFunction& function);

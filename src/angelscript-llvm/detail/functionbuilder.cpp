@@ -426,15 +426,36 @@ void FunctionBuilder::process_instruction(BytecodeInstruction ins)
 	}
 
 	case asBC_RDSPtr: unimpl(); break;
-	case asBC_CMPd: unimpl(); break;
-	case asBC_CMPu: unimpl(); break;
-	case asBC_CMPf: unimpl(); break;
+
+	case asBC_CMPd:
+	{
+		llvm::Value* lhs = load_stack_value(ins.arg_sword0(), defs.f64);
+		llvm::Value* rhs = load_stack_value(ins.arg_sword1(), defs.f64);
+		emit_compare(lhs, rhs);
+		break;
+	}
+
+	case asBC_CMPu:
+	{
+		llvm::Value* lhs = load_stack_value(ins.arg_sword0(), defs.i32);
+		llvm::Value* rhs = load_stack_value(ins.arg_sword1(), defs.i32);
+		emit_compare(lhs, rhs, false);
+		break;
+	}
+
+	case asBC_CMPf:
+	{
+		llvm::Value* lhs = load_stack_value(ins.arg_sword0(), defs.f32);
+		llvm::Value* rhs = load_stack_value(ins.arg_sword1(), defs.f32);
+		emit_compare(lhs, rhs);
+		break;
+	}
 
 	case asBC_CMPi:
 	{
 		llvm::Value* lhs = load_stack_value(ins.arg_sword0(), defs.i32);
 		llvm::Value* rhs = load_stack_value(ins.arg_sword1(), defs.i32);
-		emit_integral_compare(lhs, rhs);
+		emit_compare(lhs, rhs);
 		break;
 	}
 
@@ -442,12 +463,26 @@ void FunctionBuilder::process_instruction(BytecodeInstruction ins)
 	{
 		llvm::Value* lhs = load_stack_value(ins.arg_sword0(), defs.i32);
 		llvm::Value* rhs = llvm::ConstantInt::get(defs.i32, ins.arg_int());
-		emit_integral_compare(lhs, rhs);
+		emit_compare(lhs, rhs);
 		break;
 	}
 
-	case asBC_CMPIf: unimpl(); break;
-	case asBC_CMPIu: unimpl(); break;
+	case asBC_CMPIf:
+	{
+		llvm::Value* lhs = load_stack_value(ins.arg_sword0(), defs.f32);
+		llvm::Value* rhs = llvm::ConstantInt::get(defs.f32, ins.arg_float());
+		emit_compare(lhs, rhs);
+		break;
+	}
+
+	case asBC_CMPIu:
+	{
+		llvm::Value* lhs = load_stack_value(ins.arg_sword0(), defs.i32);
+		llvm::Value* rhs = llvm::ConstantInt::get(defs.i32, ins.arg_int());
+		emit_compare(lhs, rhs, false);
+		break;
+	}
+
 	case asBC_JMPP: unimpl(); break;
 	case asBC_PopRPtr: unimpl(); break;
 	case asBC_PshRPtr: unimpl(); break;
@@ -878,8 +913,22 @@ void FunctionBuilder::process_instruction(BytecodeInstruction ins)
 	case asBC_BSRL64: emit_binop(ins, llvm::Instruction::LShr, defs.i64); break;
 	case asBC_BSRA64: emit_binop(ins, llvm::Instruction::AShr, defs.i64); break;
 
-	case asBC_CMPi64: unimpl(); break;
-	case asBC_CMPu64: unimpl(); break;
+	case asBC_CMPi64:
+	{
+		llvm::Value* lhs = load_stack_value(ins.arg_sword0(), defs.i64);
+		llvm::Value* rhs = load_stack_value(ins.arg_sword1(), defs.i64);
+		emit_compare(lhs, rhs);
+		break;
+	}
+
+	case asBC_CMPu64:
+	{
+		llvm::Value* lhs = load_stack_value(ins.arg_sword0(), defs.i64);
+		llvm::Value* rhs = load_stack_value(ins.arg_sword1(), defs.i64);
+		emit_compare(lhs, rhs, false);
+		break;
+	}
+
 	case asBC_ChkNullS: unimpl(); break;
 	case asBC_ClrHi: unimpl(); break;
 
@@ -1191,17 +1240,36 @@ void FunctionBuilder::emit_increment(llvm::Type* value_type, long by)
 	ir.CreateStore(incremented, value_pointer);
 }
 
-void FunctionBuilder::emit_integral_compare(llvm::Value* lhs, llvm::Value* rhs)
+void FunctionBuilder::emit_compare(llvm::Value* lhs, llvm::Value* rhs, bool is_signed)
 {
 	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
 	CommonDefinitions& defs = m_compiler.builder().definitions();
+
+	asllvm_assert(lhs->getType() == rhs->getType());
+
+	const bool is_float = lhs->getType()->isFloatingPointTy();
 
 	llvm::Value* constant_lt = llvm::ConstantInt::get(defs.i32, -1);
 	llvm::Value* constant_eq = llvm::ConstantInt::get(defs.i32, 0);
 	llvm::Value* constant_gt = llvm::ConstantInt::get(defs.i32, 1);
 
-	llvm::Value* lower_than   = ir.CreateICmp(llvm::CmpInst::ICMP_SLT, lhs, rhs);
-	llvm::Value* greater_than = ir.CreateICmp(llvm::CmpInst::ICMP_SGT, lhs, rhs);
+	llvm::Value *lower_than, *greater_than;
+
+	if (is_float)
+	{
+		lower_than   = ir.CreateFCmp(llvm::CmpInst::FCMP_OLT, lhs, rhs);
+		greater_than = ir.CreateFCmp(llvm::CmpInst::FCMP_OGT, lhs, rhs);
+	}
+	else if (is_signed)
+	{
+		lower_than   = ir.CreateICmp(llvm::CmpInst::ICMP_SLT, lhs, rhs);
+		greater_than = ir.CreateICmp(llvm::CmpInst::ICMP_SGT, lhs, rhs);
+	}
+	else
+	{
+		lower_than   = ir.CreateICmp(llvm::CmpInst::ICMP_ULT, lhs, rhs);
+		greater_than = ir.CreateICmp(llvm::CmpInst::ICMP_UGT, lhs, rhs);
+	}
 
 	// lt_or_eq = lhs < rhs ? -1 : 0;
 	llvm::Value* lt_or_eq = ir.CreateSelect(lower_than, constant_lt, constant_eq);
