@@ -999,7 +999,7 @@ std::string FunctionBuilder::disassemble(BytecodeInstruction instruction)
 	{
 	case asBCTYPE_NO_ARG:
 	{
-		return {};
+		return fmt::format("{}", instruction.info->name);
 	}
 
 	case asBCTYPE_W_ARG:
