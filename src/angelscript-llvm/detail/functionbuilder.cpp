@@ -208,7 +208,7 @@ void FunctionBuilder::preprocess_instruction(BytecodeInstruction instruction)
 	}
 }
 
-void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
+void FunctionBuilder::process_instruction(BytecodeInstruction ins)
 {
 	asIScriptEngine&   engine         = m_compiler.engine();
 	llvm::IRBuilder<>& ir             = m_compiler.builder().ir();
@@ -217,7 +217,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 
 	const auto old_stack_pointer = m_stack_pointer;
 
-	if (auto it = m_jump_map.find(instruction.offset); it != m_jump_map.end())
+	if (auto it = m_jump_map.find(ins.offset); it != m_jump_map.end())
 	{
 		asllvm_assert(m_stack_pointer == local_storage_size());
 		switch_to_block(it->second);
@@ -231,7 +231,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 
 	// TODO: handle division by zero by setting an exception on the context for ALL div AND rem ops
 
-	switch (instruction.info->bc)
+	switch (ins.info->bc)
 	{
 	case asBC_PopPtr:
 	{
@@ -243,19 +243,19 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 
 	case asBC_PshC4:
 	{
-		push_stack_value(llvm::ConstantInt::get(defs.i32, instruction.arg_dword()), 1);
+		push_stack_value(llvm::ConstantInt::get(defs.i32, ins.arg_dword()), 1);
 		break;
 	}
 
 	case asBC_PshV4:
 	{
-		push_stack_value(load_stack_value(instruction.arg_sword0(), defs.i32), 1);
+		push_stack_value(load_stack_value(ins.arg_sword0(), defs.i32), 1);
 		break;
 	}
 
 	case asBC_PSF:
 	{
-		push_stack_value(get_stack_value_pointer(instruction.arg_sword0(), defs.iptr), AS_PTR_SIZE);
+		push_stack_value(get_stack_value_pointer(ins.arg_sword0(), defs.iptr), AS_PTR_SIZE);
 		break;
 	}
 
@@ -264,9 +264,8 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 	case asBC_PshG4:
 	{
 		// TODO: common code for global_ptr
-		llvm::Value* global_ptr
-			= ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, instruction.arg_pword()), defs.pi32);
-		llvm::Value* global = ir.CreateLoad(defs.i32, global_ptr);
+		llvm::Value* global_ptr = ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, ins.arg_pword()), defs.pi32);
+		llvm::Value* global     = ir.CreateLoad(defs.i32, global_ptr);
 
 		push_stack_value(global, 1);
 		break;
@@ -276,7 +275,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 
 	case asBC_CALL:
 	{
-		auto& function = static_cast<asCScriptFunction&>(*engine.GetFunctionById(instruction.arg_int()));
+		auto& function = static_cast<asCScriptFunction&>(*engine.GetFunctionById(ins.arg_int()));
 		emit_script_call(function);
 		break;
 	}
@@ -298,13 +297,13 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 			ir.CreateRet(load_value_register_value(m_llvm_function->getReturnType()));
 		}
 
-		m_ret_pointer = instruction.pointer;
+		m_ret_pointer = ins.pointer;
 		break;
 	}
 
 	case asBC_JMP:
 	{
-		ir.CreateBr(get_branch_target(instruction));
+		ir.CreateBr(get_branch_target(ins));
 		break;
 	}
 
@@ -313,7 +312,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 		llvm::Value* condition = ir.CreateICmp(
 			llvm::CmpInst::ICMP_EQ, load_value_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
 
-		ir.CreateCondBr(condition, get_branch_target(instruction), get_conditional_fail_branch_target(instruction));
+		ir.CreateCondBr(condition, get_branch_target(ins), get_conditional_fail_branch_target(ins));
 
 		break;
 	}
@@ -323,7 +322,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 		llvm::Value* condition = ir.CreateICmp(
 			llvm::CmpInst::ICMP_NE, load_value_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
 
-		ir.CreateCondBr(condition, get_branch_target(instruction), get_conditional_fail_branch_target(instruction));
+		ir.CreateCondBr(condition, get_branch_target(ins), get_conditional_fail_branch_target(ins));
 
 		break;
 	}
@@ -333,7 +332,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 		llvm::Value* condition = ir.CreateICmp(
 			llvm::CmpInst::ICMP_SLT, load_value_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
 
-		ir.CreateCondBr(condition, get_branch_target(instruction), get_conditional_fail_branch_target(instruction));
+		ir.CreateCondBr(condition, get_branch_target(ins), get_conditional_fail_branch_target(ins));
 
 		break;
 	}
@@ -343,7 +342,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 		llvm::Value* condition = ir.CreateICmp(
 			llvm::CmpInst::ICMP_SGE, load_value_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
 
-		ir.CreateCondBr(condition, get_branch_target(instruction), get_conditional_fail_branch_target(instruction));
+		ir.CreateCondBr(condition, get_branch_target(ins), get_conditional_fail_branch_target(ins));
 
 		break;
 	}
@@ -353,7 +352,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 		llvm::Value* condition = ir.CreateICmp(
 			llvm::CmpInst::ICMP_SGT, load_value_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
 
-		ir.CreateCondBr(condition, get_branch_target(instruction), get_conditional_fail_branch_target(instruction));
+		ir.CreateCondBr(condition, get_branch_target(ins), get_conditional_fail_branch_target(ins));
 
 		break;
 	}
@@ -363,7 +362,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 		llvm::Value* condition = ir.CreateICmp(
 			llvm::CmpInst::ICMP_SLE, load_value_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
 
-		ir.CreateCondBr(condition, get_branch_target(instruction), get_conditional_fail_branch_target(instruction));
+		ir.CreateCondBr(condition, get_branch_target(ins), get_conditional_fail_branch_target(ins));
 
 		break;
 	}
@@ -374,9 +373,9 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 	case asBC_TNS: unimpl(); break;
 	case asBC_TP: unimpl(); break;
 	case asBC_TNP: unimpl(); break;
-	case asBC_NEGi: emit_neg(instruction, defs.i32); break;
-	case asBC_NEGf: emit_neg(instruction, defs.f32); break;
-	case asBC_NEGd: emit_neg(instruction, defs.f64); break;
+	case asBC_NEGi: emit_neg(ins, defs.i32); break;
+	case asBC_NEGf: emit_neg(ins, defs.f32); break;
+	case asBC_NEGd: emit_neg(ins, defs.f64); break;
 	case asBC_INCi16: emit_increment(defs.i16, 1); break;
 	case asBC_INCi8: emit_increment(defs.i8, 1); break;
 	case asBC_DECi16: emit_increment(defs.i16, -1); break;
@@ -390,39 +389,39 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 
 	case asBC_IncVi:
 	{
-		llvm::Value* value  = load_stack_value(instruction.arg_sword0(), defs.i32);
+		llvm::Value* value  = load_stack_value(ins.arg_sword0(), defs.i32);
 		llvm::Value* result = ir.CreateAdd(value, llvm::ConstantInt::get(defs.i32, 1));
-		store_stack_value(instruction.arg_sword0(), result);
+		store_stack_value(ins.arg_sword0(), result);
 		break;
 	}
 
 	case asBC_DecVi:
 	{
-		llvm::Value* value  = load_stack_value(instruction.arg_sword0(), defs.i32);
+		llvm::Value* value  = load_stack_value(ins.arg_sword0(), defs.i32);
 		llvm::Value* result = ir.CreateSub(value, llvm::ConstantInt::get(defs.i32, 1));
-		store_stack_value(instruction.arg_sword0(), result);
+		store_stack_value(ins.arg_sword0(), result);
 		break;
 	}
 
-	case asBC_BNOT: emit_bit_not(instruction, defs.i32); break;
-	case asBC_BAND: emit_binop(instruction, llvm::Instruction::And, defs.i32); break;
-	case asBC_BOR: emit_binop(instruction, llvm::Instruction::Or, defs.i32); break;
-	case asBC_BXOR: emit_binop(instruction, llvm::Instruction::Xor, defs.i32); break;
-	case asBC_BSLL: emit_binop(instruction, llvm::Instruction::Shl, defs.i32); break;
-	case asBC_BSRL: emit_binop(instruction, llvm::Instruction::LShr, defs.i32); break;
-	case asBC_BSRA: emit_binop(instruction, llvm::Instruction::AShr, defs.i32); break;
+	case asBC_BNOT: emit_bit_not(ins, defs.i32); break;
+	case asBC_BAND: emit_binop(ins, llvm::Instruction::And, defs.i32); break;
+	case asBC_BOR: emit_binop(ins, llvm::Instruction::Or, defs.i32); break;
+	case asBC_BXOR: emit_binop(ins, llvm::Instruction::Xor, defs.i32); break;
+	case asBC_BSLL: emit_binop(ins, llvm::Instruction::Shl, defs.i32); break;
+	case asBC_BSRL: emit_binop(ins, llvm::Instruction::LShr, defs.i32); break;
+	case asBC_BSRA: emit_binop(ins, llvm::Instruction::AShr, defs.i32); break;
 
 	case asBC_COPY: unimpl(); break;
 
 	case asBC_PshC8:
 	{
-		push_stack_value(llvm::ConstantInt::get(defs.i64, instruction.arg_qword()), 2);
+		push_stack_value(llvm::ConstantInt::get(defs.i64, ins.arg_qword()), 2);
 		break;
 	}
 
 	case asBC_PshVPtr:
 	{
-		push_stack_value(load_stack_value(instruction.arg_sword0(), defs.iptr), AS_PTR_SIZE);
+		push_stack_value(load_stack_value(ins.arg_sword0(), defs.iptr), AS_PTR_SIZE);
 		break;
 	}
 
@@ -433,16 +432,16 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 
 	case asBC_CMPi:
 	{
-		llvm::Value* lhs = load_stack_value(instruction.arg_sword0(), defs.i32);
-		llvm::Value* rhs = load_stack_value(instruction.arg_sword1(), defs.i32);
+		llvm::Value* lhs = load_stack_value(ins.arg_sword0(), defs.i32);
+		llvm::Value* rhs = load_stack_value(ins.arg_sword1(), defs.i32);
 		emit_integral_compare(lhs, rhs);
 		break;
 	}
 
 	case asBC_CMPIi:
 	{
-		llvm::Value* lhs = load_stack_value(instruction.arg_sword0(), defs.i32);
-		llvm::Value* rhs = llvm::ConstantInt::get(defs.i32, instruction.arg_int());
+		llvm::Value* lhs = load_stack_value(ins.arg_sword0(), defs.i32);
+		llvm::Value* rhs = llvm::ConstantInt::get(defs.i32, ins.arg_int());
 		emit_integral_compare(lhs, rhs);
 		break;
 	}
@@ -456,7 +455,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 
 	case asBC_CALLSYS:
 	{
-		asCScriptFunction* function = static_cast<asCScriptFunction*>(engine.GetFunctionById(instruction.arg_int()));
+		asCScriptFunction* function = static_cast<asCScriptFunction*>(engine.GetFunctionById(ins.arg_int()));
 		asllvm_assert(function != nullptr);
 		emit_system_call(*function);
 
@@ -477,8 +476,8 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 
 	case asBC_ALLOC:
 	{
-		auto&     type           = *reinterpret_cast<asCObjectType*>(instruction.arg_pword());
-		const int constructor_id = instruction.arg_int(AS_PTR_SIZE);
+		auto&     type           = *reinterpret_cast<asCObjectType*>(ins.arg_pword());
+		const int constructor_id = ins.arg_int(AS_PTR_SIZE);
 
 		// Allocate memory for the object
 		std::array<llvm::Value*, 1> alloc_args{{
@@ -541,17 +540,16 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 
 	case asBC_LOADOBJ:
 	{
-		llvm::Value* pointer_to_object = load_stack_value(instruction.arg_sword0(), defs.pvoid);
+		llvm::Value* pointer_to_object = load_stack_value(ins.arg_sword0(), defs.pvoid);
 		ir.CreateStore(pointer_to_object, m_object_register);
-		store_stack_value(
-			instruction.arg_sword0(), ir.CreatePtrToInt(llvm::ConstantInt::get(defs.iptr, 0), defs.pvoid));
+		store_stack_value(ins.arg_sword0(), ir.CreatePtrToInt(llvm::ConstantInt::get(defs.iptr, 0), defs.pvoid));
 
 		break;
 	}
 
 	case asBC_STOREOBJ:
 	{
-		store_stack_value(instruction.arg_sword0(), ir.CreateLoad(defs.pvoid, m_object_register));
+		store_stack_value(ins.arg_sword0(), ir.CreateLoad(defs.pvoid, m_object_register));
 		ir.CreateStore(ir.CreatePtrToInt(llvm::ConstantInt::get(defs.iptr, 0), defs.pvoid), m_object_register);
 		break;
 	}
@@ -560,7 +558,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 	{
 		// Replace a variable index by a pointer to the value
 
-		llvm::Value* offset_pointer = get_stack_value_pointer(m_stack_pointer - instruction.arg_word0(), defs.iptr);
+		llvm::Value* offset_pointer = get_stack_value_pointer(m_stack_pointer - ins.arg_word0(), defs.iptr);
 		llvm::Value* offset         = ir.CreateLoad(defs.iptr, offset_pointer);
 
 		// Get pointer to where the pointer value on the stack is
@@ -588,7 +586,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 	case asBC_GETOBJREF: unimpl(); break;
 	case asBC_GETREF:
 	{
-		llvm::Value* pointer = get_stack_value_pointer(m_stack_pointer - instruction.arg_word0(), defs.pi32);
+		llvm::Value* pointer = get_stack_value_pointer(m_stack_pointer - ins.arg_word0(), defs.pi32);
 
 		llvm::Value*                      index = ir.CreateLoad(defs.i32, ir.CreateBitCast(pointer, defs.pi32));
 		const std::array<llvm::Value*, 2> indices{{llvm::ConstantInt::get(defs.i64, 0), index}};
@@ -607,13 +605,13 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 	case asBC_SetV2:
 	case asBC_SetV4:
 	{
-		store_stack_value(instruction.arg_sword0(), llvm::ConstantInt::get(defs.i32, instruction.arg_dword()));
+		store_stack_value(ins.arg_sword0(), llvm::ConstantInt::get(defs.i32, ins.arg_dword()));
 		break;
 	}
 
 	case asBC_SetV8:
 	{
-		store_stack_value(instruction.arg_sword0(), llvm::ConstantInt::get(defs.i64, instruction.arg_qword()));
+		store_stack_value(ins.arg_sword0(), llvm::ConstantInt::get(defs.i64, ins.arg_qword()));
 		break;
 	}
 
@@ -624,7 +622,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 		// TODO: Check for null pointer
 		llvm::Value* original_value = ir.CreateLoad(defs.iptr, stack_pointer);
 		llvm::Value* incremented_value
-			= ir.CreateAdd(original_value, llvm::ConstantInt::get(defs.iptr, instruction.arg_sword0()));
+			= ir.CreateAdd(original_value, llvm::ConstantInt::get(defs.iptr, ins.arg_sword0()));
 
 		ir.CreateStore(incremented_value, stack_pointer);
 		break;
@@ -632,8 +630,8 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 
 	case asBC_CpyVtoV4:
 	{
-		auto target = instruction.arg_sword0();
-		auto source = instruction.arg_sword1();
+		auto target = ins.arg_sword0();
+		auto source = ins.arg_sword1();
 
 		store_stack_value(target, load_stack_value(source, defs.i32));
 
@@ -642,8 +640,8 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 
 	case asBC_CpyVtoV8:
 	{
-		auto target = instruction.arg_sword0();
-		auto source = instruction.arg_sword1();
+		auto target = ins.arg_sword0();
+		auto source = ins.arg_sword1();
 
 		store_stack_value(target, load_stack_value(source, defs.i64));
 
@@ -652,48 +650,46 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 
 	case asBC_CpyVtoR4:
 	{
-		store_value_register_value(load_stack_value(instruction.arg_sword0(), defs.i32));
+		store_value_register_value(load_stack_value(ins.arg_sword0(), defs.i32));
 		break;
 	}
 
 	case asBC_CpyVtoR8:
 	{
-		store_value_register_value(load_stack_value(instruction.arg_sword0(), defs.i64));
+		store_value_register_value(load_stack_value(ins.arg_sword0(), defs.i64));
 		break;
 	}
 
 	case asBC_CpyVtoG4:
 	{
-		llvm::Value* global_ptr
-			= ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, instruction.arg_pword()), defs.pi32);
-		llvm::Value* value = load_stack_value(instruction.arg_sword0(), defs.i32);
+		llvm::Value* global_ptr = ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, ins.arg_pword()), defs.pi32);
+		llvm::Value* value      = load_stack_value(ins.arg_sword0(), defs.i32);
 		ir.CreateStore(value, global_ptr);
 		break;
 	}
 
 	case asBC_CpyRtoV4:
 	{
-		store_stack_value(instruction.arg_sword0(), load_value_register_value(defs.i32));
+		store_stack_value(ins.arg_sword0(), load_value_register_value(defs.i32));
 		break;
 	}
 
 	case asBC_CpyRtoV8:
 	{
-		store_stack_value(instruction.arg_sword0(), load_value_register_value(defs.i64));
+		store_stack_value(ins.arg_sword0(), load_value_register_value(defs.i64));
 		break;
 	}
 
 	case asBC_CpyGtoV4:
 	{
-		llvm::Value* global_ptr
-			= ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, instruction.arg_pword()), defs.pi32);
-		store_stack_value(instruction.arg_sword0(), ir.CreateLoad(global_ptr, defs.i32));
+		llvm::Value* global_ptr = ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, ins.arg_pword()), defs.pi32);
+		store_stack_value(ins.arg_sword0(), ir.CreateLoad(global_ptr, defs.i32));
 		break;
 	}
 
 	case asBC_WRTV1:
 	{
-		llvm::Value* value  = load_stack_value(instruction.arg_sword0(), defs.i8);
+		llvm::Value* value  = load_stack_value(ins.arg_sword0(), defs.i8);
 		llvm::Value* target = load_value_register_value(defs.pi8);
 		ir.CreateStore(value, target);
 		break;
@@ -701,7 +697,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 
 	case asBC_WRTV2:
 	{
-		llvm::Value* value  = load_stack_value(instruction.arg_sword0(), defs.i16);
+		llvm::Value* value  = load_stack_value(ins.arg_sword0(), defs.i16);
 		llvm::Value* target = load_value_register_value(defs.pi16);
 		ir.CreateStore(value, target);
 		break;
@@ -709,7 +705,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 
 	case asBC_WRTV4:
 	{
-		llvm::Value* value  = load_stack_value(instruction.arg_sword0(), defs.i32);
+		llvm::Value* value  = load_stack_value(ins.arg_sword0(), defs.i32);
 		llvm::Value* target = load_value_register_value(defs.pi32);
 		ir.CreateStore(value, target);
 		break;
@@ -717,7 +713,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 
 	case asBC_WRTV8:
 	{
-		llvm::Value* value  = load_stack_value(instruction.arg_sword0(), defs.i64);
+		llvm::Value* value  = load_stack_value(ins.arg_sword0(), defs.i64);
 		llvm::Value* target = load_value_register_value(defs.pi64);
 		ir.CreateStore(value, target);
 		break;
@@ -728,7 +724,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 		llvm::Value* source_pointer = load_value_register_value(defs.pi8);
 		llvm::Value* source_word    = ir.CreateLoad(defs.i8, source_pointer);
 		llvm::Value* source         = ir.CreateZExt(source_word, defs.i32);
-		store_stack_value(instruction.arg_sword0(), source);
+		store_stack_value(ins.arg_sword0(), source);
 		break;
 	}
 
@@ -737,7 +733,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 		llvm::Value* source_pointer = load_value_register_value(defs.pi16);
 		llvm::Value* source_word    = ir.CreateLoad(defs.i16, source_pointer);
 		llvm::Value* source         = ir.CreateZExt(source_word, defs.i32);
-		store_stack_value(instruction.arg_sword0(), source);
+		store_stack_value(ins.arg_sword0(), source);
 		break;
 	}
 
@@ -745,7 +741,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 	{
 		llvm::Value* source_pointer = load_value_register_value(defs.pi32);
 		llvm::Value* source         = ir.CreateLoad(defs.i32, source_pointer);
-		store_stack_value(instruction.arg_sword0(), source);
+		store_stack_value(ins.arg_sword0(), source);
 		break;
 	}
 
@@ -753,26 +749,25 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 	{
 		llvm::Value* source_pointer = load_value_register_value(defs.pi64);
 		llvm::Value* source         = ir.CreateLoad(defs.i64, source_pointer);
-		store_stack_value(instruction.arg_sword0(), source);
+		store_stack_value(ins.arg_sword0(), source);
 		break;
 	}
 
 	case asBC_LDG:
 	{
-		store_value_register_value(
-			ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, instruction.arg_pword()), defs.pvoid));
+		store_value_register_value(ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, ins.arg_pword()), defs.pvoid));
 		break;
 	}
 
 	case asBC_LDV:
 	{
-		store_value_register_value(get_stack_value_pointer(instruction.arg_sword0(), defs.pvoid));
+		store_value_register_value(get_stack_value_pointer(ins.arg_sword0(), defs.pvoid));
 		break;
 	}
 
 	case asBC_PGA:
 	{
-		push_stack_value(llvm::ConstantInt::get(defs.i64, instruction.arg_pword()), AS_PTR_SIZE);
+		push_stack_value(llvm::ConstantInt::get(defs.i64, ins.arg_pword()), AS_PTR_SIZE);
 		break;
 	}
 
@@ -780,70 +775,58 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 
 	case asBC_VAR:
 	{
-		push_stack_value(llvm::ConstantInt::get(defs.i64, instruction.arg_sword0()), AS_PTR_SIZE);
+		push_stack_value(llvm::ConstantInt::get(defs.i64, ins.arg_sword0()), AS_PTR_SIZE);
 		break;
 	}
 
-	case asBC_iTOf: emit_cast(instruction, llvm::Instruction::SIToFP, defs.i32, defs.f32); break;
-	case asBC_fTOi: emit_cast(instruction, llvm::Instruction::FPToSI, defs.f32, defs.i32); break;
-	case asBC_uTOf: emit_cast(instruction, llvm::Instruction::UIToFP, defs.i32, defs.f32); break;
-	case asBC_fTOu: emit_cast(instruction, llvm::Instruction::FPToUI, defs.f32, defs.i32); break;
+	case asBC_iTOf: emit_cast(ins, llvm::Instruction::SIToFP, defs.i32, defs.f32); break;
+	case asBC_fTOi: emit_cast(ins, llvm::Instruction::FPToSI, defs.f32, defs.i32); break;
+	case asBC_uTOf: emit_cast(ins, llvm::Instruction::UIToFP, defs.i32, defs.f32); break;
+	case asBC_fTOu: emit_cast(ins, llvm::Instruction::FPToUI, defs.f32, defs.i32); break;
 
-	case asBC_sbTOi: emit_cast(instruction, llvm::Instruction::SExt, defs.i8, defs.i32); break;
-	case asBC_swTOi: emit_cast(instruction, llvm::Instruction::SExt, defs.i16, defs.i32); break;
-	case asBC_ubTOi: emit_cast(instruction, llvm::Instruction::ZExt, defs.i8, defs.i32); break;
-	case asBC_uwTOi: emit_cast(instruction, llvm::Instruction::ZExt, defs.i16, defs.i32); break;
+	case asBC_sbTOi: emit_cast(ins, llvm::Instruction::SExt, defs.i8, defs.i32); break;
+	case asBC_swTOi: emit_cast(ins, llvm::Instruction::SExt, defs.i16, defs.i32); break;
+	case asBC_ubTOi: emit_cast(ins, llvm::Instruction::ZExt, defs.i8, defs.i32); break;
+	case asBC_uwTOi: emit_cast(ins, llvm::Instruction::ZExt, defs.i16, defs.i32); break;
 
-	case asBC_dTOi: emit_cast(instruction, llvm::Instruction::FPToSI, defs.f64, defs.i32); break;
-	case asBC_dTOu: emit_cast(instruction, llvm::Instruction::FPToUI, defs.f64, defs.i32); break;
-	case asBC_dTOf: emit_cast(instruction, llvm::Instruction::FPTrunc, defs.f64, defs.f32); break;
+	case asBC_dTOi: emit_cast(ins, llvm::Instruction::FPToSI, defs.f64, defs.i32); break;
+	case asBC_dTOu: emit_cast(ins, llvm::Instruction::FPToUI, defs.f64, defs.i32); break;
+	case asBC_dTOf: emit_cast(ins, llvm::Instruction::FPTrunc, defs.f64, defs.f32); break;
 
-	case asBC_iTOd: emit_cast(instruction, llvm::Instruction::SIToFP, defs.i32, defs.f64); break;
-	case asBC_uTOd: emit_cast(instruction, llvm::Instruction::UIToFP, defs.i32, defs.f64); break;
-	case asBC_fTOd: emit_cast(instruction, llvm::Instruction::FPExt, defs.f32, defs.f64); break;
+	case asBC_iTOd: emit_cast(ins, llvm::Instruction::SIToFP, defs.i32, defs.f64); break;
+	case asBC_uTOd: emit_cast(ins, llvm::Instruction::UIToFP, defs.i32, defs.f64); break;
+	case asBC_fTOd: emit_cast(ins, llvm::Instruction::FPExt, defs.f32, defs.f64); break;
 
-	case asBC_ADDi: emit_binop(instruction, llvm::Instruction::Add, defs.i32); break;
-	case asBC_SUBi: emit_binop(instruction, llvm::Instruction::Sub, defs.i32); break;
-	case asBC_MULi: emit_binop(instruction, llvm::Instruction::Mul, defs.i32); break;
-	case asBC_DIVi: emit_binop(instruction, llvm::Instruction::SDiv, defs.i32); break;
-	case asBC_MODi: emit_binop(instruction, llvm::Instruction::SRem, defs.i32); break;
+	case asBC_ADDi: emit_binop(ins, llvm::Instruction::Add, defs.i32); break;
+	case asBC_SUBi: emit_binop(ins, llvm::Instruction::Sub, defs.i32); break;
+	case asBC_MULi: emit_binop(ins, llvm::Instruction::Mul, defs.i32); break;
+	case asBC_DIVi: emit_binop(ins, llvm::Instruction::SDiv, defs.i32); break;
+	case asBC_MODi: emit_binop(ins, llvm::Instruction::SRem, defs.i32); break;
 
-	case asBC_ADDf: emit_binop(instruction, llvm::Instruction::FAdd, defs.f32); break;
-	case asBC_SUBf: emit_binop(instruction, llvm::Instruction::FSub, defs.f32); break;
-	case asBC_MULf: emit_binop(instruction, llvm::Instruction::FMul, defs.f32); break;
-	case asBC_DIVf: emit_binop(instruction, llvm::Instruction::FDiv, defs.f32); break;
-	case asBC_MODf: emit_binop(instruction, llvm::Instruction::FRem, defs.f32); break;
+	case asBC_ADDf: emit_binop(ins, llvm::Instruction::FAdd, defs.f32); break;
+	case asBC_SUBf: emit_binop(ins, llvm::Instruction::FSub, defs.f32); break;
+	case asBC_MULf: emit_binop(ins, llvm::Instruction::FMul, defs.f32); break;
+	case asBC_DIVf: emit_binop(ins, llvm::Instruction::FDiv, defs.f32); break;
+	case asBC_MODf: emit_binop(ins, llvm::Instruction::FRem, defs.f32); break;
 
-	case asBC_ADDd: emit_binop(instruction, llvm::Instruction::FAdd, defs.f64); break;
-	case asBC_SUBd: emit_binop(instruction, llvm::Instruction::FSub, defs.f64); break;
-	case asBC_MULd: emit_binop(instruction, llvm::Instruction::FMul, defs.f64); break;
-	case asBC_DIVd: emit_binop(instruction, llvm::Instruction::FDiv, defs.f64); break;
-	case asBC_MODd: emit_binop(instruction, llvm::Instruction::FRem, defs.f64); break;
+	case asBC_ADDd: emit_binop(ins, llvm::Instruction::FAdd, defs.f64); break;
+	case asBC_SUBd: emit_binop(ins, llvm::Instruction::FSub, defs.f64); break;
+	case asBC_MULd: emit_binop(ins, llvm::Instruction::FMul, defs.f64); break;
+	case asBC_DIVd: emit_binop(ins, llvm::Instruction::FDiv, defs.f64); break;
+	case asBC_MODd: emit_binop(ins, llvm::Instruction::FRem, defs.f64); break;
 
-	case asBC_ADDIi:
-		emit_binop(instruction, llvm::Instruction::Add, llvm::ConstantInt::get(defs.i32, instruction.arg_int(1)));
-		break;
-	case asBC_SUBIi:
-		emit_binop(instruction, llvm::Instruction::Sub, llvm::ConstantInt::get(defs.i32, instruction.arg_int(1)));
-		break;
-	case asBC_MULIi:
-		emit_binop(instruction, llvm::Instruction::Mul, llvm::ConstantInt::get(defs.i32, instruction.arg_int(1)));
-		break;
+	case asBC_ADDIi: emit_binop(ins, llvm::Instruction::Add, llvm::ConstantInt::get(defs.i32, ins.arg_int(1))); break;
+	case asBC_SUBIi: emit_binop(ins, llvm::Instruction::Sub, llvm::ConstantInt::get(defs.i32, ins.arg_int(1))); break;
+	case asBC_MULIi: emit_binop(ins, llvm::Instruction::Mul, llvm::ConstantInt::get(defs.i32, ins.arg_int(1))); break;
 
-	case asBC_ADDIf:
-		emit_binop(instruction, llvm::Instruction::FAdd, llvm::ConstantFP::get(defs.f32, instruction.arg_float(1)));
-		break;
-	case asBC_SUBIf:
-		emit_binop(instruction, llvm::Instruction::FSub, llvm::ConstantFP::get(defs.f32, instruction.arg_float(1)));
-		break;
-	case asBC_MULIf:
-		emit_binop(instruction, llvm::Instruction::FMul, llvm::ConstantFP::get(defs.f32, instruction.arg_float(1)));
-		break;
+	case asBC_ADDIf: emit_binop(ins, llvm::Instruction::FAdd, llvm::ConstantFP::get(defs.f32, ins.arg_float(1))); break;
+	case asBC_SUBIf: emit_binop(ins, llvm::Instruction::FSub, llvm::ConstantFP::get(defs.f32, ins.arg_float(1))); break;
+	case asBC_MULIf: emit_binop(ins, llvm::Instruction::FMul, llvm::ConstantFP::get(defs.f32, ins.arg_float(1))); break;
 
 	case asBC_SetG4:
 	{
-		llvm::Value* pointer = ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, instruction.arg_pword()), defs.pi32);
-		llvm::Value* value   = llvm::ConstantInt::get(defs.i32, instruction.arg_dword(AS_PTR_SIZE));
+		llvm::Value* pointer = ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, ins.arg_pword()), defs.pi32);
+		llvm::Value* value   = llvm::ConstantInt::get(defs.i32, ins.arg_dword(AS_PTR_SIZE));
 		ir.CreateStore(value, pointer);
 		break;
 	}
@@ -853,47 +836,47 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 
 	case asBC_CALLINTF:
 	{
-		auto& function = static_cast<asCScriptFunction&>(*engine.GetFunctionById(instruction.arg_int()));
+		auto& function = static_cast<asCScriptFunction&>(*engine.GetFunctionById(ins.arg_int()));
 		emit_script_call(function);
 		break;
 	}
 
-	case asBC_iTOb: emit_cast(instruction, llvm::Instruction::Trunc, defs.i32, defs.i8); break;
-	case asBC_iTOw: emit_cast(instruction, llvm::Instruction::Trunc, defs.i32, defs.i16); break;
+	case asBC_iTOb: emit_cast(ins, llvm::Instruction::Trunc, defs.i32, defs.i8); break;
+	case asBC_iTOw: emit_cast(ins, llvm::Instruction::Trunc, defs.i32, defs.i16); break;
 
 	case asBC_Cast: unimpl(); break;
 
-	case asBC_i64TOi: emit_cast(instruction, llvm::Instruction::Trunc, defs.i64, defs.i32); break;
-	case asBC_uTOi64: emit_cast(instruction, llvm::Instruction::ZExt, defs.i32, defs.i64); break;
-	case asBC_iTOi64: emit_cast(instruction, llvm::Instruction::SExt, defs.i32, defs.i64); break;
+	case asBC_i64TOi: emit_cast(ins, llvm::Instruction::Trunc, defs.i64, defs.i32); break;
+	case asBC_uTOi64: emit_cast(ins, llvm::Instruction::ZExt, defs.i32, defs.i64); break;
+	case asBC_iTOi64: emit_cast(ins, llvm::Instruction::SExt, defs.i32, defs.i64); break;
 
-	case asBC_fTOi64: emit_cast(instruction, llvm::Instruction::FPToSI, defs.f32, defs.i64); break;
-	case asBC_dTOi64: emit_cast(instruction, llvm::Instruction::FPToSI, defs.f64, defs.i64); break;
-	case asBC_fTOu64: emit_cast(instruction, llvm::Instruction::FPToUI, defs.f32, defs.i64); break;
-	case asBC_dTOu64: emit_cast(instruction, llvm::Instruction::FPToUI, defs.f64, defs.i64); break;
+	case asBC_fTOi64: emit_cast(ins, llvm::Instruction::FPToSI, defs.f32, defs.i64); break;
+	case asBC_dTOi64: emit_cast(ins, llvm::Instruction::FPToSI, defs.f64, defs.i64); break;
+	case asBC_fTOu64: emit_cast(ins, llvm::Instruction::FPToUI, defs.f32, defs.i64); break;
+	case asBC_dTOu64: emit_cast(ins, llvm::Instruction::FPToUI, defs.f64, defs.i64); break;
 
-	case asBC_i64TOf: emit_cast(instruction, llvm::Instruction::SIToFP, defs.i64, defs.f32); break;
-	case asBC_u64TOf: emit_cast(instruction, llvm::Instruction::UIToFP, defs.i64, defs.f32); break;
-	case asBC_i64TOd: emit_cast(instruction, llvm::Instruction::SIToFP, defs.i64, defs.f64); break;
-	case asBC_u64TOd: emit_cast(instruction, llvm::Instruction::UIToFP, defs.i64, defs.f64); break;
+	case asBC_i64TOf: emit_cast(ins, llvm::Instruction::SIToFP, defs.i64, defs.f32); break;
+	case asBC_u64TOf: emit_cast(ins, llvm::Instruction::UIToFP, defs.i64, defs.f32); break;
+	case asBC_i64TOd: emit_cast(ins, llvm::Instruction::SIToFP, defs.i64, defs.f64); break;
+	case asBC_u64TOd: emit_cast(ins, llvm::Instruction::UIToFP, defs.i64, defs.f64); break;
 
-	case asBC_NEGi64: emit_neg(instruction, defs.i64); break;
+	case asBC_NEGi64: emit_neg(ins, defs.i64); break;
 	case asBC_INCi64: emit_increment(defs.i64, 1); break;
 	case asBC_DECi64: emit_increment(defs.i64, -1); break;
-	case asBC_BNOT64: emit_bit_not(instruction, defs.i64); break;
+	case asBC_BNOT64: emit_bit_not(ins, defs.i64); break;
 
-	case asBC_ADDi64: emit_binop(instruction, llvm::Instruction::Add, defs.i64); break;
-	case asBC_SUBi64: emit_binop(instruction, llvm::Instruction::Sub, defs.i64); break;
-	case asBC_MULi64: emit_binop(instruction, llvm::Instruction::Mul, defs.i64); break;
-	case asBC_DIVi64: emit_binop(instruction, llvm::Instruction::SDiv, defs.i64); break;
-	case asBC_MODi64: emit_binop(instruction, llvm::Instruction::SRem, defs.i64); break;
+	case asBC_ADDi64: emit_binop(ins, llvm::Instruction::Add, defs.i64); break;
+	case asBC_SUBi64: emit_binop(ins, llvm::Instruction::Sub, defs.i64); break;
+	case asBC_MULi64: emit_binop(ins, llvm::Instruction::Mul, defs.i64); break;
+	case asBC_DIVi64: emit_binop(ins, llvm::Instruction::SDiv, defs.i64); break;
+	case asBC_MODi64: emit_binop(ins, llvm::Instruction::SRem, defs.i64); break;
 
-	case asBC_BAND64: emit_binop(instruction, llvm::Instruction::And, defs.i64); break;
-	case asBC_BOR64: emit_binop(instruction, llvm::Instruction::Or, defs.i64); break;
-	case asBC_BXOR64: emit_binop(instruction, llvm::Instruction::Xor, defs.i64); break;
-	case asBC_BSLL64: emit_binop(instruction, llvm::Instruction::Shl, defs.i64); break;
-	case asBC_BSRL64: emit_binop(instruction, llvm::Instruction::LShr, defs.i64); break;
-	case asBC_BSRA64: emit_binop(instruction, llvm::Instruction::AShr, defs.i64); break;
+	case asBC_BAND64: emit_binop(ins, llvm::Instruction::And, defs.i64); break;
+	case asBC_BOR64: emit_binop(ins, llvm::Instruction::Or, defs.i64); break;
+	case asBC_BXOR64: emit_binop(ins, llvm::Instruction::Xor, defs.i64); break;
+	case asBC_BSLL64: emit_binop(ins, llvm::Instruction::Shl, defs.i64); break;
+	case asBC_BSRL64: emit_binop(ins, llvm::Instruction::LShr, defs.i64); break;
+	case asBC_BSRA64: emit_binop(ins, llvm::Instruction::AShr, defs.i64); break;
 
 	case asBC_CMPi64: unimpl(); break;
 	case asBC_CMPu64: unimpl(); break;
@@ -909,7 +892,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 
 		// Pass the JitCompiler as the jitArg value, which can be used by lazy_jit_compiler().
 		// TODO: this is probably UB
-		instruction.arg_pword() = reinterpret_cast<asPWORD>(&m_compiler);
+		ins.arg_pword() = reinterpret_cast<asPWORD>(&m_compiler);
 
 		break;
 	}
@@ -923,7 +906,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 
 		// TODO: check for null object
 
-		std::array<llvm::Value*, 1> indices{{llvm::ConstantInt::get(defs.iptr, instruction.arg_sword0())}};
+		std::array<llvm::Value*, 1> indices{{llvm::ConstantInt::get(defs.iptr, ins.arg_sword0())}};
 		llvm::Value*                field = ir.CreateGEP(object, indices);
 
 		store_value_register_value(field);
@@ -931,23 +914,23 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 		break;
 	}
 
-	case asBC_PshV8: push_stack_value(load_stack_value(instruction.arg_sword0(), defs.i64), 2); break;
+	case asBC_PshV8: push_stack_value(load_stack_value(ins.arg_sword0(), defs.i64), 2); break;
 
-	case asBC_DIVu: emit_binop(instruction, llvm::Instruction::UDiv, defs.i32); break;
-	case asBC_MODu: emit_binop(instruction, llvm::Instruction::URem, defs.i32); break;
+	case asBC_DIVu: emit_binop(ins, llvm::Instruction::UDiv, defs.i32); break;
+	case asBC_MODu: emit_binop(ins, llvm::Instruction::URem, defs.i32); break;
 
-	case asBC_DIVu64: emit_binop(instruction, llvm::Instruction::UDiv, defs.i64); break;
-	case asBC_MODu64: emit_binop(instruction, llvm::Instruction::URem, defs.i64); break;
+	case asBC_DIVu64: emit_binop(ins, llvm::Instruction::UDiv, defs.i64); break;
+	case asBC_MODu64: emit_binop(ins, llvm::Instruction::URem, defs.i64); break;
 
 	case asBC_LoadRObjR: unimpl(); break;
 	case asBC_LoadVObjR: unimpl(); break;
 
 	case asBC_RefCpyV:
 	{
-		auto& object_type = *reinterpret_cast<asCObjectType*>(instruction.arg_pword());
+		auto& object_type = *reinterpret_cast<asCObjectType*>(ins.arg_pword());
 		// asSTypeBehaviour& beh         = object_type.beh;
 
-		llvm::Value* destination = get_stack_value_pointer(instruction.arg_sword0(), defs.pvoid);
+		llvm::Value* destination = get_stack_value_pointer(ins.arg_sword0(), defs.pvoid);
 		llvm::Value* s           = load_stack_value(m_stack_pointer, defs.pvoid);
 
 		if ((object_type.flags & asOBJ_NOCOUNT) == 0)
@@ -981,7 +964,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 	}
 	}
 
-	if (const auto expected_increment = instruction.info->stackInc; expected_increment != 0xFFFF)
+	if (const auto expected_increment = ins.info->stackInc; expected_increment != 0xFFFF)
 	{
 		asllvm_assert(m_stack_pointer - old_stack_pointer == expected_increment);
 	}
