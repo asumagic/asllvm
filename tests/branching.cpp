@@ -3,7 +3,13 @@
 TEST_CASE("basic integral comparisons and 'if'", "[ifcmp]")
 {
 	REQUIRE(run_string("int a = 0; if (a >= 0) { print(1); }") == "1\n");
-	REQUIRE(run_string("int a = 0; if (a < 0) { print(1); }").empty());
+	REQUIRE(run_string("int a = 0; if (a < 0) { print(0); } else { print(1); }") == "1\n");
+
+	// Emits JLowZ
+	REQUIRE(run_string("bool a = true; if (a) { print('good'); } else { print('bad'); }") == "good\n");
+
+	// Emits JLowNZ
+	REQUIRE(run_string("bool a = true, b = false; if (a || b) { print('good'); } else { print('bad'); }") == "good\n");
 }
 
 TEST_CASE("simple 'for' looping", "[forloop]")

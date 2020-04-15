@@ -150,9 +150,6 @@ TEST_CASE("floating-point comparisons", "[fpcmp]")
 
 TEST_CASE("misc. boolean logic", "[boolmisc]")
 {
-	// Emits JLowZ
-	REQUIRE(run_string("bool a = true; if (a) { print('good'); } else { print('bad'); }") == "good\n");
-
-	// Emits JLowNZ
-	REQUIRE(run_string("bool a = true, b = false; if (a || b) { print('good'); } else { print('bad'); }") == "good\n");
+	REQUIRE(run_string("bool a = false; print('' + !a);") == "true\n");
+	REQUIRE(run_string("bool a = true; print('' + !a);") == "false\n");
 }

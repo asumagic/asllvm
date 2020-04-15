@@ -262,7 +262,18 @@ void FunctionBuilder::process_instruction(BytecodeInstruction ins)
 	}
 
 	case asBC_SwapPtr: unimpl(); break;
-	case asBC_NOT: unimpl(); break;
+
+	case asBC_NOT:
+	{
+		// TODO: would load_stack_value(..., defs.i1) be _legal_?
+		llvm::Value* source      = load_stack_value(ins.arg_sword0(), defs.i8);
+		llvm::Value* source_bool = ir.CreateTrunc(source, defs.i1);
+		llvm::Value* result
+			= ir.CreateSelect(source_bool, llvm::ConstantInt::get(defs.i32, 0), llvm::ConstantInt::get(defs.i32, 1));
+		store_stack_value(ins.arg_sword0(), result);
+		break;
+	}
+
 	case asBC_PshG4:
 	{
 		// TODO: common code for global_ptr
