@@ -932,7 +932,15 @@ void FunctionBuilder::process_instruction(BytecodeInstruction ins)
 	}
 
 	case asBC_ChkNullS: unimpl(); break;
-	case asBC_ClrHi: unimpl(); break;
+
+	case asBC_ClrHi:
+	{
+		// TODO: untested. What does emit this? Is it possible to see this in final _optimized_ bytecode?
+		llvm::Value* source_value = load_value_register_value(defs.i8);
+		llvm::Value* extended     = ir.CreateZExt(source_value, defs.i32);
+		store_value_register_value(extended);
+		break;
+	}
 
 	case asBC_JitEntry:
 	{
