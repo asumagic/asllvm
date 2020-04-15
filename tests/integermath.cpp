@@ -78,6 +78,7 @@ TEST_CASE("32-bit bitwise logic", "[bitwise32]")
 	REQUIRE(run_string("int32 a = -4354352, b = 2; print(a >> b)") == "1072653236\n");
 	REQUIRE(run_string("int32 a = 4354352, b = 2; print(a >>> b)") == "1088588\n");
 	REQUIRE(run_string("int32 a = -4354352, b = 2; print(a >>> b)") == "-1088588\n");
+	REQUIRE(run_string("int32 a = 0xF0F0F0F0; print(~a)") == "252645135\n");
 }
 
 TEST_CASE("64-bit bitwise logic", "[bitwise64]")
@@ -90,4 +91,5 @@ TEST_CASE("64-bit bitwise logic", "[bitwise64]")
 	REQUIRE(run_string("int64 a = -4354352, b = 2; print(a >> b)") == "4611686018426299316\n");
 	REQUIRE(run_string("int64 a = 4354352, b = 2; print(a >>> b)") == "1088588\n");
 	REQUIRE(run_string("int64 a = -4354352, b = 2; print(a >>> b)") == "-1088588\n");
+	REQUIRE(run_string("int64 a = 0xF0F0F0F0F0F0F0F0; print(~a)") == "1085102592571150095\n");
 }

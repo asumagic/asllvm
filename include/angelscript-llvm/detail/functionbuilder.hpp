@@ -77,6 +77,12 @@ class FunctionBuilder
 	//! \brief Implements an stack arithmetic instruction (immediate variant) \p op with of type \p type.
 	void emit_stack_arithmetic_imm(BytecodeInstruction instruction, llvm::Instruction::BinaryOps op, llvm::Type* type);
 
+	//! \brief Implements an unary stack arithmetic instruction \p op with of type \p type.
+	void emit_stack_unary_arithmetic(BytecodeInstruction instruction, llvm::Instruction::UnaryOps op, llvm::Type* type);
+
+	//! \brief Implements an unary stack arithmetic instruction \p op with of type \p type.
+	void emit_stack_bit_not(BytecodeInstruction instruction, llvm::Type* type);
+
 	void emit_increment(llvm::Type* value_type, long by);
 
 	//! \brief Implements an integral comparison instruction.

@@ -404,8 +404,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 		break;
 	}
 
-	case asBC_BNOT: unimpl(); break;
-
+	case asBC_BNOT: emit_stack_bit_not(instruction, defs.i32); break;
 	case asBC_BAND: emit_stack_arithmetic(instruction, llvm::Instruction::And, defs.i32); break;
 	case asBC_BOR: emit_stack_arithmetic(instruction, llvm::Instruction::Or, defs.i32); break;
 	case asBC_BXOR: emit_stack_arithmetic(instruction, llvm::Instruction::Xor, defs.i32); break;
@@ -869,7 +868,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction instruction)
 	case asBC_NEGi64: unimpl(); break;
 	case asBC_INCi64: emit_increment(defs.i64, 1); break;
 	case asBC_DECi64: emit_increment(defs.i64, -1); break;
-	case asBC_BNOT64: unimpl(); break;
+	case asBC_BNOT64: emit_stack_bit_not(instruction, defs.i64); break;
 
 	case asBC_ADDi64: emit_stack_arithmetic(instruction, llvm::Instruction::Add, defs.i64); break;
 	case asBC_SUBi64: emit_stack_arithmetic(instruction, llvm::Instruction::Sub, defs.i64); break;
@@ -1148,8 +1147,27 @@ void FunctionBuilder::emit_stack_arithmetic_imm(
 	CommonDefinitions& defs = m_compiler.builder().definitions();
 
 	llvm::Value* lhs    = load_stack_value(instruction.arg_sword1(), type);
-	llvm::Value* rhs    = llvm::ConstantInt::get(defs.i32, instruction.arg_int(1));
+	llvm::Value* rhs    = llvm::ConstantInt::get(defs.i32, instruction.arg_int(1)); // TODO: only works on ints
 	llvm::Value* result = ir.CreateBinOp(op, lhs, rhs);
+	store_stack_value(instruction.arg_sword0(), result);
+}
+
+void FunctionBuilder::emit_stack_unary_arithmetic(
+	BytecodeInstruction instruction, llvm::Instruction::UnaryOps op, llvm::Type* type)
+{
+	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
+
+	llvm::Value* operand = load_stack_value(instruction.arg_sword0(), type);
+	llvm::Value* result  = ir.CreateUnOp(op, operand);
+	store_stack_value(instruction.arg_sword0(), result);
+}
+
+void FunctionBuilder::emit_stack_bit_not(BytecodeInstruction instruction, llvm::Type* type)
+{
+	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
+
+	llvm::Value* operand = load_stack_value(instruction.arg_sword0(), type);
+	llvm::Value* result  = ir.CreateXor(operand, llvm::ConstantInt::get(type, -1));
 	store_stack_value(instruction.arg_sword0(), result);
 }
 
