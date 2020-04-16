@@ -103,6 +103,9 @@ class FunctionBuilder
 	//! \brief Performs the call to a script function \p function with parameters read from the stack.
 	void emit_script_call(asCScriptFunction& function);
 
+	//! \brief Performs the call to a script or system function \p function.
+	void emit_call(asCScriptFunction& function);
+
 	//! \brief Load a LLVM value of type \p type from a stack variable of identifier \p i.
 	llvm::Value* load_stack_value(StackVariableIdentifier i, llvm::Type* type);
 

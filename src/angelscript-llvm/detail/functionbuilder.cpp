@@ -582,7 +582,46 @@ void FunctionBuilder::process_instruction(BytecodeInstruction ins)
 
 	case asBC_FREE:
 	{
-		m_compiler.diagnostic("STUB: not freeing user object!!", asMSGTYPE_WARNING);
+		/*asCObjectType&    object_type = *reinterpret_cast<asCObjectType*>(ins.arg_pword());
+		asSTypeBehaviour& beh         = object_type.beh;
+
+		// TODO: check for null pointer (and ignore if so)
+
+		llvm::Value* variable_pointer = get_stack_value_pointer(ins.arg_sword0(), defs.pvoid);
+		llvm::Value* object_pointer   = ir.CreateLoad(defs.pvoid, variable_pointer);
+
+		if ((object_type.flags & asOBJ_REF) != 0)
+		{
+			asllvm_assert((object_type.flags & asOBJ_NOCOUNT) != 0 || beh.release != 0);
+
+			if (beh.release != 0)
+			{
+				// Push the stack value for the release call
+				// HACK: hilariously enough we rely on the workaround for the AS bug described in stack_size()
+				push_stack_value(object_pointer, AS_PTR_SIZE);
+				emit_call(*static_cast<asCScriptEngine&>(engine).scriptFunctions[beh.release]);
+			}
+		}
+		else
+		{
+			if (beh.destruct != 0)
+			{
+				push_stack_value(object_pointer, AS_PTR_SIZE);
+				emit_call(*static_cast<asCScriptEngine&>(engine).scriptFunctions[beh.destruct]);
+			}
+			else if ((object_type.flags & asOBJ_LIST_PATTERN) != 0)
+			{
+				m_compiler.diagnostic("STUB: asOBJ_LIST_PATTERN free. this will result in a leak.", asMSGTYPE_WARNING);
+			}
+
+			{
+				std::array<llvm::Value*, 1> args{object_pointer};
+				ir.CreateCall(internal_funcs.free->getFunctionType(), internal_funcs.free, args);
+			}
+		}*/
+
+		m_compiler.diagnostic("STUB: asBC_FREE not freeing user object!", asMSGTYPE_WARNING);
+
 		break;
 	}
 
@@ -1527,6 +1566,32 @@ void FunctionBuilder::emit_script_call(asCScriptFunction& function)
 	}
 
 	m_stack_pointer -= function.GetSpaceNeededForArguments();
+}
+
+void FunctionBuilder::emit_call(asCScriptFunction& function)
+{
+	switch (function.funcType)
+	{
+	case asFUNC_SCRIPT:
+	case asFUNC_VIRTUAL:
+	case asFUNC_DELEGATE:
+	{
+		emit_script_call(function);
+		break;
+	}
+
+	case asFUNC_SYSTEM:
+	{
+		emit_system_call(function);
+		break;
+	}
+
+	default:
+	{
+		asllvm_assert(false && "unhandled function type in emit_call");
+		break;
+	}
+	}
 }
 
 llvm::Value* FunctionBuilder::load_stack_value(StackVariableIdentifier i, llvm::Type* type)

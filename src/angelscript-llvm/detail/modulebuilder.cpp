@@ -191,6 +191,15 @@ InternalFunctions ModuleBuilder::setup_internal_functions()
 	}
 
 	{
+		std::array<llvm::Type*, 1> types{{defs.pvoid}};
+		llvm::Type*                return_type = defs.tvoid;
+
+		llvm::FunctionType* function_type = llvm::FunctionType::get(return_type, types, false);
+		funcs.free                        = llvm::Function::Create(
+			function_type, llvm::Function::ExternalLinkage, 0, "asllvm.private.free", m_llvm_module.get());
+	}
+
+	{
 		std::array<llvm::Type*, 2> types{{defs.pvoid, defs.pvoid}};
 
 		llvm::FunctionType* function_type = llvm::FunctionType::get(defs.tvoid, types, false);
@@ -259,6 +268,7 @@ void ModuleBuilder::link_symbols()
 
 	// TODO: figure out why func->getName() returns an empty string
 	define_function(*userAlloc, "asllvm.private.alloc");
+	define_function(*userFree, "asllvm.private.free");
 	define_function(ScriptObject_Construct, "asllvm.private.script_object_constructor");
 	define_function(virtual_table_lookup, "asllvm.private.virtual_table_lookup");
 
