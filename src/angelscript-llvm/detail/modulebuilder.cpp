@@ -161,10 +161,21 @@ void ModuleBuilder::dump_state() const
 	m_llvm_module->print(llvm::errs(), nullptr);
 }
 
-void* ModuleBuilder::virtual_table_lookup(asCScriptObject* object, asCScriptFunction* function)
+void* ModuleBuilder::script_vtable_lookup(asCScriptObject* object, asCScriptFunction* function)
 {
 	auto& object_type = *static_cast<asCObjectType*>(object->GetObjectType());
 	return reinterpret_cast<void*>(object_type.virtualFunctionTable[function->vfTableIdx]->scriptData->jitFunction);
+}
+
+void* ModuleBuilder::system_vtable_lookup(void* object, asFUNCTION_t func)
+{
+#if defined(__linux__) && defined(__x86_64__)
+	using FunctionPtr = asQWORD (*)();
+	auto vftable      = *(reinterpret_cast<FunctionPtr**>(object));
+	return reinterpret_cast<void*>(vftable[FuncPtrToUInt(func) >> 3]);
+#else
+#	error("virtual function lookups unsupported for this target")
+#endif
 }
 
 bool ModuleBuilder::is_exposed_directly(asIScriptFunction& function) const
@@ -215,11 +226,23 @@ InternalFunctions ModuleBuilder::setup_internal_functions()
 		std::array<llvm::Type*, 2> types{{defs.pvoid, defs.pvoid}};
 
 		llvm::FunctionType* function_type = llvm::FunctionType::get(defs.pvoid, types, false);
-		funcs.vtable_lookup               = llvm::Function::Create(
+		funcs.script_vtable_lookup        = llvm::Function::Create(
 			function_type,
 			llvm::Function::ExternalLinkage,
 			0,
-			"asllvm.private.virtual_table_lookup",
+			"asllvm.private.script_vtable_lookup",
+			m_llvm_module.get());
+	}
+
+	{
+		std::array<llvm::Type*, 2> types{{defs.pvoid, defs.pvoid}};
+
+		llvm::FunctionType* function_type = llvm::FunctionType::get(defs.pvoid, types, false);
+		funcs.system_vtable_lookup        = llvm::Function::Create(
+			function_type,
+			llvm::Function::ExternalLinkage,
+			0,
+			"asllvm.private.system_vtable_lookup",
 			m_llvm_module.get());
 	}
 
@@ -270,7 +293,8 @@ void ModuleBuilder::link_symbols()
 	define_function(*userAlloc, "asllvm.private.alloc");
 	define_function(*userFree, "asllvm.private.free");
 	define_function(ScriptObject_Construct, "asllvm.private.script_object_constructor");
-	define_function(virtual_table_lookup, "asllvm.private.virtual_table_lookup");
+	define_function(script_vtable_lookup, "asllvm.private.script_vtable_lookup");
+	define_function(system_vtable_lookup, "asllvm.private.system_vtable_lookup");
 
 	define_function(fmodf, "fmodf");
 	define_function(fmod, "fmod");

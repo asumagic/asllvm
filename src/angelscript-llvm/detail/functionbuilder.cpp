@@ -1518,7 +1518,7 @@ void FunctionBuilder::emit_script_call(asCScriptFunction& function)
 			defs.pvoid,
 			"virtual_script_function");
 
-		llvm::Function*             lookup = m_module_builder.internal_functions().vtable_lookup;
+		llvm::Function*             lookup = m_module_builder.internal_functions().script_vtable_lookup;
 		std::array<llvm::Value*, 2> lookup_args{{script_object, function_value}};
 
 		llvm::Value* resolved_function = ir.CreateCall(lookup->getFunctionType(), lookup, lookup_args);

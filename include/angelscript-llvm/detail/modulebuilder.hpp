@@ -19,7 +19,7 @@ namespace asllvm::detail
 {
 struct InternalFunctions
 {
-	llvm::Function *alloc, *free, *script_object_constructor, *vtable_lookup;
+	llvm::Function *alloc, *free, *script_object_constructor, *script_vtable_lookup, *system_vtable_lookup;
 };
 
 struct PendingFunction
@@ -53,7 +53,8 @@ class ModuleBuilder
 
 	private:
 	// TODO: move this elsewhere, potentially
-	static void* virtual_table_lookup(asCScriptObject* object, asCScriptFunction* function);
+	static void* script_vtable_lookup(asCScriptObject* object, asCScriptFunction* function);
+	static void* system_vtable_lookup(void* object, asFUNCTION_t func);
 
 	bool is_exposed_directly(asIScriptFunction& function) const;
 
