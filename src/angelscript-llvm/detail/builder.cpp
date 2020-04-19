@@ -58,9 +58,23 @@ llvm::Type* Builder::to_llvm_type(asCDataType& type) const
 
 	if (type.IsObject())
 	{
+		const int type_id = type.GetTypeInfo()->typeId;
+
+		if (const auto it = m_object_types.find(type_id); it != m_object_types.end())
+		{
+			return it->second;
+		}
+
 		std::array<llvm::Type*, 1> types{{llvm::ArrayType::get(m_defs.i8, type.GetSizeInMemoryBytes())}};
 		asllvm_assert(type.GetTypeInfo() != nullptr);
-		return llvm::StructType::create(types, type.GetTypeInfo()->GetName());
+
+		llvm::StructType* struct_type = llvm::StructType::create(types, type.GetTypeInfo()->GetName());
+		m_object_types.emplace(type_id, struct_type);
+
+		// TODO: what makes most sense between declaring this as non-const and having a non-mutable m_object_types
+		// versus this as a const and m_object_types as mutable?
+
+		return struct_type;
 	}
 
 	asllvm_assert(false && "type not supported");

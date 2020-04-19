@@ -7,6 +7,7 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Type.h>
+#include <map>
 
 namespace asllvm::detail
 {
@@ -39,11 +40,12 @@ class Builder
 	std::unique_ptr<llvm::LLVMContext> setup_context();
 	llvm::legacy::PassManager          setup_pass_manager();
 
-	std::unique_ptr<llvm::LLVMContext> m_context;
-	JitCompiler&                       m_compiler;
-	llvm::legacy::PassManager          m_pass_manager;
-	llvm::IRBuilder<>                  m_ir_builder;
-	CommonDefinitions                  m_defs;
+	std::unique_ptr<llvm::LLVMContext>       m_context;
+	JitCompiler&                             m_compiler;
+	llvm::legacy::PassManager                m_pass_manager;
+	llvm::IRBuilder<>                        m_ir_builder;
+	CommonDefinitions                        m_defs;
+	mutable std::map<int, llvm::StructType*> m_object_types;
 };
 
 } // namespace asllvm::detail
