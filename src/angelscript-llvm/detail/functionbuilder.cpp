@@ -241,7 +241,15 @@ void FunctionBuilder::process_instruction(BytecodeInstruction ins)
 		break;
 	}
 
-	case asBC_PshGPtr: unimpl(); break;
+	case asBC_PshGPtr:
+	{
+		llvm::Value* pointer_to_global_address
+			= ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, ins.arg_pword()), defs.iptr->getPointerTo());
+		llvm::Value* global_address = ir.CreateLoad(defs.iptr, pointer_to_global_address);
+
+		push_stack_value(global_address, AS_PTR_SIZE);
+		break;
+	}
 
 	case asBC_PshC4:
 	{
