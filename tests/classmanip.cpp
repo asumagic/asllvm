@@ -24,3 +24,27 @@ TEST_CASE("user classes", "[userclass]")
 		run("userclasses.as", "void pass_by_value_test()")
 		== "hello\nhello\n10\n20\n30\n40\n50\n60\n70\n80\n90\n100\n");
 }
+
+TEST_CASE("virtual system functions", "[sysvirt]")
+{
+	class Base
+	{
+		public:
+		virtual void foo() { out << "Base::foo()\n"; }
+	};
+
+	class Derived final : public Base
+	{
+		public:
+		void foo() override { out << "Derived::foo()\n"; }
+	};
+
+	EngineContext ctx(default_jit_config());
+	ctx.engine->RegisterObjectType("Base", sizeof(Base), asOBJ_REF | asOBJ_NOCOUNT);
+	ctx.engine->RegisterObjectMethod("Base", "void foo()", asMETHOD(Base, foo), asCALL_THISCALL);
+
+	Derived b;
+	ctx.engine->RegisterGlobalProperty("Base@ b", &b);
+
+	REQUIRE(run_string(ctx, "b.foo()") == "Derived::foo()\n");
+}

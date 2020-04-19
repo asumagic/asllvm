@@ -32,5 +32,9 @@ struct EngineContext
 	asllvm::JitInterface jit;
 };
 
+asllvm::JitConfig default_jit_config();
+
 std::string run(const char* path, const char* entry = "void main()");
+std::string run(EngineContext& context, const char* path, const char* entry = "void main()");
 std::string run_string(const char* str);
+std::string run_string(EngineContext& context, const char* str);
