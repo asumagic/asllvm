@@ -44,7 +44,7 @@ TEST_CASE("virtual system functions", "[sysvirt]")
 	ctx.engine->RegisterObjectMethod("Base", "void foo()", asMETHOD(Base, foo), asCALL_THISCALL);
 
 	Derived b;
-	ctx.engine->RegisterGlobalProperty("Base@ b", &b);
+	ctx.engine->RegisterGlobalProperty("Base b", &b);
 
 	REQUIRE(run_string(ctx, "b.foo()") == "Derived::foo()\n");
 }

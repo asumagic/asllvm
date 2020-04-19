@@ -56,15 +56,35 @@ llvm::Function* ModuleBuilder::create_function(asCScriptFunction& function)
 
 llvm::Function* ModuleBuilder::get_system_function(asCScriptFunction& system_function)
 {
-	CommonDefinitions&          defs = m_compiler.builder().definitions();
 	asSSystemFunctionInterface& intf = *system_function.sysFuncIntf;
 
 	const int id = system_function.GetId();
-
 	if (auto it = m_system_functions.find(id); it != m_system_functions.end())
 	{
 		return it->second;
 	}
+
+	llvm::Function* function = llvm::Function::Create(
+		get_system_function_type(system_function),
+		llvm::Function::ExternalLinkage,
+		0,
+		make_system_function_name(system_function),
+		m_llvm_module.get());
+
+	if (intf.hostReturnInMemory)
+	{
+		function->addParamAttr(0, llvm::Attribute::StructRet);
+	}
+
+	m_system_functions.emplace(id, function);
+
+	return function;
+}
+
+llvm::FunctionType* ModuleBuilder::get_system_function_type(asCScriptFunction& system_function)
+{
+	CommonDefinitions&          defs = m_compiler.builder().definitions();
+	asSSystemFunctionInterface& intf = *system_function.sysFuncIntf;
 
 	llvm::Type* return_type = defs.tvoid;
 
@@ -90,6 +110,7 @@ llvm::Function* ModuleBuilder::get_system_function(asCScriptFunction& system_fun
 	{
 	// thiscall: add this as first parameter
 	// HACK: this is probably not very crossplatform to do
+	case ICC_VIRTUAL_THISCALL:
 	case ICC_THISCALL:
 	case ICC_CDECL_OBJFIRST:
 	{
@@ -109,23 +130,7 @@ llvm::Function* ModuleBuilder::get_system_function(asCScriptFunction& system_fun
 	default: asllvm_assert(false && "unsupported calling convention");
 	}
 
-	llvm::FunctionType* function_type = llvm::FunctionType::get(return_type, types, false);
-
-	llvm::Function* function = llvm::Function::Create(
-		function_type,
-		llvm::Function::ExternalLinkage,
-		0,
-		make_system_function_name(system_function),
-		m_llvm_module.get());
-
-	if (intf.hostReturnInMemory)
-	{
-		function->addParamAttr(0, llvm::Attribute::StructRet);
-	}
-
-	m_system_functions.emplace(id, function);
-
-	return function;
+	return llvm::FunctionType::get(return_type, types, false);
 }
 
 void ModuleBuilder::build()
@@ -167,12 +172,13 @@ void* ModuleBuilder::script_vtable_lookup(asCScriptObject* object, asCScriptFunc
 	return reinterpret_cast<void*>(object_type.virtualFunctionTable[function->vfTableIdx]->scriptData->jitFunction);
 }
 
-void* ModuleBuilder::system_vtable_lookup(void* object, asFUNCTION_t func)
+void* ModuleBuilder::system_vtable_lookup(void* object, asPWORD func)
 {
+	// TODO: this likely does not have to be a function
 #if defined(__linux__) && defined(__x86_64__)
 	using FunctionPtr = asQWORD (*)();
 	auto vftable      = *(reinterpret_cast<FunctionPtr**>(object));
-	return reinterpret_cast<void*>(vftable[FuncPtrToUInt(func) >> 3]);
+	return reinterpret_cast<void*>(vftable[func >> 3]);
 #else
 #	error("virtual function lookups unsupported for this target")
 #endif

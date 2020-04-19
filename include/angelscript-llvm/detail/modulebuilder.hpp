@@ -41,8 +41,9 @@ class ModuleBuilder
 
 	void append(PendingFunction function);
 
-	llvm::Function* create_function(asCScriptFunction& function);
-	llvm::Function* get_system_function(asCScriptFunction& system_function);
+	llvm::Function*     create_function(asCScriptFunction& function);
+	llvm::Function*     get_system_function(asCScriptFunction& system_function);
+	llvm::FunctionType* get_system_function_type(asCScriptFunction& system_function);
 
 	void build();
 
@@ -54,7 +55,7 @@ class ModuleBuilder
 	private:
 	// TODO: move this elsewhere, potentially
 	static void* script_vtable_lookup(asCScriptObject* object, asCScriptFunction* function);
-	static void* system_vtable_lookup(void* object, asFUNCTION_t func);
+	static void* system_vtable_lookup(void* object, asPWORD func);
 
 	bool is_exposed_directly(asIScriptFunction& function) const;
 

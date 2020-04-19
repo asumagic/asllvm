@@ -17,5 +17,4 @@ std::string make_system_function_name(asIScriptFunction& function)
 {
 	return fmt::format("asllvm.external.{}", function.GetDeclaration(true, true, true));
 }
-
 } // namespace asllvm::detail

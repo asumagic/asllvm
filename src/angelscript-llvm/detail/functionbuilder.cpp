@@ -1369,18 +1369,20 @@ void FunctionBuilder::emit_compare(llvm::Value* lhs, llvm::Value* rhs, bool is_s
 
 void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 {
-	llvm::IRBuilder<>&          ir   = m_compiler.builder().ir();
-	CommonDefinitions&          defs = m_compiler.builder().definitions();
-	asSSystemFunctionInterface& intf = *function.sysFuncIntf;
+	llvm::IRBuilder<>&          ir             = m_compiler.builder().ir();
+	CommonDefinitions&          defs           = m_compiler.builder().definitions();
+	InternalFunctions&          internal_funcs = m_module_builder.internal_functions();
+	asSSystemFunctionInterface& intf           = *function.sysFuncIntf;
 
-	llvm::Function* callee = m_module_builder.get_system_function(function);
+	llvm::FunctionType* callee_type = m_module_builder.get_system_function_type(function);
 
-	const std::size_t         argument_count = callee->arg_size();
+	const std::size_t         argument_count = callee_type->getNumParams();
 	std::vector<llvm::Value*> args(argument_count);
 
 	// TODO: should use references were possible, *const for consistency for now though
-	llvm::Type* const return_type    = callee->getReturnType();
+	llvm::Type* const return_type    = callee_type->getReturnType();
 	llvm::Value*      return_pointer = nullptr;
+	llvm::Value*      object         = nullptr;
 
 	if (function.DoesReturnOnStack() && !intf.hostReturnInMemory)
 	{
@@ -1389,8 +1391,8 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 	}
 
 	const auto pop_sret_pointer = [&] {
-		llvm::Argument* llvm_argument = &*(callee->arg_begin() + 0);
-		llvm::Value*    value         = load_stack_value(m_stack_pointer, llvm_argument->getType());
+		llvm::Type*  param_type = callee_type->getParamType(0);
+		llvm::Value* value      = load_stack_value(m_stack_pointer, param_type);
 		m_stack_pointer -= AS_PTR_SIZE;
 		return value;
 	};
@@ -1398,9 +1400,9 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 	for (std::size_t i = 0, insert_index = 0, script_param_index = 0; i < argument_count; ++i)
 	{
 		const auto pop_param = [&] {
-			llvm::Argument* llvm_argument = &*(callee->arg_begin() + insert_index);
+			llvm::Type* param_type = callee_type->getParamType(insert_index);
 
-			args[insert_index] = load_stack_value(m_stack_pointer, llvm_argument->getType());
+			args[insert_index] = load_stack_value(m_stack_pointer, param_type);
 			m_stack_pointer -= function.parameterTypes[script_param_index].GetSizeOnStackDWords();
 
 			++insert_index;
@@ -1409,6 +1411,7 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 
 		switch (intf.callConv)
 		{
+		case ICC_VIRTUAL_THISCALL:
 		case ICC_THISCALL:
 		case ICC_CDECL_OBJFIRST:
 		{
@@ -1417,8 +1420,7 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 				// 'this' pointer
 				if (i == 0)
 				{
-					llvm::Argument* llvm_argument = &*(callee->arg_begin() + 1);
-					args[1]                       = load_stack_value(m_stack_pointer, llvm_argument->getType());
+					args[1] = object = load_stack_value(m_stack_pointer, callee_type->getParamType(1));
 					m_stack_pointer -= AS_PTR_SIZE;
 					break;
 				}
@@ -1435,8 +1437,7 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 				// 'this' pointer
 				if (i == 0)
 				{
-					llvm::Argument* llvm_argument = &*(callee->arg_begin() + 0);
-					args[0]                       = load_stack_value(m_stack_pointer, llvm_argument->getType());
+					args[0] = object = load_stack_value(m_stack_pointer, callee_type->getParamType(0));
 					m_stack_pointer -= AS_PTR_SIZE;
 					insert_index = 1;
 					break;
@@ -1453,8 +1454,8 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 			// 'this' pointer
 			if (i == 0)
 			{
-				llvm::Argument* llvm_argument = &*(callee->arg_end() - 1);
-				args.back()                   = load_stack_value(m_stack_pointer, llvm_argument->getType());
+				args.back() = object
+					= load_stack_value(m_stack_pointer, callee_type->getParamType(callee_type->getNumParams() - 1));
 				m_stack_pointer -= AS_PTR_SIZE;
 				break;
 			}
@@ -1484,7 +1485,37 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 		}
 	}
 
-	llvm::Value* result = ir.CreateCall(callee->getFunctionType(), callee, args);
+	llvm::Value* callee = nullptr;
+
+	switch (intf.callConv)
+	{
+	// Virtual
+	case ICC_VIRTUAL_THISCALL:
+	{
+		asllvm_assert(object != nullptr);
+
+		std::array<llvm::Value*, 2> lookup_args{
+			object,
+			ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, reinterpret_cast<asPWORD>(intf.func)), defs.pvoid)};
+
+		callee = ir.CreateBitCast(
+			ir.CreateCall(
+				internal_funcs.system_vtable_lookup->getFunctionType(),
+				internal_funcs.system_vtable_lookup,
+				lookup_args),
+			callee_type->getPointerTo());
+
+		break;
+	}
+
+	default:
+	{
+		callee = m_module_builder.get_system_function(function);
+		break;
+	}
+	}
+
+	llvm::Value* result = ir.CreateCall(callee_type, callee, args);
 
 	if (return_pointer == nullptr)
 	{
