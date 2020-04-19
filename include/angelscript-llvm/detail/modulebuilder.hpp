@@ -19,19 +19,21 @@ namespace asllvm::detail
 {
 struct InternalFunctions
 {
-	llvm::Function *alloc, *free, *script_object_constructor, *script_vtable_lookup, *system_vtable_lookup;
+	llvm::Function *alloc, *free, *script_object_constructor, *script_vtable_lookup, *system_vtable_lookup,
+		*call_object_method;
 };
 
 struct PendingFunction
 {
-	asIScriptFunction* function;
+	asCScriptFunction* function;
 	asJITFunction*     jit_function;
 };
 
 struct JitSymbol
 {
-	std::string    name;
-	asJITFunction* jit_function;
+	asCScriptFunction* script_function;
+	std::string        name, entry_name;
+	asJITFunction*     jit_function;
 };
 
 class ModuleBuilder
@@ -56,6 +58,7 @@ class ModuleBuilder
 	// TODO: move this elsewhere, potentially
 	static void* script_vtable_lookup(asCScriptObject* object, asCScriptFunction* function);
 	static void* system_vtable_lookup(void* object, asPWORD func);
+	static void  call_object_method(void* object, asCScriptFunction* function);
 
 	bool is_exposed_directly(asIScriptFunction& function) const;
 

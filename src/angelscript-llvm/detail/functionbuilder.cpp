@@ -114,12 +114,6 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 
 llvm::Function* FunctionBuilder::create_wrapper_function()
 {
-	// No wrapper functions generated for methods
-	if (m_script_function.GetObjectType() != nullptr)
-	{
-		return m_llvm_function;
-	}
-
 	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
 	llvm::LLVMContext& context = m_compiler.builder().context();
 	CommonDefinitions& defs    = m_compiler.builder().definitions();
@@ -590,7 +584,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction ins)
 
 	case asBC_FREE:
 	{
-		/*asCObjectType&    object_type = *reinterpret_cast<asCObjectType*>(ins.arg_pword());
+		asCObjectType&    object_type = *reinterpret_cast<asCObjectType*>(ins.arg_pword());
 		asSTypeBehaviour& beh         = object_type.beh;
 
 		// TODO: check for null pointer (and ignore if so)
@@ -604,18 +598,17 @@ void FunctionBuilder::process_instruction(BytecodeInstruction ins)
 
 			if (beh.release != 0)
 			{
-				// Push the stack value for the release call
-				// HACK: hilariously enough we rely on the workaround for the AS bug described in stack_size()
-				push_stack_value(object_pointer, AS_PTR_SIZE);
-				emit_call(*static_cast<asCScriptEngine&>(engine).scriptFunctions[beh.release]);
+				// emit_object_method_call(static_cast<asCScriptEngine&>(engine).scriptFunctions[beh.release],
+				// object_pointer);
+				m_compiler.diagnostic("STUB: refcounting not well supported yet, not releasing reference!!");
 			}
 		}
 		else
 		{
 			if (beh.destruct != 0)
 			{
-				push_stack_value(object_pointer, AS_PTR_SIZE);
-				emit_call(*static_cast<asCScriptEngine&>(engine).scriptFunctions[beh.destruct]);
+				emit_object_method_call(
+					*static_cast<asCScriptEngine&>(engine).scriptFunctions[beh.destruct], object_pointer);
 			}
 			else if ((object_type.flags & asOBJ_LIST_PATTERN) != 0)
 			{
@@ -626,9 +619,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction ins)
 				std::array<llvm::Value*, 1> args{object_pointer};
 				ir.CreateCall(internal_funcs.free->getFunctionType(), internal_funcs.free, args);
 			}
-		}*/
-
-		m_compiler.diagnostic("STUB: asBC_FREE not freeing user object!", asMSGTYPE_WARNING);
+		}
 
 		break;
 	}
@@ -1631,6 +1622,18 @@ void FunctionBuilder::emit_call(asCScriptFunction& function)
 		break;
 	}
 	}
+}
+
+void FunctionBuilder::emit_object_method_call(asCScriptFunction& function, llvm::Value* object)
+{
+	llvm::IRBuilder<>& ir             = m_compiler.builder().ir();
+	CommonDefinitions& defs           = m_compiler.builder().definitions();
+	InternalFunctions& internal_funcs = m_module_builder.internal_functions();
+
+	std::array<llvm::Value*, 2> args{
+		object, ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, reinterpret_cast<asPWORD>(&function)), defs.pvoid)};
+
+	ir.CreateCall(internal_funcs.call_object_method->getFunctionType(), internal_funcs.call_object_method, args);
 }
 
 llvm::Value* FunctionBuilder::load_stack_value(StackVariableIdentifier i, llvm::Type* type)

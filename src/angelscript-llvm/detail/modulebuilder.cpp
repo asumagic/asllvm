@@ -39,11 +39,8 @@ llvm::Function* ModuleBuilder::create_function(asCScriptFunction& function)
 
 	const std::string name = make_function_name(function);
 
-	llvm::Function* llvm_function = llvm::Function::Create(
-		function_type,
-		is_exposed_directly(function) ? llvm::Function::ExternalLinkage : llvm::Function::InternalLinkage,
-		name,
-		*m_llvm_module);
+	llvm::Function* llvm_function
+		= llvm::Function::Create(function_type, llvm::Function::ExternalLinkage, name, *m_llvm_module);
 
 	// i8* noalias %params
 	(llvm_function->arg_begin() + 0)->setName("params");
@@ -149,9 +146,12 @@ void ModuleBuilder::build()
 	ExitOnError(m_compiler.jit().addIRModule(
 		llvm::orc::ThreadSafeModule(std::move(m_llvm_module), m_compiler.builder().extract_old_context())));
 
-	for (auto& symbol : m_jit_functions)
+	for (JitSymbol& symbol : m_jit_functions)
 	{
-		auto entry           = ExitOnError(m_compiler.jit().lookup(symbol.name));
+		auto function = ExitOnError(m_compiler.jit().lookup(symbol.name));
+		symbol.script_function->SetUserData(reinterpret_cast<void*>(function.getAddress()), vtable_userdata_identifier);
+
+		auto entry           = ExitOnError(m_compiler.jit().lookup(symbol.entry_name));
 		*symbol.jit_function = reinterpret_cast<asJITFunction>(entry.getAddress());
 	}
 }
@@ -169,7 +169,8 @@ void ModuleBuilder::dump_state() const
 void* ModuleBuilder::script_vtable_lookup(asCScriptObject* object, asCScriptFunction* function)
 {
 	auto& object_type = *static_cast<asCObjectType*>(object->GetObjectType());
-	return reinterpret_cast<void*>(object_type.virtualFunctionTable[function->vfTableIdx]->scriptData->jitFunction);
+	return reinterpret_cast<void*>(
+		object_type.virtualFunctionTable[function->vfTableIdx]->GetUserData(vtable_userdata_identifier));
 }
 
 void* ModuleBuilder::system_vtable_lookup(void* object, asPWORD func)
@@ -184,9 +185,12 @@ void* ModuleBuilder::system_vtable_lookup(void* object, asPWORD func)
 #endif
 }
 
-bool ModuleBuilder::is_exposed_directly(asIScriptFunction& function) const
+void ModuleBuilder::call_object_method(void* object, asCScriptFunction* function)
 {
-	return function.GetObjectType() != nullptr;
+	// TODO: this is not very efficient: this performs an extra call into AS that is more generic than we require: we
+	// know a lot of stuff about the function at JIT time.
+	auto& engine = *static_cast<asCScriptEngine*>(function->GetEngine());
+	engine.CallObjectMethod(object, function->GetId());
 }
 
 InternalFunctions ModuleBuilder::setup_internal_functions()
@@ -252,6 +256,18 @@ InternalFunctions ModuleBuilder::setup_internal_functions()
 			m_llvm_module.get());
 	}
 
+	{
+		std::array<llvm::Type*, 2> types{{defs.pvoid, defs.pvoid}};
+
+		llvm::FunctionType* function_type = llvm::FunctionType::get(defs.tvoid, types, false);
+		funcs.call_object_method          = llvm::Function::Create(
+			function_type,
+			llvm::Function::ExternalLinkage,
+			0,
+			"asllvm.private.call_object_method",
+			m_llvm_module.get());
+	}
+
 	return funcs;
 }
 
@@ -275,7 +291,13 @@ void ModuleBuilder::build_functions()
 		builder.read_bytecode(bytecode, length);
 
 		llvm::Function* entry = builder.create_wrapper_function();
-		m_jit_functions.push_back({entry->getName().str(), pending.jit_function});
+
+		JitSymbol symbol;
+		symbol.script_function = pending.function;
+		symbol.name            = make_function_name(*pending.function); // TODO: get it from somewhere
+		symbol.entry_name      = entry->getName();
+		symbol.jit_function    = pending.jit_function;
+		m_jit_functions.push_back(symbol);
 	}
 
 	m_pending_functions.clear();
@@ -301,6 +323,7 @@ void ModuleBuilder::link_symbols()
 	define_function(ScriptObject_Construct, "asllvm.private.script_object_constructor");
 	define_function(script_vtable_lookup, "asllvm.private.script_vtable_lookup");
 	define_function(system_vtable_lookup, "asllvm.private.system_vtable_lookup");
+	define_function(call_object_method, "asllvm.private.call_object_method");
 
 	define_function(fmodf, "fmodf");
 	define_function(fmod, "fmod");
