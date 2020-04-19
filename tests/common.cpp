@@ -1,5 +1,7 @@
 #include "common.hpp"
 
+//#define DEBUG_DISABLE_JIT
+
 #include <iostream>
 #include <scriptbuilder/scriptbuilder.h>
 #include <scriptstdstring/scriptstdstring.h>
@@ -47,7 +49,9 @@ void print_uint(unsigned long value) { out << value << '\n'; }
 EngineContext::EngineContext(asllvm::JitConfig config) : engine{asCreateScriptEngine()}, jit{config}
 {
 	engine->SetEngineProperty(asEP_INCLUDE_JIT_INSTRUCTIONS, true);
+#ifndef DEBUG_DISABLE_JIT
 	asllvm_test_check(engine->SetJITCompiler(&jit) >= 0);
+#endif
 
 	register_interface();
 }
@@ -79,7 +83,9 @@ asIScriptModule& EngineContext::build(const char* name, const char* script_path)
 
 void EngineContext::run(asIScriptModule& module, const char* entry_point)
 {
+#ifndef DEBUG_DISABLE_JIT
 	jit.BuildModules();
+#endif
 
 	asIScriptFunction* function = module.GetFunctionByDecl(entry_point);
 	asllvm_test_check(function != nullptr);
