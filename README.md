@@ -68,6 +68,7 @@ This part is fairly incomplete, but provided to give a general idea:
   - [ ] VM suspend support
 
 \*: `a ** b` (i.e. `pow`) is not implemented yet for any type.
+
 \*\*: Reference counting through handles is implemented as stubs and don't actually perform any freeing for now.
 
 **Due to the design of asllvm, it is not possible to partially JIT modules, or to skip JITting for specific modules.**
@@ -85,9 +86,12 @@ differences with BMS's JIT compiler.
 
 BMS's JIT compiler was made with x86/x86-64 in mind, and cannot be ported to other architectures without a massive
 rewrite.
+
 asllvm is currently only implementing x86-64 Linux gcc support, but porting it to both x86 and x86-64 for Windows, Linux
 and macOS should not be complicated.
+
 x86-64 Linux and x86-64 Windows MinGW support is planned.
+
 Porting asllvm to other architectures is non-trivial, but feasible, but may require some trickery and debugging around
 the ABI support.
 
@@ -113,5 +117,6 @@ Extra dependencies (`{fmt}` and `Catch2`) will be fetched automatically using `h
 ## Usage
 
 There is currently no simple usage example, but you can check [`tests/common.cpp`](tests/common.cpp) to get an idea.
+
 You have to register the JIT as usual. In its current state (this should be changed later on), you *need* to call
 `JitInterface::BuildModules` before any script call.
