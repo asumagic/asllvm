@@ -1,6 +1,6 @@
 # asllvm
 
-A JIT compiler for AngelScript.
+A JIT compiler for AngelScript using LLVM.
 
 ## Current status
 
@@ -9,6 +9,70 @@ is currently very limited.
 
 The tests scattered around `.cpp` and `.as` files in the [`tests/`](tests/) directory should provide an idea of the
 current support.
+
+## Implementation status
+
+In its current state, this is an **incomplete** TODO list:
+
+### General
+
+- [x] Generate, build, optimize and execute translated IR
+- [ ] Complete bytecode support
+
+### Planned platform support
+
+Some specific features might be platform specific behavior and may need changes to port asllvm to other platforms, e.g.:
+- `CommonDefinitions::iptr` is always 64-bit even on 32-bit platforms. This should be detected as needed and used in
+    more places than it currently is.
+- There may be unexpected C++ ABI differences between platforms, so generated external calls may be incorrect.
+
+- [x] x86-64
+  - [x] Linux
+  - [ ] Windows (MinGW)
+
+### Bytecode and feature support
+
+This part is fairly incomplete, but provided to give a general idea:
+
+- [x] Integral arithmetic\*
+- [x] Floating-point arithmetic\*
+- [x] Variables
+  - [x] Globals
+- [x] Branching (`if`, `for`, `while`, `switch` statements)
+- [x] Script function calls
+  - [x] Regular pointers
+  - [ ] Imported functions
+  - [ ] Function pointers
+- [x] Application interface
+  - [ ] List constructors
+  - [x] Object types
+    - [x] Allocation
+    - [x] Pass by value
+    - [x] Pass by reference
+    - [x] Return by value (from system function)
+    - [ ] Return by value (from script function)
+    - [x] Virtual method calls
+    - [ ] Composite calls
+  - [ ] Reference-counted types
+  - [x] Function calls
+- [x] Script classes
+  - [x] Constructing and destructing script classes
+  - [x] Virtual script calls
+    - [ ] Devirtualization optimization
+  - [x] Reference counted types\*\*
+- [ ] VM execution status support
+  - [ ] Exception on null pointer dereference
+  - [ ] Exception on division by zero
+  - [ ] Exception on overflow for some specific arithmetic ops
+  - [ ] Support VM register introspection in system calls (for debugging, etc.)
+  - [ ] VM suspend support
+
+\*: `a ** b` (i.e. `pow`) is not implemented yet for any type.
+\*\*: Reference counting through handles is implemented as stubs and don't actually perform any freeing for now.
+
+**Due to the design of asllvm, it is not possible to partially JIT modules, or to skip JITting for specific modules.**
+The JIT assumes that only supported features are used by your scripts and application interface, or it will yield an
+assertion failure or broken codegen. Any script call from JIT'd code *must* point to a JIT'd function.
 
 ## Comparison, rationale and implementation status
 
