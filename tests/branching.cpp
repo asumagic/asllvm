@@ -24,7 +24,7 @@ TEST_CASE("simple 'while' looping", "[whileloop]")
 
 TEST_CASE("switch statement", "[switch]")
 {
-	REQUIRE(run("switch.as") ==
+	REQUIRE(run("scripts/switch.as") ==
 		"I am Siegward of Catarina.\n"
 		"To be honest, I'm in a bit of a pickle.\n"
 		"Whoever it is, I'm sure I can talk some sense into them.\n"
