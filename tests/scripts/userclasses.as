@@ -40,11 +40,11 @@ class Foo
         print(m10);
     }
 
-    /*string return_string_field()
+    string return_string_field()
     {
         str_field = "world";
         return str_field;
-    }*/
+    }
 
     int8 m1, m2;
     int16 m3;
@@ -75,13 +75,12 @@ void method_field_test()
     Foo f;
     f.use_field();
 }
-/*
-void object_field_test()
+
+void return_field_test()
 {
     Foo f;
     print(f.return_string_field());
 }
-*/
 
 void handle_test()
 {

@@ -50,7 +50,7 @@ This part is fairly incomplete, but provided to give a general idea:
     - [x] Pass by value
     - [x] Pass by reference
     - [x] Return by value (from system function)
-    - [ ] Return by value (from script function)
+    - [x] Return by value (from script function)
     - [x] Virtual method calls
     - [ ] Composite calls
   - [ ] Reference-counted types
