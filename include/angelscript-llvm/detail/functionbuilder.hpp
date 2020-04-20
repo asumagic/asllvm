@@ -7,12 +7,19 @@
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
+#include <map>
 #include <vector>
 
 namespace asllvm::detail
 {
 class FunctionBuilder
 {
+	struct PreprocessContext
+	{
+		long current_switch_offset;
+		bool handling_jump_table = false;
+	};
+
 	public:
 	//! \brief Constructor for FunctionBuilder, usually called by ModuleBuilder::create_function_builder().
 	FunctionBuilder(
@@ -46,7 +53,7 @@ class FunctionBuilder
 	//!		further processing stage.
 	//!		In particular, this creates labels that are used for branching instructions.
 	//! \see read_bytecode()
-	void preprocess_instruction(BytecodeInstruction instruction);
+	void preprocess_instruction(BytecodeInstruction instruction, PreprocessContext& ctx);
 
 	//! \brief Do the dirty work for the current bytecode instruction.
 	//! \details
@@ -194,6 +201,10 @@ class FunctionBuilder
 	//! \brief Map from a bytecode offset to a BasicBlock.
 	//! \see InstructionContext::offset
 	std::map<long, llvm::BasicBlock*> m_jump_map;
+
+	//! \brief Map from the bytecode offset of a asBC_JMPP opcode (used for jump tables) to the offsets of the targets.
+	//! \see InstructionContext::offset
+	std::map<long, std::vector<llvm::BasicBlock*>> m_switch_map;
 
 	//! \brief Pointer to the RET instruction.
 	//! \details AngelScript bytecode functions only use RET once, we can thus assume to have only one exit point.

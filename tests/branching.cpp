@@ -21,3 +21,12 @@ TEST_CASE("simple 'while' looping", "[whileloop]")
 {
 	REQUIRE(run_string("int i = 5; while (i != 7) { print(i); ++i; }") == "5\n6\n");
 }
+
+TEST_CASE("switch statement", "[switch]")
+{
+	REQUIRE(run("switch.as") ==
+		"I am Siegward of Catarina.\n"
+		"To be honest, I'm in a bit of a pickle.\n"
+		"Whoever it is, I'm sure I can talk some sense into them.\n"
+	);
+}

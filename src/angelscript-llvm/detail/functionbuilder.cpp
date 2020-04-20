@@ -73,7 +73,11 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 			fmt::print(stderr, "\n");
 		}
 
-		walk_bytecode([this](BytecodeInstruction instruction) { preprocess_instruction(instruction); });
+		{
+			// TODO: this is a bit dumb
+			PreprocessContext context;
+			walk_bytecode([&](BytecodeInstruction instruction) { preprocess_instruction(instruction, context); });
+		}
 
 		emit_allocate_local_structures();
 
@@ -177,13 +181,29 @@ llvm::Function* FunctionBuilder::create_wrapper_function()
 	return wrapper_function;
 }
 
-void FunctionBuilder::preprocess_instruction(BytecodeInstruction instruction)
+void FunctionBuilder::preprocess_instruction(BytecodeInstruction instruction, PreprocessContext& ctx)
 {
 	switch (instruction.info->bc)
 	{
+	case asBC_JMPP:
+	{
+		ctx.current_switch_offset = instruction.offset;
+		ctx.handling_jump_table   = true;
+		break;
+	}
+
 	case asBC_JMP:
 	{
 		preprocess_unconditional_branch(instruction);
+
+		if (ctx.handling_jump_table)
+		{
+			insert_label(instruction.offset);
+			auto [it, success]      = m_switch_map.emplace(ctx.current_switch_offset, std::vector<llvm::BasicBlock*>());
+			auto& [offset, targets] = *it;
+			targets.push_back(m_jump_map.at(instruction.offset)); // TODO: map lookup is redundant here
+		}
+
 		break;
 	}
 
@@ -196,11 +216,16 @@ void FunctionBuilder::preprocess_instruction(BytecodeInstruction instruction)
 	case asBC_JLowZ:
 	case asBC_JLowNZ:
 	{
+		ctx.handling_jump_table = false;
 		preprocess_conditional_branch(instruction);
 		break;
 	}
 
-	default: break;
+	default:
+	{
+		ctx.handling_jump_table = false;
+		break;
+	}
 	}
 }
 
@@ -498,7 +523,22 @@ void FunctionBuilder::process_instruction(BytecodeInstruction ins)
 		break;
 	}
 
-	case asBC_JMPP: unimpl(); break;
+	case asBC_JMPP:
+	{
+		auto& targets = m_switch_map.at(ins.offset);
+		asllvm_assert(!targets.empty());
+
+		llvm::SwitchInst* inst
+			= ir.CreateSwitch(load_stack_value(ins.arg_sword0(), defs.i32), targets.back(), targets.size());
+
+		for (std::size_t i = 0; i < targets.size(); ++i)
+		{
+			inst->addCase(llvm::ConstantInt::get(defs.i32, i), targets[i]);
+		}
+
+		break;
+	}
+
 	case asBC_PopRPtr: unimpl(); break;
 	case asBC_PshRPtr: unimpl(); break;
 	case asBC_STR: asllvm_assert(false && "STR is deperecated and should not have been emitted by AS"); break;

@@ -123,7 +123,7 @@ CommonDefinitions Builder::setup_common_definitions()
 	defs.pf64  = llvm::Type::getDoublePtrTy(*m_context);
 
 	{
-		std::array types{
+		std::array<llvm::Type*, 8> types{
 			defs.pi32,  // programPointer
 			defs.pi32,  // stackFramePointer
 			defs.pi32,  // stackPointer

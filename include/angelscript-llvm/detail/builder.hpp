@@ -15,7 +15,12 @@ struct CommonDefinitions
 {
 	llvm::Type* vm_registers;
 
-	llvm::Type *tvoid, *i1, *i8, *i16, *i32, *i64, *iptr, *f32, *f64;
+	llvm::Type* tvoid;
+
+	llvm::IntegerType *i1, *i8, *i16, *i32, *i64, *iptr;
+
+	llvm::Type *f32, *f64;
+
 	llvm::Type *pvoid, *pi8, *pi16, *pi32, *pi64, *pf32, *pf64;
 };
 
