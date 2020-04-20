@@ -12,9 +12,8 @@
 
 namespace asllvm::detail
 {
-Builder::Builder(JitCompiler& compiler) :
+Builder::Builder() :
 	m_context{setup_context()},
-	m_compiler{compiler},
 	m_pass_manager{setup_pass_manager()},
 	m_ir_builder{*m_context},
 	m_defs{setup_common_definitions()}

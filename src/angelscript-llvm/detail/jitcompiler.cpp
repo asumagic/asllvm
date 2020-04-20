@@ -21,7 +21,7 @@ JitCompiler::JitCompiler(JitConfig config) :
 	m_llvm_initializer{},
 	m_jit{ExitOnError(llvm::orc::LLJITBuilder().create())},
 	m_config{config},
-	m_builder{*this},
+	m_builder{},
 	m_module_map{*this}
 {}
 
