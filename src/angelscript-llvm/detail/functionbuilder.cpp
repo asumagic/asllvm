@@ -1613,7 +1613,7 @@ void FunctionBuilder::emit_script_call(asCScriptFunction& function)
 
 	{
 		asCDataType& r = function.returnType;
-		asllvm_assert(r.IsPrimitive() || r.IsObjectHandle());
+		asllvm_assert(r.IsPrimitive() || r.IsObjectHandle() || r.IsObject());
 	}
 
 	if (function.returnType.GetTokenType() != ttVoid)
