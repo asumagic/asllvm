@@ -465,7 +465,16 @@ void FunctionBuilder::process_instruction(BytecodeInstruction ins)
 		break;
 	}
 
-	case asBC_RDSPtr: unimpl(); break;
+	case asBC_RDSPtr:
+	{
+		// Dereference pointer from the top of stack, set the top of the stack to the dereferenced value.
+
+		// TODO: check for null address
+		llvm::Value* address = load_stack_value(m_stack_pointer, defs.pvoid->getPointerTo());
+		llvm::Value* value   = ir.CreateLoad(defs.pvoid, address);
+		store_stack_value(m_stack_pointer, value);
+		break;
+	}
 
 	case asBC_CMPd:
 	{
