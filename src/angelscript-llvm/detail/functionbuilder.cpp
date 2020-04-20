@@ -347,65 +347,12 @@ void FunctionBuilder::process_instruction(BytecodeInstruction ins)
 		break;
 	}
 
-	case asBC_JZ:
-	{
-		llvm::Value* condition = ir.CreateICmp(
-			llvm::CmpInst::ICMP_EQ, load_value_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
-
-		ir.CreateCondBr(condition, get_branch_target(ins), get_conditional_fail_branch_target(ins));
-
-		break;
-	}
-
-	case asBC_JNZ:
-	{
-		llvm::Value* condition = ir.CreateICmp(
-			llvm::CmpInst::ICMP_NE, load_value_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
-
-		ir.CreateCondBr(condition, get_branch_target(ins), get_conditional_fail_branch_target(ins));
-
-		break;
-	}
-
-	case asBC_JS:
-	{
-		llvm::Value* condition = ir.CreateICmp(
-			llvm::CmpInst::ICMP_SLT, load_value_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
-
-		ir.CreateCondBr(condition, get_branch_target(ins), get_conditional_fail_branch_target(ins));
-
-		break;
-	}
-
-	case asBC_JNS:
-	{
-		llvm::Value* condition = ir.CreateICmp(
-			llvm::CmpInst::ICMP_SGE, load_value_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
-
-		ir.CreateCondBr(condition, get_branch_target(ins), get_conditional_fail_branch_target(ins));
-
-		break;
-	}
-
-	case asBC_JP:
-	{
-		llvm::Value* condition = ir.CreateICmp(
-			llvm::CmpInst::ICMP_SGT, load_value_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
-
-		ir.CreateCondBr(condition, get_branch_target(ins), get_conditional_fail_branch_target(ins));
-
-		break;
-	}
-
-	case asBC_JNP:
-	{
-		llvm::Value* condition = ir.CreateICmp(
-			llvm::CmpInst::ICMP_SLE, load_value_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
-
-		ir.CreateCondBr(condition, get_branch_target(ins), get_conditional_fail_branch_target(ins));
-
-		break;
-	}
+	case asBC_JZ: emit_conditional_branch(ins, llvm::CmpInst::ICMP_EQ); break;
+	case asBC_JNZ: emit_conditional_branch(ins, llvm::CmpInst::ICMP_NE); break;
+	case asBC_JS: emit_conditional_branch(ins, llvm::CmpInst::ICMP_SLT); break;
+	case asBC_JNS: emit_conditional_branch(ins, llvm::CmpInst::ICMP_SGE); break;
+	case asBC_JP: emit_conditional_branch(ins, llvm::CmpInst::ICMP_SGT); break;
+	case asBC_JNP: emit_conditional_branch(ins, llvm::CmpInst::ICMP_SLE); break;
 
 	case asBC_TZ: emit_condition(llvm::CmpInst::ICMP_EQ); break;
 	case asBC_TNZ: emit_condition(llvm::CmpInst::ICMP_NE); break;
@@ -1683,6 +1630,17 @@ void FunctionBuilder::emit_object_method_call(asCScriptFunction& function, llvm:
 		object, ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, reinterpret_cast<asPWORD>(&function)), defs.pvoid)};
 
 	ir.CreateCall(internal_funcs.call_object_method->getFunctionType(), internal_funcs.call_object_method, args);
+}
+
+void FunctionBuilder::emit_conditional_branch(BytecodeInstruction ins, llvm::CmpInst::Predicate predicate)
+{
+	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
+	CommonDefinitions& defs = m_compiler.builder().definitions();
+
+	llvm::Value* condition
+		= ir.CreateICmp(predicate, load_value_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
+
+	ir.CreateCondBr(condition, get_branch_target(ins), get_conditional_fail_branch_target(ins));
 }
 
 llvm::Value* FunctionBuilder::load_stack_value(StackVariableIdentifier i, llvm::Type* type)
