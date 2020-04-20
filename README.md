@@ -1,28 +1,42 @@
 # asllvm
 
-A platform-independent JIT compiler for AngelScript.
+A JIT compiler for AngelScript.
 
 ## Current status
 
 asllvm is currently highly experimental **and will *not* work with your current application** as feature support
 is currently very limited.
 
-Right now, only x86-64 on Linux is tested and supported, but when complete, pretty much every LLVM-supported platform
-should be able to work.
-
 The tests scattered around `.cpp` and `.as` files in the [`tests/`](tests/) directory should provide an idea of the
 current support.
 
-## Comparison
+## Comparison, rationale and implementation status
 
-An existing AngelScript JIT compiler from BlindMindStudios exist. Here are some differences you should expect.
+This project was partly created for learning purposes.
 
-- asllvm should be significantly easier to port to non-x86 CPU architectures and/or other OSes.
-- asllvm will likely be slower at compiling, but may generate significantly more efficient code. There are two reasons
-for this. First, asllvm aims to support all of the AngelScript bytecode, whereas BlindMindStudios' JIT fallbacks to the
-AngelScript interpreter for various cases. Second, LLVM is able to perform a lot of optimizations over the generated
-code.
-- LLVM is a heavy dependency. Adding asllvm to your application will likely bloat it up by a few tens of megabytes.
+An existing AngelScript JIT compiler from BlindMindStudios exists. I believe that asllvm may have several significant
+differences with BMS's JIT compiler.
+
+### Cross-platform support
+
+BMS's JIT compiler was made with x86/x86-64 in mind, and cannot be ported to other architectures without a massive
+rewrite.
+asllvm is currently only implementing x86-64 Linux gcc support, but porting it to both x86 and x86-64 for Windows, Linux
+and macOS should not be complicated.
+x86-64 Linux and x86-64 Windows MinGW support is planned.
+Porting asllvm to other architectures is non-trivial, but feasible, but may require some trickery and debugging around
+the ABI support.
+
+### Performance
+
+BMS's JIT compiler has good compile times, potentially better than asllvm, but the generated code is likely to be
+less efficient for several reasons:
+- BMS's JIT compiler does not really perform any optimization, whereas LLVM does (and does so quite well).
+- BMS's JIT compiler fallbacks to the VM in many occasions. asllvm aims to not ever require to use the AS VM as a
+    fallback.
+- There are some optimizations potentially planned for asllvm that may simplify the generated logic.
+
+Note, however, that asllvm is a *much* larger dependency as it depends on LLVM. Think several tens of megabytes.
 
 ## Requirements
 
@@ -32,7 +46,8 @@ You will need:
 
 Extra dependencies (`{fmt}` and `Catch2`) will be fetched automatically using `hunter`.
 
-## Example
+## Usage
 
-An example is available in the `samples/simple` directory.
-asllvm registers using AngelScript's JIT interface and should be straightforward to get working.
+There is currently no simple usage example, but you can check [`tests/common.cpp`](tests/common.cpp) to get an idea.
+You have to register the JIT as usual. In its current state (this should be changed later on), you *need* to call
+`JitInterface::BuildModules` before any script call.
