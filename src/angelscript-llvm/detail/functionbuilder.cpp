@@ -116,7 +116,7 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 	return m_llvm_function;
 }
 
-llvm::Function* FunctionBuilder::create_wrapper_function()
+llvm::Function* FunctionBuilder::create_vm_entry()
 {
 	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
 	llvm::LLVMContext& context = m_compiler.builder().context();

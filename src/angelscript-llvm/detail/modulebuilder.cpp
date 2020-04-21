@@ -290,7 +290,7 @@ void ModuleBuilder::build_functions()
 
 		builder.read_bytecode(bytecode, length);
 
-		llvm::Function* entry = builder.create_wrapper_function();
+		llvm::Function* entry = builder.create_vm_entry();
 
 		JitSymbol symbol;
 		symbol.script_function = pending.function;
