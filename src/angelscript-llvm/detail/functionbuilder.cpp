@@ -156,8 +156,8 @@ llvm::Function* FunctionBuilder::create_vm_entry()
 	if (m_llvm_function->getReturnType() != llvm::Type::getVoidTy(context))
 	{
 		llvm::Value* value_register = [&] {
-			std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(defs.i64, 0),
-												llvm::ConstantInt::get(defs.i32, 3)};
+			std::array<llvm::Value*, 2> indices{
+				llvm::ConstantInt::get(defs.i64, 0), llvm::ConstantInt::get(defs.i32, 3)};
 
 			return ir.CreateGEP(registers, indices, "valueRegister");
 		}();
@@ -1645,7 +1645,8 @@ void FunctionBuilder::emit_conditional_branch(BytecodeInstruction ins, llvm::Cmp
 
 llvm::Value* FunctionBuilder::load_stack_value(StackVariableIdentifier i, llvm::Type* type)
 {
-	return m_compiler.builder().ir().CreateLoad(type, get_stack_value_pointer(i, type));
+	return m_compiler.builder().ir().CreateLoad(
+		type, get_stack_value_pointer(i, type), fmt::format("local@{}.value", i));
 }
 
 void FunctionBuilder::store_stack_value(StackVariableIdentifier i, llvm::Value* value)
@@ -1658,7 +1659,7 @@ llvm::Value* FunctionBuilder::get_stack_value_pointer(FunctionBuilder::StackVari
 	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
 
 	llvm::Value* pointer = get_stack_value_pointer(i);
-	return ir.CreateBitCast(pointer, type->getPointerTo());
+	return ir.CreateBitCast(pointer, type->getPointerTo(), fmt::format("local@{}.castedptr", i));
 }
 
 llvm::Value* FunctionBuilder::get_stack_value_pointer(FunctionBuilder::StackVariableIdentifier i)
@@ -1685,7 +1686,7 @@ llvm::Value* FunctionBuilder::get_stack_value_pointer(FunctionBuilder::StackVari
 			{llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(context), 0),
 			 llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(context), local_offset)}};
 
-		return ir.CreateGEP(m_locals, indices);
+		return ir.CreateGEP(m_locals, indices, fmt::format("local@{}.ptr", i));
 	}
 }
 
