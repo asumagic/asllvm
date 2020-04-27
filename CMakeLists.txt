@@ -43,7 +43,10 @@ if(NOT IS_DIRECTORY "${ANGELSCRIPT_SDK_DIRECTORY}/angelscript/source")
 endif()
 
 target_compile_features(angelscript-llvm PUBLIC cxx_std_17)
-target_include_directories(angelscript-llvm PRIVATE include/ ${ANGELSCRIPT_SDK_DIRECTORY}/angelscript/source)
+target_include_directories(angelscript-llvm PRIVATE include/
+	${ANGELSCRIPT_SDK_DIRECTORY}/angelscript/source
+	${ANGELSCRIPT_SDK_DIRECTORY}/angelscript/include
+)
 target_link_libraries(angelscript-llvm
     angelscript pthread
     fmt::fmt
