@@ -21,8 +21,8 @@ FunctionBuilder::FunctionBuilder(
 	m_script_function{script_function},
 	m_llvm_function{llvm_function}
 {
-	m_compiler.builder().ir().SetInsertPoint(
-		llvm::BasicBlock::Create(m_compiler.builder().context(), "entry", llvm_function));
+	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
+	ir.SetInsertPoint(llvm::BasicBlock::Create(m_compiler.builder().context(), "entry", llvm_function));
 }
 
 llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
@@ -1564,7 +1564,7 @@ void FunctionBuilder::emit_script_call(asCScriptFunction& callee)
 	{
 		const bool is_final = callee.IsFinal() || ((callee.objectType->flags & asOBJ_NOINHERIT) != 0);
 
-		if (is_final)
+		if (m_compiler.config().allow_devirtualization && is_final)
 		{
 			// TODO: move logic to its own function and find a way to make it less garbage
 			const auto method_count = callee.objectType->GetMethodCount();

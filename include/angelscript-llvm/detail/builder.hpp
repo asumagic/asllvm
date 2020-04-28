@@ -27,7 +27,7 @@ struct CommonDefinitions
 class Builder
 {
 	public:
-	Builder();
+	Builder(JitCompiler& compiler);
 
 	llvm::IRBuilder<>& ir() { return m_ir_builder; }
 	CommonDefinitions& definitions() { return m_defs; }
@@ -45,6 +45,7 @@ class Builder
 	std::unique_ptr<llvm::LLVMContext> setup_context();
 	llvm::legacy::PassManager          setup_pass_manager();
 
+	JitCompiler&                             m_compiler;
 	std::unique_ptr<llvm::LLVMContext>       m_context;
 	llvm::legacy::PassManager                m_pass_manager;
 	llvm::IRBuilder<>                        m_ir_builder;

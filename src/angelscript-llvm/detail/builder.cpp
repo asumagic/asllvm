@@ -12,12 +12,22 @@
 
 namespace asllvm::detail
 {
-Builder::Builder() :
+Builder::Builder(JitCompiler& compiler) :
+	m_compiler{compiler},
 	m_context{setup_context()},
 	m_pass_manager{setup_pass_manager()},
 	m_ir_builder{*m_context},
 	m_defs{setup_common_definitions()}
-{}
+{
+	llvm::FastMathFlags fast_fp;
+
+	if (m_compiler.config().allow_fast_math)
+	{
+		fast_fp.set();
+	}
+
+	m_ir_builder.setFastMathFlags(fast_fp);
+}
 
 llvm::Type* Builder::to_llvm_type(asCDataType& type) const
 {
