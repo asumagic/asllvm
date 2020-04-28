@@ -239,6 +239,8 @@ InternalFunctions ModuleBuilder::setup_internal_functions()
 		funcs.alloc                       = llvm::Function::Create(
 			function_type, llvm::Function::ExternalLinkage, 0, "asllvm.private.alloc", m_llvm_module.get());
 
+		funcs.alloc->addFnAttr(llvm::Attribute::InaccessibleMemOnly);
+
 		// The object we created is unique as it was dynamically allocated
 		funcs.alloc->addAttribute(0, llvm::Attribute::NoAlias);
 	}
@@ -262,6 +264,8 @@ InternalFunctions ModuleBuilder::setup_internal_functions()
 			0,
 			"asllvm.private.script_object_constructor",
 			m_llvm_module.get());
+
+		funcs.script_object_constructor->addFnAttr(llvm::Attribute::InaccessibleMemOrArgMemOnly);
 	}
 
 	{
