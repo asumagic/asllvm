@@ -917,7 +917,12 @@ void FunctionBuilder::process_instruction(BytecodeInstruction ins)
 	}
 
 	case asBC_ChkRefS: unimpl(); break;
-	case asBC_ChkNullV: unimpl(); break;
+
+	case asBC_ChkNullV:
+	{
+		// FIXME: Check for null pointer in ChkNullV
+		break;
+	}
 
 	case asBC_CALLINTF:
 	{
@@ -1029,7 +1034,20 @@ void FunctionBuilder::process_instruction(BytecodeInstruction ins)
 	case asBC_DIVu64: emit_binop(ins, llvm::Instruction::UDiv, defs.i64); break;
 	case asBC_MODu64: emit_binop(ins, llvm::Instruction::URem, defs.i64); break;
 
-	case asBC_LoadRObjR: unimpl(); break;
+	case asBC_LoadRObjR:
+	{
+		llvm::Value* base_pointer = load_stack_value(ins.arg_sword0(), defs.pvoid);
+
+		// FIXME: check for null base_pointer
+
+		std::array<llvm::Value*, 1> offsets{llvm::ConstantInt::get(defs.iptr, ins.arg_sword1())};
+		llvm::Value*                pointer = ir.CreateGEP(base_pointer, offsets, "fieldptr");
+
+		store_value_register_value(pointer);
+
+		break;
+	}
+
 	case asBC_LoadVObjR: unimpl(); break;
 
 	case asBC_RefCpyV:
