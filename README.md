@@ -122,3 +122,48 @@ There is currently no simple usage example, but you can check [`tests/common.cpp
 
 You have to register the JIT as usual. In its current state (this should be changed later on), you *need* to call
 `JitInterface::BuildModules` before any script call.
+
+## Recommendations
+
+### Performance: using `final` whenever possible
+
+asllvm is able to statically dispatch virtual function calls in a specific scenario: Either the original method
+declaration either the class where the original method declaration resides must be `final`.
+
+For example, devirtualization will work in the following scenario:
+
+```angelscript
+final class A
+{
+    void foo() { print("hi"); }
+}
+
+void main()
+{
+    A().foo();
+}
+```
+
+but not in the following one:
+
+```angelscript
+class A
+{
+    void foo() { print("hi"); }
+}
+
+class B : A
+{
+    final void foo() { print("hello"); }
+}
+
+void main()
+{
+    B().foo();
+}
+```
+
+(Note, devirtualization might be extended to support more cases in the future.)
+
+This is an important optimization for classes dealing with a lot of classes. A virtual function lookup is somewhat
+expensive and disallows some optimizations (such as inlining).
