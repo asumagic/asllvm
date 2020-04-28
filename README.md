@@ -58,7 +58,7 @@ This part is fairly incomplete, but provided to give a general idea:
 - [x] Script classes
   - [x] Constructing and destructing script classes
   - [x] Virtual script calls
-    - [ ] Devirtualization optimization
+    - [x] Devirtualization optimization\*\*\*
   - [x] Reference counted types\*\*
 - [ ] VM execution status support
   - [ ] Exception on null pointer dereference
@@ -70,6 +70,8 @@ This part is fairly incomplete, but provided to give a general idea:
 \*: `a ** b` (i.e. `pow`) is not implemented yet for any type.
 
 \*\*: Reference counting through handles is implemented as stubs and don't actually perform any freeing for now.
+
+\*\*\*: Implemented for trivial cases (method was originally declared as `final`).
 
 **Due to the design of asllvm, it is not possible to partially JIT modules, or to skip JITting for specific modules.**
 The JIT assumes that only supported features are used by your scripts and application interface, or it will yield an
