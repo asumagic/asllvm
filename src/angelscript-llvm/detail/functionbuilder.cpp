@@ -328,9 +328,10 @@ void FunctionBuilder::process_instruction(BytecodeInstruction ins)
 		{
 			ir.CreateRetVoid();
 		}
-		else if (type.IsObjectHandle())
+		else if (type.IsObjectHandle() || type.IsObject())
 		{
-			ir.CreateRet(ir.CreateLoad(defs.pvoid, m_object_register));
+			ir.CreateRet(
+				ir.CreateBitCast(ir.CreateLoad(defs.pvoid, m_object_register), m_llvm_function->getReturnType()));
 		}
 		else
 		{
@@ -1629,10 +1630,10 @@ void FunctionBuilder::emit_script_call(asCScriptFunction& callee)
 		{
 			m_stack_pointer -= callee.GetSpaceNeededForReturnValue();
 		}
-		else if (callee.returnType.IsObjectHandle())
+		else if (callee.returnType.IsObjectHandle() || callee.returnType.IsObject())
 		{
 			// Store to the object register
-			ir.CreateStore(ret, m_object_register);
+			ir.CreateStore(ret, ir.CreateBitCast(m_object_register, ret->getType()->getPointerTo()));
 		}
 		else
 		{

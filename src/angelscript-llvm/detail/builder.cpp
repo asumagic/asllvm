@@ -50,6 +50,8 @@ llvm::Type* Builder::to_llvm_type(asCDataType& type) const
 		return base_type;
 	}
 
+	// FIXME: this should return a pointer to the object type as determined below. this likely will require a lot of
+	// changes in the codegen where pvoid is used generically instead.
 	if (type.IsReference() || type.IsObjectHandle())
 	{
 		return m_defs.pvoid;

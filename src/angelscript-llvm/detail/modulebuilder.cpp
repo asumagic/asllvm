@@ -58,12 +58,27 @@ llvm::Function* ModuleBuilder::create_function(asCScriptFunction& function)
 
 llvm::FunctionType* ModuleBuilder::get_script_function_type(asCScriptFunction& script_function)
 {
+	CommonDefinitions& defs = m_compiler.builder().definitions();
+
 	std::array<llvm::Type*, 1> types{llvm::PointerType::getInt32PtrTy(m_compiler.builder().context())};
 
 	// If returning on stack, this means the return object will be written to a pointer passed as a param (using PSF).
-	llvm::Type* return_type = script_function.DoesReturnOnStack()
-		? m_compiler.builder().definitions().tvoid
-		: m_compiler.builder().to_llvm_type(script_function.returnType);
+	// Otherwise, an handle to the actual object is returned.
+	// That is, of course, unless the return type is void, in which case we don't need to care.
+	llvm::Type* return_type;
+
+	if (script_function.returnType.GetTokenType() == ttVoid || script_function.DoesReturnOnStack())
+	{
+		return_type = defs.tvoid;
+	}
+	else if (script_function.returnType.IsObject() && !script_function.returnType.IsObjectHandle())
+	{
+		return_type = m_compiler.builder().to_llvm_type(script_function.returnType)->getPointerTo();
+	}
+	else
+	{
+		return_type = m_compiler.builder().to_llvm_type(script_function.returnType);
+	}
 
 	return llvm::FunctionType::get(return_type, types, false);
 }
