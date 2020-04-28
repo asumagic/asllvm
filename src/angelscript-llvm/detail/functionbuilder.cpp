@@ -530,8 +530,11 @@ void FunctionBuilder::process_instruction(BytecodeInstruction ins)
 			llvm::ConstantInt::get(defs.iptr, type.size) // TODO: align type.size to 4 bytes
 		}};
 
-		llvm::Value* object_memory_pointer
-			= ir.CreateCall(internal_funcs.alloc->getFunctionType(), internal_funcs.alloc, alloc_args);
+		llvm::Value* object_memory_pointer = ir.CreateCall(
+			internal_funcs.alloc->getFunctionType(),
+			internal_funcs.alloc,
+			alloc_args,
+			fmt::format("heap.{}", type.GetName()));
 
 		if (type.flags & asOBJ_SCRIPT_OBJECT)
 		{
@@ -554,11 +557,10 @@ void FunctionBuilder::process_instruction(BytecodeInstruction ins)
 			// TODO: check if target_pointer is null before the store (we really should)
 			ir.CreateStore(object_memory_pointer, target_pointer);
 
-			m_stack_pointer -= AS_PTR_SIZE;
-			store_stack_value(m_stack_pointer, object_memory_pointer);
-
 			push_stack_value(object_memory_pointer, AS_PTR_SIZE);
 			emit_script_call(constructor);
+
+			m_stack_pointer -= AS_PTR_SIZE; // pop the target pointer (not done later?? this seems off)
 		}
 		else
 		{
