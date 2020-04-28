@@ -27,6 +27,8 @@ TEST_CASE("user classes", "[userclass]")
 		== "hello\nhello\n10\n20\n30\n40\n50\n60\n70\n80\n90\n100\n");
 }
 
+TEST_CASE("devirtualization", "[devirt]") { REQUIRE(run("scripts/devirt.as") == "hello\n"); }
+
 TEST_CASE("virtual system functions", "[sysvirt]")
 {
 	class Base

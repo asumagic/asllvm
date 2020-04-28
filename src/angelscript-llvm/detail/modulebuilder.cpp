@@ -24,23 +24,28 @@ void ModuleBuilder::append(PendingFunction function) { m_pending_functions.push_
 
 llvm::Function* ModuleBuilder::create_function(asCScriptFunction& function)
 {
+	asllvm_assert(
+		function.vfTableIdx < 0
+		&& "Virtual functions should not be handled at this level. Resolve the virtual function first.");
+
 	if (auto it = m_script_functions.find(function.GetId()); it != m_script_functions.end())
 	{
 		return it->second;
 	}
 
-	std::array<llvm::Type*, 1> types{llvm::PointerType::getInt32PtrTy(m_compiler.builder().context())};
-
-	// If returning on stack, this means the return object will be written to a pointer passed as a param (using PSF).
-	llvm::Type* return_type = function.DoesReturnOnStack() ? m_compiler.builder().definitions().tvoid
-														   : m_compiler.builder().to_llvm_type(function.returnType);
-
-	llvm::FunctionType* function_type = llvm::FunctionType::get(return_type, types, false);
+	if (m_compiler.config().verbose)
+	{
+		m_compiler.diagnostic(fmt::format(
+			"creating function {}: signature {}, object type {}",
+			function.GetId(),
+			function.GetDeclaration(true, true, true),
+			function.objectType != nullptr ? function.objectType->GetName() : "(null)"));
+	}
 
 	const std::string name = make_function_name(function);
 
-	llvm::Function* llvm_function
-		= llvm::Function::Create(function_type, llvm::Function::ExternalLinkage, name, *m_llvm_module);
+	llvm::Function* llvm_function = llvm::Function::Create(
+		get_script_function_type(function), llvm::Function::ExternalLinkage, name, *m_llvm_module);
 
 	// i8* noalias %params
 	(llvm_function->arg_begin() + 0)->setName("params");
@@ -49,6 +54,18 @@ llvm::Function* ModuleBuilder::create_function(asCScriptFunction& function)
 	m_script_functions.emplace(function.GetId(), llvm_function);
 
 	return llvm_function;
+}
+
+llvm::FunctionType* ModuleBuilder::get_script_function_type(asCScriptFunction& script_function)
+{
+	std::array<llvm::Type*, 1> types{llvm::PointerType::getInt32PtrTy(m_compiler.builder().context())};
+
+	// If returning on stack, this means the return object will be written to a pointer passed as a param (using PSF).
+	llvm::Type* return_type = script_function.DoesReturnOnStack()
+		? m_compiler.builder().definitions().tvoid
+		: m_compiler.builder().to_llvm_type(script_function.returnType);
+
+	return llvm::FunctionType::get(return_type, types, false);
 }
 
 llvm::Function* ModuleBuilder::get_system_function(asCScriptFunction& system_function)
@@ -280,10 +297,11 @@ void ModuleBuilder::build_functions()
 
 	for (const auto& pending : m_pending_functions)
 	{
-		FunctionBuilder builder{m_compiler,
-								*this,
-								*static_cast<asCScriptFunction*>(pending.function),
-								m_script_functions.at(pending.function->GetId())};
+		FunctionBuilder builder{
+			m_compiler,
+			*this,
+			*static_cast<asCScriptFunction*>(pending.function),
+			m_script_functions.at(pending.function->GetId())};
 
 		asUINT   length;
 		asDWORD* bytecode = pending.function->GetByteCode(&length);

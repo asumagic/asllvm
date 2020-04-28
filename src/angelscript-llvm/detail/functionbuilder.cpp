@@ -1520,71 +1520,96 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 	}
 }
 
-void FunctionBuilder::emit_script_call(asCScriptFunction& function)
+void FunctionBuilder::emit_script_call(asCScriptFunction& callee)
 {
 	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
 	CommonDefinitions& defs = m_compiler.builder().definitions();
 
 	// Check supported calls
-	switch (function.funcType)
+	switch (callee.funcType)
 	{
 	case asFUNC_VIRTUAL:
 	case asFUNC_SCRIPT: break;
 	default: asllvm_assert(false && "unsupported script type for script function call");
 	}
 
-	llvm::Function* callee = m_module_builder.create_function(function);
+	llvm::FunctionType* callee_type = m_module_builder.get_script_function_type(callee);
 
 	llvm::CallInst* ret;
 
-	if (function.funcType == asFUNC_VIRTUAL)
+	llvm::Value* resolved_function = nullptr;
+
+	if (callee.funcType == asFUNC_VIRTUAL)
 	{
-		// TODO: null pointer access check
-		llvm::Value* script_object = load_stack_value(m_stack_pointer, defs.pvoid);
+		const bool is_final = callee.IsFinal();
 
-		llvm::Value* function_value = ir.CreateIntToPtr(
-			llvm::ConstantInt::get(defs.iptr, reinterpret_cast<asPWORD>(&function)),
-			defs.pvoid,
-			"virtual_script_function");
+		if (is_final)
+		{
+			// TODO: move logic to its own function and find a way to make it less garbage
+			const auto method_count = callee.objectType->GetMethodCount();
 
-		llvm::Function*             lookup = m_module_builder.internal_functions().script_vtable_lookup;
-		std::array<llvm::Value*, 2> lookup_args{{script_object, function_value}};
+			for (std::size_t i = 0; i < method_count; ++i)
+			{
+				auto& potential_match = *static_cast<asCScriptFunction*>(callee.objectType->GetMethodByIndex(i, false));
 
-		llvm::Value* resolved_function = ir.CreateCall(lookup->getFunctionType(), lookup, lookup_args);
+				if (std::string(potential_match.GetDeclaration(true, true, true))
+					== std::string(callee.GetDeclaration(true, true, true)))
+				{
+					resolved_function = m_module_builder.create_function(potential_match);
+					break;
+				}
+			}
 
-		llvm::Value*                new_frame_pointer = get_stack_value_pointer(m_stack_pointer, defs.i32);
-		std::array<llvm::Value*, 1> args{{new_frame_pointer}};
+			asllvm_assert(
+				resolved_function != nullptr
+				&& "Something is wrong if we couldn't find the matching non-virtual method");
+		}
+		else
+		{
+			// TODO: null pointer access check
+			llvm::Value* script_object = load_stack_value(m_stack_pointer, defs.pvoid);
 
-		ret = ir.CreateCall(
-			callee->getFunctionType(),
-			ir.CreateBitCast(resolved_function, callee->getFunctionType()->getPointerTo()),
-			args);
+			llvm::Value* function_value = ir.CreateIntToPtr(
+				llvm::ConstantInt::get(defs.iptr, reinterpret_cast<asPWORD>(&callee)),
+				defs.pvoid,
+				"virtual_script_function");
+
+			llvm::Function*             lookup = m_module_builder.internal_functions().script_vtable_lookup;
+			std::array<llvm::Value*, 2> lookup_args{{script_object, function_value}};
+
+			resolved_function = ir.CreateBitCast(
+				ir.CreateCall(lookup->getFunctionType(), lookup, lookup_args),
+				callee_type->getPointerTo(),
+				"resolved_vcall");
+		}
 	}
 	else
 	{
-		llvm::Value*                new_frame_pointer = get_stack_value_pointer(m_stack_pointer, defs.i32);
-		std::array<llvm::Value*, 1> args{{new_frame_pointer}};
-
-		ret = ir.CreateCall(callee->getFunctionType(), callee, args);
+		resolved_function = m_module_builder.create_function(callee);
 	}
 
+	llvm::Value*                new_frame_pointer = get_stack_value_pointer(m_stack_pointer, defs.i32);
+	std::array<llvm::Value*, 1> args{{new_frame_pointer}};
+
+	ret = ir.CreateCall(callee_type, resolved_function, args);
+
 	{
-		asCDataType& r = function.returnType;
+		asCDataType& r = callee.returnType;
 		asllvm_assert(r.IsPrimitive() || r.IsObjectHandle() || r.IsObject());
 	}
 
-	if (function.GetObjectType() != nullptr)
+	if (callee.GetObjectType() != nullptr)
 	{
 		m_stack_pointer -= AS_PTR_SIZE;
 	}
 
-	if (function.returnType.GetTokenType() != ttVoid)
+	if (callee.returnType.GetTokenType() != ttVoid)
 	{
-		if (function.DoesReturnOnStack())
+		if (callee.DoesReturnOnStack())
 		{
-			m_stack_pointer -= function.GetSpaceNeededForReturnValue();
+			m_stack_pointer -= callee.GetSpaceNeededForReturnValue();
 		}
-		else if (function.returnType.IsObjectHandle())
+		else if (callee.returnType.IsObjectHandle())
 		{
 			// Store to the object register
 			ir.CreateStore(ret, m_object_register);
@@ -1597,7 +1622,7 @@ void FunctionBuilder::emit_script_call(asCScriptFunction& function)
 		}
 	}
 
-	m_stack_pointer -= function.GetSpaceNeededForArguments();
+	m_stack_pointer -= callee.GetSpaceNeededForArguments();
 }
 
 void FunctionBuilder::emit_call(asCScriptFunction& function)
