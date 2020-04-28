@@ -1573,8 +1573,8 @@ void FunctionBuilder::emit_script_call(asCScriptFunction& callee)
 			{
 				auto& potential_match = *static_cast<asCScriptFunction*>(callee.objectType->GetMethodByIndex(i, false));
 
-				if (std::string(potential_match.GetDeclaration(true, true, true))
-					== std::string(callee.GetDeclaration(true, true, true)))
+				if (std::string(potential_match.GetDeclaration(true, true, false))
+					== std::string(callee.GetDeclaration(true, true, false)))
 				{
 					resolved_function = m_module_builder.create_function(potential_match);
 					break;
