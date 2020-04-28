@@ -557,6 +557,7 @@ void FunctionBuilder::process_instruction(BytecodeInstruction ins)
 			m_stack_pointer -= AS_PTR_SIZE;
 			store_stack_value(m_stack_pointer, object_memory_pointer);
 
+			push_stack_value(object_memory_pointer, AS_PTR_SIZE);
 			emit_script_call(constructor);
 		}
 		else
@@ -1554,8 +1555,6 @@ void FunctionBuilder::emit_script_call(asCScriptFunction& function)
 		llvm::Value*                new_frame_pointer = get_stack_value_pointer(m_stack_pointer, defs.i32);
 		std::array<llvm::Value*, 1> args{{new_frame_pointer}};
 
-		m_stack_pointer -= AS_PTR_SIZE;
-
 		ret = ir.CreateCall(
 			callee->getFunctionType(),
 			ir.CreateBitCast(resolved_function, callee->getFunctionType()->getPointerTo()),
@@ -1572,6 +1571,11 @@ void FunctionBuilder::emit_script_call(asCScriptFunction& function)
 	{
 		asCDataType& r = function.returnType;
 		asllvm_assert(r.IsPrimitive() || r.IsObjectHandle() || r.IsObject());
+	}
+
+	if (function.GetObjectType() != nullptr)
+	{
+		m_stack_pointer -= AS_PTR_SIZE;
 	}
 
 	if (function.returnType.GetTokenType() != ttVoid)
