@@ -1103,6 +1103,7 @@ std::string FunctionBuilder::disassemble(BytecodeInstruction instruction)
 		return {};
 	}
 
+	case asBC_CALL:
 	case asBC_CALLSYS:
 	{
 		auto* func = static_cast<asCScriptFunction*>(m_compiler.engine().GetFunctionById(instruction.arg_int()));
