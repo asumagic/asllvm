@@ -40,7 +40,7 @@ This part is fairly incomplete, but provided to give a general idea:
   - [x] Globals
 - [x] Branching (`if`, `for`, `while`, `switch` statements)
 - [x] Script function calls
-  - [x] Regular pointers
+  - [x] Regular functions
   - [ ] Imported functions
   - [ ] Function pointers
 - [x] Application interface
