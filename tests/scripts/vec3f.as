@@ -1,4 +1,4 @@
-class Vec3f
+final class Vec3f
 {
 	float x;
 	float y;
