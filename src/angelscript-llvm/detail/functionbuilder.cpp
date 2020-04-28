@@ -1110,7 +1110,8 @@ std::string FunctionBuilder::disassemble(BytecodeInstruction instruction)
 
 		asllvm_assert(func != nullptr);
 
-		return fmt::format("CALLSYS {} # {}", func->GetName(), func->GetDeclaration(true, true, true));
+		return fmt::format(
+			"{} {} # {}", instruction.info->name, func->GetName(), func->GetDeclaration(true, true, true));
 	}
 
 	default: break;
