@@ -106,6 +106,11 @@ llvm::Function* ModuleBuilder::get_system_function(asCScriptFunction& system_fun
 		function->addParamAttr(0, llvm::Attribute::StructRet);
 	}
 
+	if (m_compiler.config().assume_const_is_pure && system_function.IsReadOnly())
+	{
+		function->addFnAttr(llvm::Attribute::InaccessibleMemOrArgMemOnly);
+	}
+
 	m_system_functions.emplace(id, function);
 
 	return function;
