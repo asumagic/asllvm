@@ -1562,7 +1562,7 @@ void FunctionBuilder::emit_script_call(asCScriptFunction& callee)
 
 	if (callee.funcType == asFUNC_VIRTUAL)
 	{
-		const bool is_final = callee.IsFinal();
+		const bool is_final = callee.IsFinal() || ((callee.objectType->flags & asOBJ_NOINHERIT) != 0);
 
 		if (is_final)
 		{
