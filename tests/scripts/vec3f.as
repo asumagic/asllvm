@@ -83,4 +83,5 @@ void main()
 	Vec3f v2(10.0f, 5.0f, 0.0f);
 	print('' + DotProduct(v1, v2));
 	CrossProduct(v1, v2).Print();
+	v1.Lerp(v2, 0.5).Print();
 }
