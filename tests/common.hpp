@@ -1,11 +1,16 @@
 #pragma once
 
+#define CATCH_CONFIG_ENABLE_BENCHMARKING
+
 #include <angelscript-llvm/detail/assert.hpp>
 #include <angelscript-llvm/jit.hpp>
 #include <angelscript.h>
 #include <catch2/catch.hpp>
 #include <sstream>
 #include <string>
+
+#define TEST_REQUIRE(name, tag, cond)                                                                                  \
+	TEST_CASE(name, tag) { REQUIRE(cond) }
 
 #define asllvm_test_check(x)                                                                                           \
 	if (!(x))                                                                                                          \
@@ -25,6 +30,8 @@ struct EngineContext
 	void register_interface();
 
 	asIScriptModule& build(const char* name, const char* script_path);
+
+	void prepare_execution();
 
 	void run(asIScriptModule& module, const char* entry_point);
 

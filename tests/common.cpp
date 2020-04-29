@@ -81,11 +81,16 @@ asIScriptModule& EngineContext::build(const char* name, const char* script_path)
 	return *engine->GetModule(name);
 }
 
-void EngineContext::run(asIScriptModule& module, const char* entry_point)
+void EngineContext::prepare_execution()
 {
 #ifndef DEBUG_DISABLE_JIT
 	jit.BuildModules();
 #endif
+}
+
+void EngineContext::run(asIScriptModule& module, const char* entry_point)
+{
+	prepare_execution();
 
 	asIScriptFunction* function = module.GetFunctionByDecl(entry_point);
 	asllvm_test_check(function != nullptr);
