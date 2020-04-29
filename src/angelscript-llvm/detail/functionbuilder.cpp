@@ -1576,7 +1576,7 @@ void FunctionBuilder::emit_script_call(asCScriptFunction& callee)
 				if (std::string(potential_match.GetDeclaration(true, true, false))
 					== std::string(callee.GetDeclaration(true, true, false)))
 				{
-					resolved_function = m_module_builder.create_function(potential_match);
+					resolved_function = m_module_builder.get_script_function(potential_match);
 					break;
 				}
 			}
@@ -1606,7 +1606,7 @@ void FunctionBuilder::emit_script_call(asCScriptFunction& callee)
 	}
 	else
 	{
-		resolved_function = m_module_builder.create_function(callee);
+		resolved_function = m_module_builder.get_script_function(callee);
 	}
 
 	llvm::Value*                new_frame_pointer = get_stack_value_pointer(m_stack_pointer, defs.i32);

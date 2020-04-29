@@ -22,7 +22,7 @@ ModuleBuilder::ModuleBuilder(JitCompiler& compiler, asIScriptModule& module) :
 
 void ModuleBuilder::append(PendingFunction function) { m_pending_functions.push_back(function); }
 
-llvm::Function* ModuleBuilder::create_function(asCScriptFunction& function)
+llvm::Function* ModuleBuilder::get_script_function(asCScriptFunction& function)
 {
 	asllvm_assert(
 		function.vfTableIdx < 0
@@ -317,7 +317,7 @@ void ModuleBuilder::build_functions()
 {
 	for (auto& pending : m_pending_functions)
 	{
-		create_function(*static_cast<asCScriptFunction*>(pending.function));
+		get_script_function(*static_cast<asCScriptFunction*>(pending.function));
 	}
 
 	for (const auto& pending : m_pending_functions)
