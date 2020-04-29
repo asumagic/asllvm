@@ -25,7 +25,10 @@ TEST_CASE("user classes", "[userclass]")
 	REQUIRE(
 		run("scripts/userclasses.as", "void pass_by_value_test()")
 		== "hello\nhello\n10\n20\n30\n40\n50\n60\n70\n80\n90\n100\n");
+}
 
+TEST_CASE("user class Vec3f")
+{
 	REQUIRE(run("scripts/vec3f.as") == "150\nx: -50; y: 100; z: -50\nx: 10; y: 7.5; z: 5\n");
 }
 
