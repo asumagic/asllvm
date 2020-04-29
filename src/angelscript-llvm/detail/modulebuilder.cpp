@@ -70,15 +70,25 @@ llvm::Function* ModuleBuilder::get_script_function(asCScriptFunction& function)
 
 	{
 		// TODO: move to its own function, or find a better way to do this
-		llvm::IRBuilder<>& ir = m_compiler.builder().ir();
+		llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
+		llvm::LLVMContext& context = m_compiler.builder().context();
 
 		auto* old_bb           = ir.GetInsertBlock();
 		auto  old_insert_point = ir.GetInsertPoint();
 
-		ir.SetInsertPoint(llvm::BasicBlock::Create(m_compiler.builder().context(), "entry", proxy_function));
+		ir.SetInsertPoint(llvm::BasicBlock::Create(context, "entry", proxy_function));
 
 		std::array<llvm::Value*, 1> args{&*(proxy_function->arg_begin() + 0)};
-		ir.CreateRet(ir.CreateCall(internal_function->getFunctionType(), internal_function, args));
+		llvm::Value*                ret = ir.CreateCall(internal_function->getFunctionType(), internal_function, args);
+
+		if (proxy_function->getReturnType() != llvm::Type::getVoidTy(context))
+		{
+			ir.CreateRet(ret);
+		}
+		else
+		{
+			ir.CreateRetVoid();
+		}
 
 		if (old_bb != nullptr)
 		{
