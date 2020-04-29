@@ -46,6 +46,8 @@ class FunctionBuilder
 	//!		read_bytecode() and return to the VM cleanly.
 	llvm::Function* create_vm_entry();
 
+	llvm::Function* create_proxy();
+
 	private:
 	//! \brief Handle a given bytecode instruction for preprocessing.
 	//! \details
@@ -117,6 +119,8 @@ class FunctionBuilder
 	void emit_object_method_call(asCScriptFunction& function, llvm::Value* object);
 
 	void emit_conditional_branch(BytecodeInstruction ins, llvm::CmpInst::Predicate predicate);
+
+	llvm::Value* resolve_virtual_script_function(llvm::Value* script_object, asCScriptFunction& callee);
 
 	//! \brief Load a LLVM value of type \p type from a stack variable of identifier \p i.
 	llvm::Value* load_stack_value(StackVariableIdentifier i, llvm::Type* type);

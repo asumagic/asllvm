@@ -1557,39 +1557,11 @@ void FunctionBuilder::emit_script_call(asCScriptFunction& callee)
 
 	llvm::FunctionType* callee_type = m_module_builder.get_script_function_type(callee);
 
-	llvm::CallInst* ret;
-
 	llvm::Value* resolved_function = nullptr;
 
 	if (callee.funcType == asFUNC_VIRTUAL)
 	{
-		const bool is_final = callee.IsFinal() || ((callee.objectType->flags & asOBJ_NOINHERIT) != 0);
-
-		if (m_compiler.config().allow_devirtualization && is_final)
-		{
-			asCScriptFunction* resolved_script_function = get_nonvirtual_match(callee);
-			asllvm_assert(resolved_script_function != nullptr);
-
-			resolved_function = m_module_builder.get_script_function(*resolved_script_function);
-		}
-		else
-		{
-			// TODO: null pointer access check
-			llvm::Value* script_object = load_stack_value(m_stack_pointer, defs.pvoid);
-
-			llvm::Value* function_value = ir.CreateIntToPtr(
-				llvm::ConstantInt::get(defs.iptr, reinterpret_cast<asPWORD>(&callee)),
-				defs.pvoid,
-				"virtual_script_function");
-
-			llvm::Function*             lookup = m_module_builder.internal_functions().script_vtable_lookup;
-			std::array<llvm::Value*, 2> lookup_args{{script_object, function_value}};
-
-			resolved_function = ir.CreateBitCast(
-				ir.CreateCall(lookup->getFunctionType(), lookup, lookup_args),
-				callee_type->getPointerTo(),
-				"resolved_vcall");
-		}
+		resolved_function = resolve_virtual_script_function(load_stack_value(m_stack_pointer, defs.pvoid), callee);
 	}
 	else
 	{
@@ -1599,12 +1571,7 @@ void FunctionBuilder::emit_script_call(asCScriptFunction& callee)
 	llvm::Value*                new_frame_pointer = get_stack_value_pointer(m_stack_pointer, defs.i32);
 	std::array<llvm::Value*, 1> args{{new_frame_pointer}};
 
-	ret = ir.CreateCall(callee_type, resolved_function, args);
-
-	{
-		asCDataType& r = callee.returnType;
-		asllvm_assert(r.IsPrimitive() || r.IsObjectHandle() || r.IsObject());
-	}
+	llvm::CallInst* ret = ir.CreateCall(callee_type, resolved_function, args);
 
 	if (callee.GetObjectType() != nullptr)
 	{
@@ -1622,11 +1589,15 @@ void FunctionBuilder::emit_script_call(asCScriptFunction& callee)
 			// Store to the object register
 			ir.CreateStore(ret, ir.CreateBitCast(m_object_register, ret->getType()->getPointerTo()));
 		}
-		else
+		else if (callee.returnType.IsPrimitive())
 		{
 			// Store to the value register
 			llvm::Value* typed_value_register = ir.CreateBitCast(m_value_register, ret->getType()->getPointerTo());
 			ir.CreateStore(ret, typed_value_register);
+		}
+		else
+		{
+			asllvm_assert(false && "unhandled return type");
 		}
 	}
 
@@ -1680,6 +1651,39 @@ void FunctionBuilder::emit_conditional_branch(BytecodeInstruction ins, llvm::Cmp
 		= ir.CreateICmp(predicate, load_value_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
 
 	ir.CreateCondBr(condition, get_branch_target(ins), get_conditional_fail_branch_target(ins));
+}
+
+llvm::Value* FunctionBuilder::resolve_virtual_script_function(llvm::Value* script_object, asCScriptFunction& callee)
+{
+	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
+	CommonDefinitions& defs = m_compiler.builder().definitions();
+
+	// FIXME: null check for script_object
+
+	const bool is_final = callee.IsFinal() || ((callee.objectType->flags & asOBJ_NOINHERIT) != 0);
+
+	if (m_compiler.config().allow_devirtualization && is_final)
+	{
+		asCScriptFunction* resolved_script_function = get_nonvirtual_match(callee);
+		asllvm_assert(resolved_script_function != nullptr);
+
+		return m_module_builder.get_script_function(*resolved_script_function);
+	}
+	else
+	{
+		llvm::Value* function_value = ir.CreateIntToPtr(
+			llvm::ConstantInt::get(defs.iptr, reinterpret_cast<asPWORD>(&callee)),
+			defs.pvoid,
+			"virtual_script_function");
+
+		llvm::Function*             lookup = m_module_builder.internal_functions().script_vtable_lookup;
+		std::array<llvm::Value*, 2> lookup_args{{script_object, function_value}};
+
+		return ir.CreateBitCast(
+			ir.CreateCall(lookup->getFunctionType(), lookup, lookup_args),
+			m_module_builder.get_script_function_type(callee)->getPointerTo(),
+			"resolved_vcall");
+	}
 }
 
 llvm::Value* FunctionBuilder::load_stack_value(StackVariableIdentifier i, llvm::Type* type)

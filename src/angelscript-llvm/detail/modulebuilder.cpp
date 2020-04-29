@@ -44,17 +44,51 @@ llvm::Function* ModuleBuilder::get_script_function(asCScriptFunction& function)
 
 	const std::string name = make_function_name(function);
 
-	llvm::Function* llvm_function = llvm::Function::Create(
-		get_script_function_type(function), llvm::Function::ExternalLinkage, name, *m_llvm_module);
+	const auto create_function = [&](const auto& name, auto linkage) {
+		llvm::Function* llvm_function
+			= llvm::Function::Create(get_script_function_type(function), linkage, name, *m_llvm_module);
 
-	// i8* noalias %params
-	(llvm_function->arg_begin() + 0)->setName("params");
-	llvm_function->addParamAttr(0, llvm::Attribute::NoAlias);
-	llvm_function->addParamAttr(0, llvm::Attribute::NoCapture);
+		// i8* noalias %params
+		(llvm_function->arg_begin() + 0)->setName("params");
+		llvm_function->addParamAttr(0, llvm::Attribute::NoAlias);
+		llvm_function->addParamAttr(0, llvm::Attribute::NoCapture);
 
-	m_script_functions.emplace(function.GetId(), llvm_function);
+		return llvm_function;
+	};
 
-	return llvm_function;
+	// It apparently helps LLVM optimizations to split the same function into:
+	// 1. one that has an internal linkage
+	// 2. one that has an external linkage that calls the former
+	// The reason is that the function with the internal linkage can have its function type transformed freely, enabling
+	// sometimes powerful optimizations. It does not seem to be able to infer that when the function is external since
+	// the function type must stay the same, but it is also not able to do the "split" on its own.
+
+	llvm::Function* internal_function
+		= create_function(fmt::format("{}.internal", name), llvm::Function::InternalLinkage);
+
+	llvm::Function* proxy_function = create_function(name, llvm::Function::ExternalLinkage);
+
+	{
+		// TODO: move to its own function, or find a better way to do this
+		llvm::IRBuilder<>& ir = m_compiler.builder().ir();
+
+		auto* old_bb           = ir.GetInsertBlock();
+		auto  old_insert_point = ir.GetInsertPoint();
+
+		ir.SetInsertPoint(llvm::BasicBlock::Create(m_compiler.builder().context(), "entry", proxy_function));
+
+		std::array<llvm::Value*, 1> args{&*(proxy_function->arg_begin() + 0)};
+		ir.CreateRet(ir.CreateCall(internal_function->getFunctionType(), internal_function, args));
+
+		if (old_bb != nullptr)
+		{
+			ir.SetInsertPoint(old_bb, old_insert_point);
+		}
+	}
+
+	m_script_functions.emplace(function.GetId(), internal_function);
+
+	return internal_function;
 }
 
 llvm::FunctionType* ModuleBuilder::get_script_function_type(asCScriptFunction& script_function)
