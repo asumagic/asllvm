@@ -1,5 +1,6 @@
 #include <angelscript-llvm/detail/functionbuilder.hpp>
 
+#include <angelscript-llvm/detail/ashelper.hpp>
 #include <angelscript-llvm/detail/asinternalheaders.hpp>
 #include <angelscript-llvm/detail/assert.hpp>
 #include <angelscript-llvm/detail/jitcompiler.hpp>
@@ -1566,24 +1567,10 @@ void FunctionBuilder::emit_script_call(asCScriptFunction& callee)
 
 		if (m_compiler.config().allow_devirtualization && is_final)
 		{
-			// TODO: move logic to its own function and find a way to make it less garbage
-			const auto method_count = callee.objectType->GetMethodCount();
+			asCScriptFunction* resolved_script_function = get_nonvirtual_match(callee);
+			asllvm_assert(resolved_script_function != nullptr);
 
-			for (std::size_t i = 0; i < method_count; ++i)
-			{
-				auto& potential_match = *static_cast<asCScriptFunction*>(callee.objectType->GetMethodByIndex(i, false));
-
-				if (std::string(potential_match.GetDeclaration(true, true, false))
-					== std::string(callee.GetDeclaration(true, true, false)))
-				{
-					resolved_function = m_module_builder.get_script_function(potential_match);
-					break;
-				}
-			}
-
-			asllvm_assert(
-				resolved_function != nullptr
-				&& "Something is wrong if we couldn't find the matching non-virtual method");
+			resolved_function = m_module_builder.get_script_function(*resolved_script_function);
 		}
 		else
 		{
