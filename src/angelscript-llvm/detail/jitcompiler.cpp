@@ -7,7 +7,12 @@
 #include <angelscript-llvm/detail/modulebuilder.hpp>
 #include <angelscript-llvm/detail/modulecommon.hpp>
 #include <fmt/core.h>
+#include <llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h>
 #include <llvm/Support/TargetSelect.h>
+
+#if !LLVM_USE_PERF
+#	warning "LLVM was not build with perf support. Disabling perf listener support"
+#endif
 
 namespace asllvm::detail
 {
@@ -20,10 +25,23 @@ LibraryInitializer::LibraryInitializer()
 JitCompiler::JitCompiler(JitConfig config) :
 	m_llvm_initializer{},
 	m_jit{ExitOnError(llvm::orc::LLJITBuilder().create())},
+	m_gdb_listener{llvm::JITEventListener::createGDBRegistrationListener()},
+#if LLVM_USE_PERF
+	m_perf_listener{llvm::JITEventListener::createPerfJITEventListener()},
+#endif
 	m_config{config},
 	m_builder{*this},
 	m_module_map{*this}
-{}
+{
+	auto& object_linking_layer = static_cast<llvm::orc::RTDyldObjectLinkingLayer&>(m_jit->getObjLinkingLayer());
+	object_linking_layer.setNotifyLoaded([this](auto a, auto& b, auto& c) {
+		m_gdb_listener->notifyObjectLoaded(a, b, c);
+
+#if LLVM_USE_PERF
+		m_perf_listener->notifyObjectLoaded(a, b, c);
+#endif
+	});
+}
 
 int JitCompiler::jit_compile(asIScriptFunction* function, asJITFunction* output)
 {

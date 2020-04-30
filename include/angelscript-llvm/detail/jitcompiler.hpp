@@ -4,6 +4,7 @@
 #include <angelscript-llvm/detail/builder.hpp>
 #include <angelscript-llvm/detail/modulemap.hpp>
 #include <angelscript.h>
+#include <llvm/ExecutionEngine/JITEventListener.h>
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
 #include <string>
 
@@ -37,9 +38,13 @@ class JitCompiler
 	[[no_unique_address]] LibraryInitializer m_llvm_initializer;
 	asIScriptEngine*                         m_engine = nullptr;
 	std::unique_ptr<llvm::orc::LLJIT>        m_jit;
-	JitConfig                                m_config;
-	Builder                                  m_builder;
-	ModuleMap                                m_module_map;
+	llvm::JITEventListener*                  m_gdb_listener;
+#if LLVM_USE_PERF
+	llvm::JITEventListener* m_perf_listener;
+#endif
+	JitConfig m_config;
+	Builder   m_builder;
+	ModuleMap m_module_map;
 };
 
 } // namespace asllvm::detail
