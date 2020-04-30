@@ -41,6 +41,8 @@ JitCompiler::JitCompiler(JitConfig config) :
 		m_perf_listener->notifyObjectLoaded(a, b, c);
 #endif
 	});
+
+	object_linking_layer.setProcessAllSections(true);
 }
 
 int JitCompiler::jit_compile(asIScriptFunction* function, asJITFunction* output)
