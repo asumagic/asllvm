@@ -36,15 +36,15 @@ FunctionBuilder::FunctionBuilder(
 		m_script_function.GetDeclaration(true, true),
 		llvm::StringRef{},
 		module_debug_info.file,
-		0,
+		1,
 		di.createSubroutineType(di.getOrCreateTypeArray(v)),
-		0,
+		1,
 		llvm::DINode::FlagPrototyped,
 		llvm::DISubprogram::SPFlagDefinition);
 
 	m_llvm_function->setSubprogram(sp);
 
-	ir.SetCurrentDebugLocation(llvm::DebugLoc::get(0, 0, sp));
+	ir.SetCurrentDebugLocation(llvm::DebugLoc::get(1, 1, sp));
 }
 
 llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
