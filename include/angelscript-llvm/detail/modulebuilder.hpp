@@ -19,8 +19,7 @@ namespace asllvm::detail
 {
 struct InternalFunctions
 {
-	llvm::Function *alloc, *free, *script_object_constructor, *script_vtable_lookup, *system_vtable_lookup,
-		*call_object_method;
+	llvm::Function *alloc, *free, *new_script_object, *script_vtable_lookup, *system_vtable_lookup, *call_object_method;
 };
 
 struct PendingFunction
@@ -61,6 +60,7 @@ class ModuleBuilder
 	static void* script_vtable_lookup(asCScriptObject* object, asCScriptFunction* function);
 	static void* system_vtable_lookup(void* object, asPWORD func);
 	static void  call_object_method(void* object, asCScriptFunction* function);
+	static void* new_script_object(asCObjectType* object_type);
 
 	bool is_exposed_directly(asIScriptFunction& function) const;
 

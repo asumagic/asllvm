@@ -83,7 +83,7 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 		emit_allocate_local_structures();
 
 		walk_bytecode([&](BytecodeInstruction instruction) {
-			process_instruction(instruction);
+			translate_instruction(instruction);
 
 			// Emit metadata on last inserted instruction for debugging
 			if (m_compiler.config().verbose)
@@ -230,7 +230,7 @@ void FunctionBuilder::preprocess_instruction(BytecodeInstruction instruction, Pr
 	}
 }
 
-void FunctionBuilder::process_instruction(BytecodeInstruction ins)
+void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 {
 	asIScriptEngine&   engine         = m_compiler.engine();
 	llvm::IRBuilder<>& ir             = m_compiler.builder().ir();
@@ -527,28 +527,14 @@ void FunctionBuilder::process_instruction(BytecodeInstruction ins)
 		auto&     type           = *reinterpret_cast<asCObjectType*>(ins.arg_pword());
 		const int constructor_id = ins.arg_int(AS_PTR_SIZE);
 
-		// Allocate memory for the object
-		std::array<llvm::Value*, 1> alloc_args{{
-			llvm::ConstantInt::get(defs.iptr, type.size) // TODO: align type.size to 4 bytes
-		}};
-
-		llvm::Value* object_memory_pointer = ir.CreateCall(
-			internal_funcs.alloc->getFunctionType(),
-			internal_funcs.alloc,
-			alloc_args,
-			fmt::format("heap.{}", type.GetName()));
-
 		if (type.flags & asOBJ_SCRIPT_OBJECT)
 		{
 			// Initialize stuff using the scriptobject constructor
-			std::array<llvm::Value*, 2> scriptobject_constructor_args{
-				{ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, reinterpret_cast<asPWORD>(&type)), defs.pvoid),
-				 object_memory_pointer}};
+			std::array<llvm::Value*, 1> args{
+				{ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, reinterpret_cast<asPWORD>(&type)), defs.pvoid)}};
 
-			ir.CreateCall(
-				internal_funcs.script_object_constructor->getFunctionType(),
-				internal_funcs.script_object_constructor,
-				scriptobject_constructor_args);
+			llvm::Value* object_memory_pointer = ir.CreateCall(
+				internal_funcs.new_script_object->getFunctionType(), internal_funcs.new_script_object, args);
 
 			// Constructor
 			asCScriptFunction& constructor = *static_cast<asCScriptEngine&>(engine).scriptFunctions[constructor_id];
@@ -566,6 +552,17 @@ void FunctionBuilder::process_instruction(BytecodeInstruction ins)
 		}
 		else
 		{
+			// Allocate memory for the object
+			std::array<llvm::Value*, 1> alloc_args{
+				llvm::ConstantInt::get(defs.iptr, type.size) // TODO: align type.size to 4 bytes
+			};
+
+			llvm::Value* object_memory_pointer = ir.CreateCall(
+				internal_funcs.alloc->getFunctionType(),
+				internal_funcs.alloc,
+				alloc_args,
+				fmt::format("heap.{}", type.GetName()));
+
 			if (constructor_id != 0)
 			{
 				push_stack_value(object_memory_pointer, AS_PTR_SIZE);

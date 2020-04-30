@@ -64,7 +64,7 @@ class FunctionBuilder
 	//! \warning
 	//!		This requires preprocess_instruction() to have been used beforehand.
 	//! \see read_bytecode()
-	void process_instruction(BytecodeInstruction instruction);
+	void translate_instruction(BytecodeInstruction instruction);
 
 	//! \brief Get a human-readable disassembly for a given bytecode instruction.
 	std::string disassemble(BytecodeInstruction instruction);

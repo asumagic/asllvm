@@ -275,6 +275,13 @@ void ModuleBuilder::call_object_method(void* object, asCScriptFunction* function
 	engine.CallObjectMethod(object, function->GetId());
 }
 
+void* ModuleBuilder::new_script_object(asCObjectType* object_type)
+{
+	auto* object = static_cast<asCScriptObject*>(userAlloc(object_type->size));
+	ScriptObject_Construct(object_type, object);
+	return object;
+}
+
 InternalFunctions ModuleBuilder::setup_internal_functions()
 {
 	CommonDefinitions& defs = m_compiler.builder().definitions();
@@ -305,17 +312,16 @@ InternalFunctions ModuleBuilder::setup_internal_functions()
 	}
 
 	{
-		std::array<llvm::Type*, 2> types{{defs.pvoid, defs.pvoid}};
+		std::array<llvm::Type*, 1> types{{defs.pvoid}};
 
-		llvm::FunctionType* function_type = llvm::FunctionType::get(defs.tvoid, types, false);
-		funcs.script_object_constructor   = llvm::Function::Create(
-			function_type,
-			llvm::Function::ExternalLinkage,
-			0,
-			"asllvm.private.script_object_constructor",
-			m_llvm_module.get());
+		llvm::FunctionType* function_type = llvm::FunctionType::get(defs.pvoid, types, false);
+		funcs.new_script_object           = llvm::Function::Create(
+			function_type, llvm::Function::ExternalLinkage, 0, "asllvm.private.new_script_object", m_llvm_module.get());
 
-		funcs.script_object_constructor->addFnAttr(llvm::Attribute::InaccessibleMemOrArgMemOnly);
+		funcs.new_script_object->addFnAttr(llvm::Attribute::InaccessibleMemOrArgMemOnly);
+
+		// The object we created is unique as it was dynamically allocated
+		funcs.new_script_object->addAttribute(0, llvm::Attribute::NoAlias);
 	}
 
 	{
@@ -407,7 +413,7 @@ void ModuleBuilder::link_symbols()
 	// TODO: figure out why func->getName() returns an empty string
 	define_function(*userAlloc, "asllvm.private.alloc");
 	define_function(*userFree, "asllvm.private.free");
-	define_function(ScriptObject_Construct, "asllvm.private.script_object_constructor");
+	define_function(new_script_object, "asllvm.private.new_script_object");
 	define_function(script_vtable_lookup, "asllvm.private.script_vtable_lookup");
 	define_function(system_vtable_lookup, "asllvm.private.system_vtable_lookup");
 	define_function(call_object_method, "asllvm.private.call_object_method");
