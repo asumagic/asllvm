@@ -11,7 +11,7 @@
 #include <llvm/Support/TargetSelect.h>
 
 #if !LLVM_USE_PERF
-#	warning "LLVM was not build with perf support. Disabling perf listener support"
+#	pragma message("warning: LLVM was not build with perf support. Disabling perf listener support")
 #endif
 
 namespace asllvm::detail
