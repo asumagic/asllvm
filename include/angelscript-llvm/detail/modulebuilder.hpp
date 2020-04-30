@@ -8,6 +8,7 @@
 #include <angelscript-llvm/detail/asinternalheaders.hpp>
 #include <angelscript-llvm/detail/fwd.hpp>
 #include <angelscript.h>
+#include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/PassManager.h>
 #include <map>
 #include <memory>
@@ -35,6 +36,12 @@ struct JitSymbol
 	asJITFunction*     jit_function;
 };
 
+struct ModuleDebugInfo
+{
+	llvm::DICompileUnit* compile_unit;
+	llvm::DIFile*        file;
+};
+
 class ModuleBuilder
 {
 	public:
@@ -53,6 +60,9 @@ class ModuleBuilder
 	llvm::Module&      module() { return *m_llvm_module; }
 	InternalFunctions& internal_functions() { return m_internal_functions; }
 
+	llvm::DIBuilder& di_builder() { return *m_di_builder; }
+	ModuleDebugInfo& debug_info() { return m_debug_info; }
+
 	void dump_state() const;
 
 	private:
@@ -69,14 +79,16 @@ class ModuleBuilder
 	void build_functions();
 	void link_symbols();
 
-	JitCompiler&                   m_compiler;
-	asIScriptModule*               m_script_module;
-	std::unique_ptr<llvm::Module>  m_llvm_module;
-	std::vector<PendingFunction>   m_pending_functions;
-	std::vector<JitSymbol>         m_jit_functions;
-	std::map<int, llvm::Function*> m_script_functions;
-	std::map<int, llvm::Function*> m_system_functions;
-	InternalFunctions              m_internal_functions;
+	JitCompiler&                     m_compiler;
+	asIScriptModule*                 m_script_module;
+	std::unique_ptr<llvm::Module>    m_llvm_module;
+	std::unique_ptr<llvm::DIBuilder> m_di_builder;
+	ModuleDebugInfo                  m_debug_info;
+	std::vector<PendingFunction>     m_pending_functions;
+	std::vector<JitSymbol>           m_jit_functions;
+	std::map<int, llvm::Function*>   m_script_functions;
+	std::map<int, llvm::Function*>   m_system_functions;
+	InternalFunctions                m_internal_functions;
 };
 
 } // namespace asllvm::detail

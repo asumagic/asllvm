@@ -22,8 +22,29 @@ FunctionBuilder::FunctionBuilder(
 	m_script_function{script_function},
 	m_llvm_function{llvm_function}
 {
-	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
-	ir.SetInsertPoint(llvm::BasicBlock::Create(m_compiler.builder().context(), "entry", llvm_function));
+	llvm::IRBuilder<>& ir                = m_compiler.builder().ir();
+	llvm::LLVMContext& context           = m_compiler.builder().context();
+	llvm::DIBuilder&   di                = m_module_builder.di_builder();
+	ModuleDebugInfo&   module_debug_info = m_module_builder.debug_info();
+
+	ir.SetInsertPoint(llvm::BasicBlock::Create(context, "entry", llvm_function));
+
+	std::vector<llvm::Metadata*> v;
+
+	llvm::DISubprogram* sp = di.createFunction(
+		module_debug_info.compile_unit,
+		m_script_function.GetDeclaration(true, true),
+		llvm::StringRef{},
+		module_debug_info.file,
+		0,
+		di.createSubroutineType(di.getOrCreateTypeArray(v)),
+		0,
+		llvm::DINode::FlagPrototyped,
+		llvm::DISubprogram::SPFlagDefinition);
+
+	m_llvm_function->setSubprogram(sp);
+
+	ir.SetCurrentDebugLocation(llvm::DebugLoc::get(0, 0, sp));
 }
 
 llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)

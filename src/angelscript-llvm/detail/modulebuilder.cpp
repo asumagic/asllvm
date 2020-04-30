@@ -17,8 +17,20 @@ ModuleBuilder::ModuleBuilder(JitCompiler& compiler, asIScriptModule& module) :
 	m_compiler{compiler},
 	m_script_module{&module},
 	m_llvm_module{std::make_unique<llvm::Module>(make_module_name(module), compiler.builder().context())},
+	m_di_builder{std::make_unique<llvm::DIBuilder>(*m_llvm_module)},
 	m_internal_functions{setup_internal_functions()}
-{}
+{
+	// FIXME: determine file name properly
+	m_debug_info.file = m_di_builder->createFile(module.GetName(), "");
+
+	m_debug_info.compile_unit = m_di_builder->createCompileUnit(
+		llvm::dwarf::DW_LANG_C_plus_plus,
+		m_debug_info.file,
+		"asllvm",
+		m_compiler.config().allow_llvm_optimizations,
+		"",
+		0);
+}
 
 void ModuleBuilder::append(PendingFunction function) { m_pending_functions.push_back(function); }
 
@@ -394,6 +406,8 @@ void ModuleBuilder::build_functions()
 		symbol.entry_name      = entry->getName();
 		symbol.jit_function    = pending.jit_function;
 		m_jit_functions.push_back(symbol);
+
+		m_di_builder->finalize();
 	}
 
 	m_pending_functions.clear();
