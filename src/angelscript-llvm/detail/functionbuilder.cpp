@@ -1858,6 +1858,7 @@ void FunctionBuilder::create_function_debug_info()
 		const std::size_t count     = m_script_function.GetParamCount();
 		std::uint64_t     stack_pos = 0;
 		for (std::size_t i = 0; i < count; ++i)
+
 		{
 			int          type_id = 0;
 			unsigned int flags   = 0;
@@ -1869,7 +1870,7 @@ void FunctionBuilder::create_function_debug_info()
 			llvm::DILocalVariable* local
 				= di.createParameterVariable(sp, name, i, file, 0, m_module_builder.get_debug_type(type_id), true);
 
-			std::array<std::uint64_t, 3> addresses{llvm::dwarf::DW_OP_constu, stack_pos * 4, llvm::dwarf::DW_OP_plus};
+			std::array<std::uint64_t, 2> addresses{llvm::dwarf::DW_OP_plus_uconst, stack_pos * 4};
 
 			stack_pos += data_type.GetSizeOnStackDWords();
 
@@ -1879,6 +1880,24 @@ void FunctionBuilder::create_function_debug_info()
 				di.createExpression(addresses),
 				llvm::DebugLoc::get(0, 0, sp),
 				ir.GetInsertBlock());
+		}
+	}
+
+	{
+		const auto& vars = m_script_function.scriptData->variables;
+		for (std::size_t i = m_script_function.GetParamCount(); i < vars.GetLength(); ++i)
+		{
+			const auto& var = vars[i];
+
+			llvm::DILocalVariable* local = di.createAutoVariable(
+				sp, &var->name[0], file, 0, m_module_builder.get_debug_type(engine.GetTypeIdFromDataType(var->type)));
+
+			std::array<std::uint64_t, 2> addresses{
+				llvm::dwarf::DW_OP_plus_uconst,
+				std::uint64_t(local_storage_size() + stack_size() - var->stackOffset) * 4};
+
+			di.insertDeclare(
+				m_locals, local, di.createExpression(addresses), llvm::DebugLoc::get(0, 0, sp), ir.GetInsertBlock());
 		}
 	}
 

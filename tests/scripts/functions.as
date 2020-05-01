@@ -1,3 +1,5 @@
+// Basic function stuff - useful for testing source-level debugging.
+
 void main()
 {
     print('' + calc(10, 100));
@@ -6,6 +8,7 @@ void main()
 int calc(int64 a, int b)
 {
     a *= 10;
-    b *= a;
+    int v = a;
+    v *= b;
     return b;
 }
