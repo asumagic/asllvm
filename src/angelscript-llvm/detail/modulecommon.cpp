@@ -8,14 +8,14 @@ std::string make_module_name(asIScriptModule& module) { return fmt::format("asll
 
 std::string make_function_name(asIScriptFunction& function)
 {
-	return fmt::format("{}.{}", make_module_name(*function.GetModule()), function.GetDeclaration(true, true, true));
+	return fmt::format("{}.{}", make_module_name(*function.GetModule()), function.GetDeclaration(true, true, false));
 }
 
 std::string make_jit_entry_name(asIScriptFunction& function) { return make_function_name(function) + ".jitentry"; }
 
 std::string make_system_function_name(asIScriptFunction& function)
 {
-	return fmt::format("asllvm.external.{}", function.GetDeclaration(true, true, true));
+	return fmt::format("asllvm.external.{}", function.GetDeclaration(true, true, false));
 }
 
 std::string make_debug_name(asIScriptFunction& function)

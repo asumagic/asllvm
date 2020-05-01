@@ -24,6 +24,20 @@ ModuleBuilder::ModuleBuilder(JitCompiler& compiler, asIScriptModule& module) :
 
 void ModuleBuilder::append(PendingFunction function) { m_pending_functions.push_back(function); }
 
+llvm::Function* ModuleBuilder::create_script_function_skeleton(
+	asCScriptFunction& script_function, llvm::GlobalValue::LinkageTypes linkage, const std::string& name)
+{
+	llvm::Function* llvm_function
+		= llvm::Function::Create(get_script_function_type(script_function), linkage, name, *m_llvm_module);
+
+	// i8* noalias %params
+	(llvm_function->arg_begin() + 0)->setName("params");
+	llvm_function->addParamAttr(0, llvm::Attribute::NoAlias);
+	llvm_function->addParamAttr(0, llvm::Attribute::NoCapture);
+
+	return llvm_function;
+}
+
 llvm::Function* ModuleBuilder::get_script_function(asCScriptFunction& function)
 {
 	asllvm_assert(
@@ -46,60 +60,10 @@ llvm::Function* ModuleBuilder::get_script_function(asCScriptFunction& function)
 
 	const std::string name = make_function_name(function);
 
-	const auto create_function = [&](const auto& name, auto linkage) {
-		llvm::Function* llvm_function
-			= llvm::Function::Create(get_script_function_type(function), linkage, name, *m_llvm_module);
-
-		// i8* noalias %params
-		(llvm_function->arg_begin() + 0)->setName("params");
-		llvm_function->addParamAttr(0, llvm::Attribute::NoAlias);
-		llvm_function->addParamAttr(0, llvm::Attribute::NoCapture);
-
-		return llvm_function;
-	};
-
-	// It apparently helps LLVM optimizations to split the same function into:
-	// 1. one that has an internal linkage
-	// 2. one that has an external linkage that calls the former
-	// The reason is that the function with the internal linkage can have its function type transformed freely, enabling
-	// sometimes powerful optimizations. It does not seem to be able to infer that when the function is external since
-	// the function type must stay the same, but it is also not able to do the "split" on its own.
-
 	llvm::Function* internal_function
-		= create_function(fmt::format("{}.internal", name), llvm::Function::InternalLinkage);
-
-	llvm::Function* proxy_function = create_function(name, llvm::Function::ExternalLinkage);
-
-	{
-		// TODO: move to its own function, or find a better way to do this
-		llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
-		llvm::LLVMContext& context = m_compiler.builder().context();
-
-		auto* old_bb           = ir.GetInsertBlock();
-		auto  old_insert_point = ir.GetInsertPoint();
-
-		ir.SetInsertPoint(llvm::BasicBlock::Create(context, "entry", proxy_function));
-
-		std::array<llvm::Value*, 1> args{&*(proxy_function->arg_begin() + 0)};
-		llvm::Value*                ret = ir.CreateCall(internal_function->getFunctionType(), internal_function, args);
-
-		if (proxy_function->getReturnType() != llvm::Type::getVoidTy(context))
-		{
-			ir.CreateRet(ret);
-		}
-		else
-		{
-			ir.CreateRetVoid();
-		}
-
-		if (old_bb != nullptr)
-		{
-			ir.SetInsertPoint(old_bb, old_insert_point);
-		}
-	}
+		= create_script_function_skeleton(function, llvm::Function::InternalLinkage, fmt::format("{}.internal", name));
 
 	m_script_functions.emplace(function.GetId(), internal_function);
-
 	return internal_function;
 }
 
@@ -442,6 +406,7 @@ void ModuleBuilder::build_functions()
 		builder.read_bytecode(bytecode, length);
 
 		llvm::Function* entry = builder.create_vm_entry();
+		builder.create_proxy();
 
 		JitSymbol symbol;
 		symbol.script_function = pending.function;

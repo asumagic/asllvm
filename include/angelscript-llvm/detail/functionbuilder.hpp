@@ -8,6 +8,7 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <map>
+#include <string_view>
 #include <vector>
 
 namespace asllvm::detail
@@ -18,6 +19,11 @@ class FunctionBuilder
 	{
 		long current_switch_offset;
 		bool handling_jump_table = false;
+	};
+
+	struct SourceLocation
+	{
+		int line, column;
 	};
 
 	public:
@@ -46,6 +52,12 @@ class FunctionBuilder
 	//!		read_bytecode() and return to the VM cleanly.
 	llvm::Function* create_vm_entry();
 
+	// It apparently helps LLVM optimizations to split the same function into:
+	// 1. one that has an internal linkage
+	// 2. one that has an external linkage that calls the former
+	// The reason is that the function with the internal linkage can have its function type transformed freely, enabling
+	// sometimes powerful optimizations. It does not seem to be able to infer that when the function is external since
+	// the function type must stay the same, but it is also not able to do the "split" on its own.
 	llvm::Function* create_proxy();
 
 	private:
@@ -174,8 +186,11 @@ class FunctionBuilder
 	//!		\p block from the old one if necessary.
 	void switch_to_block(llvm::BasicBlock* block);
 
-	void create_function_debug_info();
+	void create_function_debug_info(llvm::Function* function, std::string_view symbol_suffix = {});
 	void create_locals_debug_info();
+
+	SourceLocation get_source_location(std::size_t bytecode_offset);
+	llvm::DebugLoc get_debug_location(std::size_t bytecode_offset, llvm::DISubprogram* sp);
 
 	long local_storage_size() const;
 	long stack_size() const;

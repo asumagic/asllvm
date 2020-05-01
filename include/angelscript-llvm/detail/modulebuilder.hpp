@@ -52,6 +52,9 @@ class ModuleBuilder
 
 	void append(PendingFunction function);
 
+	llvm::Function* create_script_function_skeleton(
+		asCScriptFunction& script_function, llvm::GlobalValue::LinkageTypes linkage, const std::string& name);
+
 	llvm::Function*     get_script_function(asCScriptFunction& function);
 	llvm::FunctionType* get_script_function_type(asCScriptFunction& script_function);
 

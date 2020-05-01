@@ -82,7 +82,7 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 			walk_bytecode([&](BytecodeInstruction instruction) { preprocess_instruction(instruction, context); });
 		}
 
-		create_function_debug_info();
+		create_function_debug_info(m_llvm_function);
 		emit_allocate_local_structures();
 		create_locals_debug_info();
 
@@ -137,6 +137,8 @@ llvm::Function* FunctionBuilder::create_vm_entry()
 		make_jit_entry_name(m_script_function),
 		m_module_builder.module());
 
+	create_function_debug_info(wrapper_function, "!jitentry");
+
 	llvm::BasicBlock* block = llvm::BasicBlock::Create(context, "entry", wrapper_function);
 
 	ir.SetInsertPoint(block);
@@ -184,6 +186,33 @@ llvm::Function* FunctionBuilder::create_vm_entry()
 	ir.CreateRetVoid();
 
 	return wrapper_function;
+}
+
+llvm::Function* FunctionBuilder::create_proxy()
+{
+	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
+	llvm::LLVMContext& context = m_compiler.builder().context();
+
+	llvm::Function* proxy_function = m_module_builder.create_script_function_skeleton(
+		m_script_function, llvm::Function::ExternalLinkage, make_function_name(m_script_function));
+
+	ir.SetInsertPoint(llvm::BasicBlock::Create(context, "entry", proxy_function));
+
+	std::array<llvm::Value*, 1> args{&*(proxy_function->arg_begin() + 0)};
+	llvm::Value*                ret = ir.CreateCall(m_llvm_function->getFunctionType(), m_llvm_function, args);
+
+	if (proxy_function->getReturnType() != llvm::Type::getVoidTy(context))
+	{
+		ir.CreateRet(ret);
+	}
+	else
+	{
+		ir.CreateRetVoid();
+	}
+
+	create_function_debug_info(proxy_function, "!jitentry");
+
+	return proxy_function;
 }
 
 void FunctionBuilder::preprocess_instruction(BytecodeInstruction instruction, PreprocessContext& ctx)
@@ -241,14 +270,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	CommonDefinitions& defs           = m_compiler.builder().definitions();
 	InternalFunctions& internal_funcs = m_module_builder.internal_functions();
 
-	{
-		int       section;
-		const int encoded_line = m_script_function.GetLineNumber(ins.offset, &section);
-
-		const int line = encoded_line & 0xFFFFF, column = encoded_line >> 20;
-
-		ir.SetCurrentDebugLocation(llvm::DebugLoc::get(line, column, m_llvm_function->getSubprogram()));
-	}
+	ir.SetCurrentDebugLocation(get_debug_location(ins.offset, m_llvm_function->getSubprogram()));
 
 	const auto old_stack_pointer = m_stack_pointer;
 
@@ -1821,7 +1843,7 @@ void FunctionBuilder::switch_to_block(llvm::BasicBlock* block)
 	ir.SetInsertPoint(block);
 }
 
-void FunctionBuilder::create_function_debug_info()
+void FunctionBuilder::create_function_debug_info(llvm::Function* function, std::string_view symbol_suffix)
 {
 	llvm::IRBuilder<>& ir                = m_compiler.builder().ir();
 	llvm::DIBuilder&   di                = m_module_builder.di_builder();
@@ -1844,7 +1866,7 @@ void FunctionBuilder::create_function_debug_info()
 
 	llvm::DISubprogram* sp = di.createFunction(
 		module_debug_info.compile_unit,
-		make_debug_name(m_script_function),
+		fmt::format("{}{}", make_debug_name(m_script_function), symbol_suffix),
 		llvm::StringRef{},
 		file,
 		1,
@@ -1853,9 +1875,9 @@ void FunctionBuilder::create_function_debug_info()
 		llvm::DINode::FlagPrototyped,
 		llvm::DISubprogram::SPFlagDefinition);
 
-	m_llvm_function->setSubprogram(sp);
+	function->setSubprogram(sp);
 
-	ir.SetCurrentDebugLocation(llvm::DebugLoc::get(0, 0, sp));
+	ir.SetCurrentDebugLocation(get_debug_location(0, sp));
 }
 
 void FunctionBuilder::create_locals_debug_info()
@@ -1890,7 +1912,7 @@ void FunctionBuilder::create_locals_debug_info()
 				&*(m_llvm_function->arg_begin() + 0),
 				local,
 				di.createExpression(addresses),
-				llvm::DebugLoc::get(0, 0, sp),
+				get_debug_location(0, sp),
 				ir.GetInsertBlock());
 		}
 	}
@@ -1913,9 +1935,24 @@ void FunctionBuilder::create_locals_debug_info()
 				std::uint64_t(local_storage_size() + stack_size() - var->stackOffset) * 4};
 
 			di.insertDeclare(
-				m_locals, local, di.createExpression(addresses), llvm::DebugLoc::get(0, 0, sp), ir.GetInsertBlock());
+				m_locals, local, di.createExpression(addresses), get_debug_location(0, sp), ir.GetInsertBlock());
 		}
 	}
+}
+
+FunctionBuilder::SourceLocation FunctionBuilder::get_source_location(std::size_t bytecode_offset)
+{
+	int       section;
+	const int encoded_line = m_script_function.GetLineNumber(bytecode_offset, &section);
+
+	const int line = encoded_line & 0xFFFFF, column = encoded_line >> 20;
+	return {line, column};
+}
+
+llvm::DebugLoc FunctionBuilder::get_debug_location(std::size_t bytecode_offset, llvm::DISubprogram* sp)
+{
+	const SourceLocation loc = get_source_location(bytecode_offset);
+	return llvm::DebugLoc::get(loc.line, loc.column, sp);
 }
 
 long FunctionBuilder::local_storage_size() const { return m_script_function.scriptData->variableSpace; }
