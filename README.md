@@ -84,6 +84,11 @@ This project was partly created for learning purposes.
 An existing AngelScript JIT compiler from BlindMindStudios exists. I believe that asllvm may have several significant
 differences with BMS's JIT compiler.
 
+### Source-level debugging
+
+asllvm currently has (limited) support for source-level debugging using gdb. This means that you can debug an
+AngelScript script in your IDE - inspect variables, step through, setup breakpoints, etc. with a consistent call stack.
+
 ### Cross-platform support
 
 BMS's JIT compiler was made with x86/x86-64 in mind, and cannot be ported to other architectures without a massive
