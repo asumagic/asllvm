@@ -1864,13 +1864,14 @@ void FunctionBuilder::create_function_debug_info()
 			const char*  name    = nullptr;
 			m_script_function.GetParam(i, &type_id, &flags, &name);
 
+			asCDataType& data_type = m_script_function.parameterTypes[i];
+
 			llvm::DILocalVariable* local
 				= di.createParameterVariable(sp, name, i, file, 0, m_module_builder.get_debug_type(type_id), true);
 
 			std::array<std::uint64_t, 3> addresses{llvm::dwarf::DW_OP_constu, stack_pos * 4, llvm::dwarf::DW_OP_plus};
 
-			// FIXME: obviously garbage
-			stack_pos += 1;
+			stack_pos += data_type.GetSizeOnStackDWords();
 
 			di.insertDeclare(
 				&*(m_llvm_function->arg_begin() + 0),
