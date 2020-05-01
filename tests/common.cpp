@@ -106,8 +106,7 @@ void EngineContext::run(asIScriptModule& module, const char* entry_point)
 asllvm::JitConfig default_jit_config()
 {
 	asllvm::JitConfig config;
-	config.verbose                  = true;
-	config.allow_llvm_optimizations = false;
+	config.verbose = true;
 	return config;
 }
 
