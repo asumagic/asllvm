@@ -189,7 +189,7 @@ class FunctionBuilder
 	void create_function_debug_info(llvm::Function* function, std::string_view symbol_suffix = {});
 	void create_locals_debug_info();
 
-	SourceLocation get_source_location(std::size_t bytecode_offset);
+	SourceLocation get_source_location(std::size_t bytecode_offset = 0);
 	llvm::DebugLoc get_debug_location(std::size_t bytecode_offset, llvm::DISubprogram* sp);
 
 	long local_storage_size() const;

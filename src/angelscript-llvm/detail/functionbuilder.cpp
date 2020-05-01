@@ -1864,7 +1864,7 @@ void FunctionBuilder::create_function_debug_info(llvm::Function* function, std::
 
 	llvm::DIFile* file = di.createFile(m_script_function.GetScriptSectionName(), ".");
 
-	const SourceLocation loc = get_source_location(0);
+	const SourceLocation loc = get_source_location();
 
 	llvm::DISubprogram* sp = di.createFunction(
 		module_debug_info.compile_unit,
