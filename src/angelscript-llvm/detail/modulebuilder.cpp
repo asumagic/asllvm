@@ -224,10 +224,7 @@ void ModuleBuilder::build()
 
 	link_symbols();
 
-	if (m_compiler.config().allow_llvm_optimizations)
-	{
-		m_compiler.builder().optimizer().run(*m_llvm_module);
-	}
+	m_compiler.builder().optimizer().run(*m_llvm_module);
 
 	ExitOnError(m_compiler.jit().addIRModule(
 		llvm::orc::ThreadSafeModule(std::move(m_llvm_module), m_compiler.builder().extract_old_context())));

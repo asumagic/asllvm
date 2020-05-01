@@ -157,17 +157,20 @@ llvm::legacy::PassManager Builder::setup_pass_manager()
 {
 	constexpr int inlining_threshold = 275;
 
-	llvm::PassManagerBuilder pmb;
-	pmb.OptLevel           = 3;
-	pmb.Inliner            = llvm::createFunctionInliningPass(inlining_threshold);
-	pmb.DisableUnrollLoops = false;
-	pmb.LoopVectorize      = true;
-	pmb.SLPVectorize       = true;
-
 	llvm::legacy::PassManager pm;
 	pm.add(llvm::createVerifierPass());
-	pmb.populateModulePassManager(pm);
-	pm.add(llvm::createVerifierPass());
+
+	if (m_compiler.config().allow_llvm_optimizations)
+	{
+		llvm::PassManagerBuilder pmb;
+		pmb.OptLevel           = 3;
+		pmb.Inliner            = llvm::createFunctionInliningPass(inlining_threshold);
+		pmb.DisableUnrollLoops = false;
+		pmb.LoopVectorize      = true;
+		pmb.SLPVectorize       = true;
+		pmb.populateModulePassManager(pm);
+		pm.add(llvm::createVerifierPass()); // Verify the optimized IR as well
+	}
 
 	return pm;
 }
