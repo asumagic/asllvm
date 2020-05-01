@@ -215,7 +215,7 @@ llvm::DIType* ModuleBuilder::get_debug_type(ModuleDebugInfo::AsTypeIdentifier sc
 	asITypeInfo* type_info = engine.GetTypeInfoById(script_type_id);
 	asllvm_assert(type_info != nullptr);
 
-	if (const auto flags = type_info->GetFlags(); flags & asOBJ_SCRIPT_OBJECT)
+	if (const auto flags = type_info->GetFlags(); (flags & asOBJ_SCRIPT_OBJECT) != 0)
 	{
 		const auto& object_type = *static_cast<asCObjectType*>(type_info);
 
@@ -251,6 +251,11 @@ llvm::DIType* ModuleBuilder::get_debug_type(ModuleDebugInfo::AsTypeIdentifier sc
 			m_di_builder->getOrCreateArray(llvm_properties));
 
 		return m_di_builder->createPointerType(class_type, AS_PTR_SIZE * 4 * 8);
+	}
+	else if ((flags & (asOBJ_REF | asOBJ_VALUE)) != 0)
+	{
+		return add(
+			m_di_builder->createBasicType(type_info->GetName(), AS_PTR_SIZE * 4 * 8, llvm::dwarf::DW_ATE_address));
 	}
 
 	return add(m_di_builder->createUnspecifiedType("<unimplemented>"));
