@@ -180,6 +180,8 @@ llvm::FunctionType* ModuleBuilder::get_system_function_type(asCScriptFunction& s
 
 llvm::DIType* ModuleBuilder::get_debug_type(ModuleDebugInfo::AsTypeIdentifier script_type_id)
 {
+	asCScriptEngine& engine = m_compiler.engine();
+
 	if (const auto it = m_debug_info.type_cache.find(script_type_id); it != m_debug_info.type_cache.end())
 	{
 		return it->second;
@@ -210,7 +212,48 @@ llvm::DIType* ModuleBuilder::get_debug_type(ModuleDebugInfo::AsTypeIdentifier sc
 	case asTYPEID_DOUBLE: return add(m_di_builder->createBasicType("double", 64, llvm::dwarf::DW_ATE_float));
 	}
 
-	return m_di_builder->createUnspecifiedType("<unimplemented>");
+	asITypeInfo* type_info = engine.GetTypeInfoById(script_type_id);
+	asllvm_assert(type_info != nullptr);
+
+	if (const auto flags = type_info->GetFlags(); flags & asOBJ_SCRIPT_OBJECT)
+	{
+		const auto& object_type = *static_cast<asCObjectType*>(type_info);
+
+		std::vector<llvm::Metadata*> llvm_properties;
+
+		const auto& properties = object_type.properties;
+		for (std::size_t i = 0; i < properties.GetLength(); ++i)
+		{
+			const auto& property = properties[i];
+
+			llvm_properties.push_back(m_di_builder->createMemberType(
+				nullptr,
+				&property->name[0],
+				nullptr,
+				0,
+				property->type.GetSizeInMemoryBytes() * 8,
+				0,
+				property->byteOffset * 8,
+				llvm::DINode::FlagPublic,
+				get_debug_type(engine.GetTypeIdFromDataType(property->type))));
+		}
+
+		llvm::DIType* class_type = m_di_builder->createClassType(
+			nullptr,
+			object_type.GetName(),
+			nullptr,
+			0,
+			object_type.GetSize(),
+			0,
+			0,
+			llvm::DINode::FlagTypePassByReference,
+			nullptr,
+			m_di_builder->getOrCreateArray(llvm_properties));
+
+		return m_di_builder->createPointerType(class_type, AS_PTR_SIZE * 4 * 8);
+	}
+
+	return add(m_di_builder->createUnspecifiedType("<unimplemented>"));
 }
 
 void ModuleBuilder::build()
