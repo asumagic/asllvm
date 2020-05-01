@@ -1864,14 +1864,16 @@ void FunctionBuilder::create_function_debug_info(llvm::Function* function, std::
 
 	llvm::DIFile* file = di.createFile(m_script_function.GetScriptSectionName(), ".");
 
+	const SourceLocation loc = get_source_location(0);
+
 	llvm::DISubprogram* sp = di.createFunction(
 		module_debug_info.compile_unit,
 		fmt::format("{}{}", make_debug_name(m_script_function), symbol_suffix),
 		llvm::StringRef{},
 		file,
-		1,
+		loc.line,
 		di.createSubroutineType(di.getOrCreateTypeArray(types)),
-		1,
+		loc.column,
 		llvm::DINode::FlagPrototyped,
 		llvm::DISubprogram::SPFlagDefinition);
 
