@@ -22,29 +22,10 @@ FunctionBuilder::FunctionBuilder(
 	m_script_function{script_function},
 	m_llvm_function{llvm_function}
 {
-	llvm::IRBuilder<>& ir                = m_compiler.builder().ir();
-	llvm::LLVMContext& context           = m_compiler.builder().context();
-	llvm::DIBuilder&   di                = m_module_builder.di_builder();
-	ModuleDebugInfo&   module_debug_info = m_module_builder.debug_info();
+	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
+	llvm::LLVMContext& context = m_compiler.builder().context();
 
 	ir.SetInsertPoint(llvm::BasicBlock::Create(context, "entry", llvm_function));
-
-	std::vector<llvm::Metadata*> v;
-
-	llvm::DISubprogram* sp = di.createFunction(
-		module_debug_info.compile_unit,
-		m_script_function.GetDeclaration(true, true),
-		llvm::StringRef{},
-		module_debug_info.file,
-		1,
-		di.createSubroutineType(di.getOrCreateTypeArray(v)),
-		1,
-		llvm::DINode::FlagPrototyped,
-		llvm::DISubprogram::SPFlagDefinition);
-
-	m_llvm_function->setSubprogram(sp);
-
-	ir.SetCurrentDebugLocation(llvm::DebugLoc::get(1, 1, sp));
 }
 
 llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
@@ -102,6 +83,8 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 		}
 
 		emit_allocate_local_structures();
+
+		create_function_debug_info();
 
 		walk_bytecode([&](BytecodeInstruction instruction) {
 			translate_instruction(instruction);
@@ -253,10 +236,19 @@ void FunctionBuilder::preprocess_instruction(BytecodeInstruction instruction, Pr
 
 void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 {
-	asIScriptEngine&   engine         = m_compiler.engine();
+	asCScriptEngine&   engine         = m_compiler.engine();
 	llvm::IRBuilder<>& ir             = m_compiler.builder().ir();
 	CommonDefinitions& defs           = m_compiler.builder().definitions();
 	InternalFunctions& internal_funcs = m_module_builder.internal_functions();
+
+	{
+		int       section;
+		const int encoded_line = m_script_function.GetLineNumber(ins.offset, &section);
+
+		const int line = encoded_line & 0xFFFFF, column = encoded_line >> 20;
+
+		ir.SetCurrentDebugLocation(llvm::DebugLoc::get(line, column, m_llvm_function->getSubprogram()));
+	}
 
 	const auto old_stack_pointer = m_stack_pointer;
 
@@ -1827,6 +1819,71 @@ void FunctionBuilder::switch_to_block(llvm::BasicBlock* block)
 	}
 
 	ir.SetInsertPoint(block);
+}
+
+void FunctionBuilder::create_function_debug_info()
+{
+	asCScriptEngine&   engine            = m_compiler.engine();
+	llvm::IRBuilder<>& ir                = m_compiler.builder().ir();
+	llvm::DIBuilder&   di                = m_module_builder.di_builder();
+	ModuleDebugInfo&   module_debug_info = m_module_builder.debug_info();
+
+	std::vector<llvm::Metadata*> types;
+	{
+		types.push_back(m_module_builder.get_debug_type(m_script_function.GetReturnTypeId()));
+
+		const std::size_t count = m_script_function.GetParamCount();
+		for (std::size_t i = 0; i < count; ++i)
+		{
+			int type_id = 0;
+			m_script_function.GetParam(i, &type_id);
+			types.push_back(m_module_builder.get_debug_type(type_id));
+		}
+	}
+
+	llvm::DIFile* file = di.createFile(m_script_function.GetScriptSectionName(), ".");
+
+	llvm::DISubprogram* sp = di.createFunction(
+		module_debug_info.compile_unit,
+		make_debug_name(m_script_function),
+		llvm::StringRef{},
+		file,
+		1,
+		di.createSubroutineType(di.getOrCreateTypeArray(types)),
+		1,
+		llvm::DINode::FlagPrototyped,
+		llvm::DISubprogram::SPFlagDefinition);
+
+	{
+		const std::size_t count     = m_script_function.GetParamCount();
+		std::uint64_t     stack_pos = 0;
+		for (std::size_t i = 0; i < count; ++i)
+		{
+			int          type_id = 0;
+			unsigned int flags   = 0;
+			const char*  name    = nullptr;
+			m_script_function.GetParam(i, &type_id, &flags, &name);
+
+			llvm::DILocalVariable* local
+				= di.createParameterVariable(sp, name, i, file, 0, m_module_builder.get_debug_type(type_id), true);
+
+			std::array<std::uint64_t, 3> addresses{llvm::dwarf::DW_OP_constu, stack_pos * 4, llvm::dwarf::DW_OP_plus};
+
+			// FIXME: obviously garbage
+			stack_pos += 1;
+
+			di.insertDeclare(
+				&*(m_llvm_function->arg_begin() + 0),
+				local,
+				di.createExpression(addresses),
+				llvm::DebugLoc::get(0, 0, sp),
+				ir.GetInsertBlock());
+		}
+	}
+
+	m_llvm_function->setSubprogram(sp);
+
+	ir.SetCurrentDebugLocation(llvm::DebugLoc::get(0, 0, sp));
 }
 
 long FunctionBuilder::local_storage_size() const { return m_script_function.scriptData->variableSpace; }

@@ -18,19 +18,9 @@ ModuleBuilder::ModuleBuilder(JitCompiler& compiler, asIScriptModule& module) :
 	m_script_module{&module},
 	m_llvm_module{std::make_unique<llvm::Module>(make_module_name(module), compiler.builder().context())},
 	m_di_builder{std::make_unique<llvm::DIBuilder>(*m_llvm_module)},
+	m_debug_info{setup_debug_info()},
 	m_internal_functions{setup_internal_functions()}
-{
-	// FIXME: determine file name properly
-	m_debug_info.file = m_di_builder->createFile(module.GetName(), "");
-
-	m_debug_info.compile_unit = m_di_builder->createCompileUnit(
-		llvm::dwarf::DW_LANG_C_plus_plus,
-		m_debug_info.file,
-		"asllvm",
-		m_compiler.config().allow_llvm_optimizations,
-		"",
-		0);
-}
+{}
 
 void ModuleBuilder::append(PendingFunction function) { m_pending_functions.push_back(function); }
 
@@ -224,6 +214,41 @@ llvm::FunctionType* ModuleBuilder::get_system_function_type(asCScriptFunction& s
 	return llvm::FunctionType::get(return_type, types, false);
 }
 
+llvm::DIType* ModuleBuilder::get_debug_type(ModuleDebugInfo::AsTypeIdentifier script_type_id)
+{
+	if (const auto it = m_debug_info.type_cache.find(script_type_id); it != m_debug_info.type_cache.end())
+	{
+		return it->second;
+	}
+
+	const auto add = [&](llvm::DIType* debug_type) {
+		m_debug_info.type_cache.emplace(script_type_id, debug_type);
+		return debug_type;
+	};
+
+	switch (script_type_id)
+	{
+	case asTYPEID_VOID: return add(m_di_builder->createUnspecifiedType("void"));
+
+	case asTYPEID_BOOL: return add(m_di_builder->createBasicType("bool", 1, llvm::dwarf::DW_ATE_boolean));
+
+	case asTYPEID_INT8: return add(m_di_builder->createBasicType("int8", 8, llvm::dwarf::DW_ATE_signed));
+	case asTYPEID_INT16: return add(m_di_builder->createBasicType("int16", 16, llvm::dwarf::DW_ATE_signed));
+	case asTYPEID_INT32: return add(m_di_builder->createBasicType("int", 32, llvm::dwarf::DW_ATE_signed));
+	case asTYPEID_INT64: return add(m_di_builder->createBasicType("int64", 64, llvm::dwarf::DW_ATE_signed));
+
+	case asTYPEID_UINT8: return add(m_di_builder->createBasicType("uint8", 8, llvm::dwarf::DW_ATE_unsigned));
+	case asTYPEID_UINT16: return add(m_di_builder->createBasicType("uint16", 16, llvm::dwarf::DW_ATE_unsigned));
+	case asTYPEID_UINT32: return add(m_di_builder->createBasicType("uint", 32, llvm::dwarf::DW_ATE_unsigned));
+	case asTYPEID_UINT64: return add(m_di_builder->createBasicType("uint64", 64, llvm::dwarf::DW_ATE_unsigned));
+
+	case asTYPEID_FLOAT: return add(m_di_builder->createBasicType("float", 32, llvm::dwarf::DW_ATE_float));
+	case asTYPEID_DOUBLE: return add(m_di_builder->createBasicType("double", 64, llvm::dwarf::DW_ATE_float));
+	}
+
+	return m_di_builder->createUnspecifiedType("<unimplemented>");
+}
+
 void ModuleBuilder::build()
 {
 	build_functions();
@@ -295,6 +320,24 @@ void* ModuleBuilder::new_script_object(asCObjectType* object_type)
 	auto* object = static_cast<asCScriptObject*>(userAlloc(object_type->size));
 	ScriptObject_Construct(object_type, object);
 	return object;
+}
+
+ModuleDebugInfo ModuleBuilder::setup_debug_info()
+{
+	ModuleDebugInfo debug_info;
+
+	// FIXME: determine file name properly
+	debug_info.file = m_di_builder->createFile(m_script_module->GetName(), "");
+
+	debug_info.compile_unit = m_di_builder->createCompileUnit(
+		llvm::dwarf::DW_LANG_C_plus_plus,
+		m_debug_info.file,
+		"asllvm",
+		m_compiler.config().allow_llvm_optimizations,
+		"",
+		0);
+
+	return debug_info;
 }
 
 InternalFunctions ModuleBuilder::setup_internal_functions()

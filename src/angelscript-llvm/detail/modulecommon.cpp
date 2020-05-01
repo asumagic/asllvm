@@ -17,4 +17,26 @@ std::string make_system_function_name(asIScriptFunction& function)
 {
 	return fmt::format("asllvm.external.{}", function.GetDeclaration(true, true, true));
 }
+
+std::string make_debug_name(asIScriptFunction& function)
+{
+	std::string name;
+
+	if (const char* ns = function.GetNamespace(); ns != nullptr)
+	{
+		name += ns;
+		name += "::";
+	}
+
+	if (const asITypeInfo* info = function.GetObjectType(); info != nullptr)
+	{
+		name += info->GetName();
+		name += "::";
+	}
+
+	name += function.GetName();
+
+	return name;
+}
+
 } // namespace asllvm::detail

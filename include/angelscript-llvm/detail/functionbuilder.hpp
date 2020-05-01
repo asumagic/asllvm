@@ -174,6 +174,8 @@ class FunctionBuilder
 	//!		\p block from the old one if necessary.
 	void switch_to_block(llvm::BasicBlock* block);
 
+	void create_function_debug_info();
+
 	long local_storage_size() const;
 	long stack_size() const;
 

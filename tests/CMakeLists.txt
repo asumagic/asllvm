@@ -4,6 +4,7 @@ add_executable(tests
 	integermath.cpp
 	floatmath.cpp
 	funcdefs.cpp
+	functions.cpp
 	booleans.cpp
 	globals.cpp
 	branching.cpp

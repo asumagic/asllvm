@@ -40,6 +40,9 @@ struct ModuleDebugInfo
 {
 	llvm::DICompileUnit* compile_unit;
 	llvm::DIFile*        file;
+
+	using AsTypeIdentifier = int;
+	std::unordered_map<AsTypeIdentifier, llvm::DIType*> type_cache;
 };
 
 class ModuleBuilder
@@ -54,6 +57,8 @@ class ModuleBuilder
 
 	llvm::Function*     get_system_function(asCScriptFunction& system_function);
 	llvm::FunctionType* get_system_function_type(asCScriptFunction& system_function);
+
+	llvm::DIType* get_debug_type(ModuleDebugInfo::AsTypeIdentifier type);
 
 	void build();
 
@@ -74,6 +79,7 @@ class ModuleBuilder
 
 	bool is_exposed_directly(asIScriptFunction& function) const;
 
+	ModuleDebugInfo   setup_debug_info();
 	InternalFunctions setup_internal_functions();
 
 	void build_functions();

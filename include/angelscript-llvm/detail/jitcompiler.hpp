@@ -23,7 +23,7 @@ class JitCompiler
 	int  jit_compile(asIScriptFunction* function, asJITFunction* output);
 	void jit_free(asJITFunction function);
 
-	asIScriptEngine&  engine() { return *m_engine; }
+	asCScriptEngine&  engine() { return *m_engine; }
 	llvm::orc::LLJIT& jit() { return *m_jit; }
 	const JitConfig&  config() const { return m_config; }
 	Builder&          builder() { return m_builder; }
@@ -36,7 +36,7 @@ class JitCompiler
 	void dump_state() const;
 
 	[[no_unique_address]] LibraryInitializer m_llvm_initializer;
-	asIScriptEngine*                         m_engine = nullptr;
+	asCScriptEngine*                         m_engine = nullptr;
 	std::unique_ptr<llvm::orc::LLJIT>        m_jit;
 	llvm::JITEventListener*                  m_gdb_listener;
 #if LLVM_USE_PERF
