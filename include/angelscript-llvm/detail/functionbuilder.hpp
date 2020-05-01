@@ -175,6 +175,7 @@ class FunctionBuilder
 	void switch_to_block(llvm::BasicBlock* block);
 
 	void create_function_debug_info();
+	void create_locals_debug_info();
 
 	long local_storage_size() const;
 	long stack_size() const;

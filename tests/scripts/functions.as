@@ -10,5 +10,5 @@ int calc(int64 a, int b)
     a *= 10;
     int v = a;
     v *= b;
-    return b;
+    return v;
 }

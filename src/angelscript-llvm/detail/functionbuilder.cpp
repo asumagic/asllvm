@@ -82,9 +82,9 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 			walk_bytecode([&](BytecodeInstruction instruction) { preprocess_instruction(instruction, context); });
 		}
 
-		emit_allocate_local_structures();
-
 		create_function_debug_info();
+		emit_allocate_local_structures();
+		create_locals_debug_info();
 
 		walk_bytecode([&](BytecodeInstruction instruction) {
 			translate_instruction(instruction);
@@ -1823,7 +1823,6 @@ void FunctionBuilder::switch_to_block(llvm::BasicBlock* block)
 
 void FunctionBuilder::create_function_debug_info()
 {
-	asCScriptEngine&   engine            = m_compiler.engine();
 	llvm::IRBuilder<>& ir                = m_compiler.builder().ir();
 	llvm::DIBuilder&   di                = m_module_builder.di_builder();
 	ModuleDebugInfo&   module_debug_info = m_module_builder.debug_info();
@@ -1854,6 +1853,19 @@ void FunctionBuilder::create_function_debug_info()
 		llvm::DINode::FlagPrototyped,
 		llvm::DISubprogram::SPFlagDefinition);
 
+	m_llvm_function->setSubprogram(sp);
+
+	ir.SetCurrentDebugLocation(llvm::DebugLoc::get(0, 0, sp));
+}
+
+void FunctionBuilder::create_locals_debug_info()
+{
+	asCScriptEngine&   engine = m_compiler.engine();
+	llvm::IRBuilder<>& ir     = m_compiler.builder().ir();
+	llvm::DIBuilder&   di     = m_module_builder.di_builder();
+
+	llvm::DISubprogram* sp = m_llvm_function->getSubprogram();
+
 	{
 		const std::size_t count     = m_script_function.GetParamCount();
 		std::uint64_t     stack_pos = 0;
@@ -1867,8 +1879,8 @@ void FunctionBuilder::create_function_debug_info()
 
 			asCDataType& data_type = m_script_function.parameterTypes[i];
 
-			llvm::DILocalVariable* local
-				= di.createParameterVariable(sp, name, i, file, 0, m_module_builder.get_debug_type(type_id), true);
+			llvm::DILocalVariable* local = di.createParameterVariable(
+				sp, name, i, sp->getFile(), 0, m_module_builder.get_debug_type(type_id), true);
 
 			std::array<std::uint64_t, 2> addresses{llvm::dwarf::DW_OP_plus_uconst, stack_pos * 4};
 
@@ -1890,7 +1902,11 @@ void FunctionBuilder::create_function_debug_info()
 			const auto& var = vars[i];
 
 			llvm::DILocalVariable* local = di.createAutoVariable(
-				sp, &var->name[0], file, 0, m_module_builder.get_debug_type(engine.GetTypeIdFromDataType(var->type)));
+				sp,
+				&var->name[0],
+				sp->getFile(),
+				0,
+				m_module_builder.get_debug_type(engine.GetTypeIdFromDataType(var->type)));
 
 			std::array<std::uint64_t, 2> addresses{
 				llvm::dwarf::DW_OP_plus_uconst,
@@ -1900,10 +1916,6 @@ void FunctionBuilder::create_function_debug_info()
 				m_locals, local, di.createExpression(addresses), llvm::DebugLoc::get(0, 0, sp), ir.GetInsertBlock());
 		}
 	}
-
-	m_llvm_function->setSubprogram(sp);
-
-	ir.SetCurrentDebugLocation(llvm::DebugLoc::get(0, 0, sp));
 }
 
 long FunctionBuilder::local_storage_size() const { return m_script_function.scriptData->variableSpace; }
