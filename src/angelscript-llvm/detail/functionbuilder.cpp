@@ -196,6 +196,8 @@ llvm::Function* FunctionBuilder::create_proxy()
 	llvm::Function* proxy_function = m_module_builder.create_script_function_skeleton(
 		m_script_function, llvm::Function::ExternalLinkage, make_function_name(m_script_function));
 
+	create_function_debug_info(proxy_function, "!jitentry");
+
 	ir.SetInsertPoint(llvm::BasicBlock::Create(context, "entry", proxy_function));
 
 	std::array<llvm::Value*, 1> args{&*(proxy_function->arg_begin() + 0)};
@@ -209,8 +211,6 @@ llvm::Function* FunctionBuilder::create_proxy()
 	{
 		ir.CreateRetVoid();
 	}
-
-	create_function_debug_info(proxy_function, "!jitentry");
 
 	return proxy_function;
 }
