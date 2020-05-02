@@ -4,6 +4,8 @@ A JIT compiler for AngelScript using LLVM and OrcV2.
 
 **asllvm is not production-ready and many features are not supported yet.**
 
+Note that it is not possible to partially JIT scripts so your application has to be fully supported to work with asllvm.
+
 ## Goals
 
 - Improving performance as much as possible.
