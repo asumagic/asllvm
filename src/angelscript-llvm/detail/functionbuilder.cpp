@@ -325,11 +325,9 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_NOT:
 	{
-		// TODO: would load_stack_value(..., defs.i1) be _legal_?
-		llvm::Value* source      = load_stack_value(ins.arg_sword0(), defs.i8);
-		llvm::Value* source_bool = ir.CreateTrunc(source, defs.i1);
+		llvm::Value* source = load_stack_value(ins.arg_sword0(), defs.i1);
 		llvm::Value* result
-			= ir.CreateSelect(source_bool, llvm::ConstantInt::get(defs.i32, 0), llvm::ConstantInt::get(defs.i32, 1));
+			= ir.CreateSelect(source, llvm::ConstantInt::get(defs.i32, 0), llvm::ConstantInt::get(defs.i32, 1));
 		store_stack_value(ins.arg_sword0(), result);
 		break;
 	}
