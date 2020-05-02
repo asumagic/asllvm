@@ -1,6 +1,7 @@
 add_executable(tests
 	main.cpp
 	common.cpp
+	enums.cpp
 	integermath.cpp
 	floatmath.cpp
 	funcdefs.cpp
