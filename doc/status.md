@@ -35,6 +35,7 @@ This part is fairly incomplete, but provided to give a general idea:
   - [ ] Imported functions
   - [ ] Function pointers
 - [x] Application interface
+  - [ ] Factories
   - [ ] List constructors
   - [x] Object types
     - [x] Allocation
