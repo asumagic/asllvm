@@ -3,6 +3,7 @@
 //#define DEBUG_DISABLE_JIT
 
 #include <iostream>
+#include <scriptarray/scriptarray.h>
 #include <scriptbuilder/scriptbuilder.h>
 #include <scriptstdstring/scriptstdstring.h>
 #include <stdexcept>
@@ -61,6 +62,7 @@ EngineContext::~EngineContext() { engine->ShutDownAndRelease(); }
 void EngineContext::register_interface()
 {
 	RegisterStdString(engine);
+	RegisterScriptArray(engine, true);
 
 	asllvm_test_check(
 		engine->RegisterGlobalFunction("void print(const string &in)", asFUNCTION(bindings::print), asCALL_CDECL) >= 0);

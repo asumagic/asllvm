@@ -1592,6 +1592,11 @@ void FunctionBuilder::emit_script_call(asCScriptFunction& callee)
 	}
 	else
 	{
+		if (std::string_view(&callee.name[0]) == "$fact")
+		{
+			asllvm_assert(false && "factories not implemented yet");
+		}
+
 		resolved_function = m_module_builder.get_script_function(callee);
 	}
 

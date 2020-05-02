@@ -52,8 +52,15 @@ int JitCompiler::jit_compile(asIScriptFunction* function, asJITFunction* output)
 		&& "JIT compiler expects to be used against the same asIScriptEngine during its lifetime");
 
 	m_engine = static_cast<asCScriptEngine*>(function->GetEngine());
-	m_module_map[*function->GetModule()].append({static_cast<asCScriptFunction*>(function), output});
 
+	asIScriptModule* module = function->GetModule();
+
+	if (module == nullptr)
+	{
+		return -1;
+	}
+
+	m_module_map[*module].append({static_cast<asCScriptFunction*>(function), output});
 	return 0;
 }
 
