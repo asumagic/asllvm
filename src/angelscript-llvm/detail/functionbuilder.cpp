@@ -23,7 +23,7 @@ FunctionBuilder::FunctionBuilder(
 	m_llvm_function{llvm_function}
 {}
 
-llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
+llvm::Function* FunctionBuilder::translate_bytecode(asDWORD* bytecode, asUINT length)
 {
 	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
 	llvm::LLVMContext& context = m_compiler.builder().context();
@@ -79,7 +79,7 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 			walk_bytecode([&](BytecodeInstruction instruction) { preprocess_instruction(instruction, context); });
 		}
 
-		create_function_debug_info(m_llvm_function);
+		create_function_debug_info(m_llvm_function, GeneratedFunctionType::Implementation);
 		emit_allocate_local_structures();
 		create_locals_debug_info();
 
@@ -118,7 +118,7 @@ llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 	return m_llvm_function;
 }
 
-llvm::Function* FunctionBuilder::create_vm_entry()
+llvm::Function* FunctionBuilder::create_vm_entry_thunk()
 {
 	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
 	llvm::LLVMContext& context = m_compiler.builder().context();
@@ -131,10 +131,10 @@ llvm::Function* FunctionBuilder::create_vm_entry()
 	llvm::Function* wrapper_function = llvm::Function::Create(
 		llvm::FunctionType::get(return_type, types, false),
 		llvm::Function::ExternalLinkage,
-		make_jit_entry_name(m_script_function),
+		make_vm_entry_thunk_name(m_script_function),
 		m_module_builder.module());
 
-	create_function_debug_info(wrapper_function, "!jitentry");
+	create_function_debug_info(wrapper_function, GeneratedFunctionType::VmEntryThunk);
 
 	llvm::BasicBlock* block = llvm::BasicBlock::Create(context, "entry", wrapper_function);
 
@@ -185,7 +185,7 @@ llvm::Function* FunctionBuilder::create_vm_entry()
 	return wrapper_function;
 }
 
-llvm::Function* FunctionBuilder::create_proxy()
+llvm::Function* FunctionBuilder::create_optimization_thunk()
 {
 	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
 	llvm::LLVMContext& context = m_compiler.builder().context();
@@ -193,7 +193,7 @@ llvm::Function* FunctionBuilder::create_proxy()
 	llvm::Function* proxy_function = m_module_builder.create_script_function_skeleton(
 		m_script_function, llvm::Function::ExternalLinkage, make_function_name(m_script_function));
 
-	create_function_debug_info(proxy_function, "!jitentry");
+	create_function_debug_info(proxy_function, GeneratedFunctionType::OptimizationThunk);
 
 	ir.SetInsertPoint(llvm::BasicBlock::Create(context, "entry", proxy_function));
 
@@ -1838,7 +1838,7 @@ void FunctionBuilder::switch_to_block(llvm::BasicBlock* block)
 	ir.SetInsertPoint(block);
 }
 
-void FunctionBuilder::create_function_debug_info(llvm::Function* function, std::string_view symbol_suffix)
+void FunctionBuilder::create_function_debug_info(llvm::Function* function, GeneratedFunctionType type)
 {
 	llvm::IRBuilder<>& ir                = m_compiler.builder().ir();
 	llvm::DIBuilder&   di                = m_module_builder.di_builder();
@@ -1861,6 +1861,15 @@ void FunctionBuilder::create_function_debug_info(llvm::Function* function, std::
 
 	const SourceLocation loc = get_source_location();
 
+	std::string_view symbol_suffix;
+
+	switch (type)
+	{
+	case GeneratedFunctionType::Implementation: break;
+	case GeneratedFunctionType::OptimizationThunk: symbol_suffix = "!optthunk"; break;
+	case GeneratedFunctionType::VmEntryThunk: symbol_suffix = "!vmthunk"; break;
+	}
+
 	llvm::DISubprogram* sp = di.createFunction(
 		module_debug_info.compile_unit,
 		fmt::format("{}{}", make_debug_name(m_script_function), symbol_suffix),
@@ -1869,7 +1878,7 @@ void FunctionBuilder::create_function_debug_info(llvm::Function* function, std::
 		loc.line,
 		di.createSubroutineType(di.getOrCreateTypeArray(types)),
 		loc.line,
-		llvm::DINode::FlagPrototyped,
+		llvm::DINode::FlagPrototyped | llvm::DINode::FlagThunk,
 		llvm::DISubprogram::SPFlagDefinition);
 
 	function->setSubprogram(sp);

@@ -448,10 +448,10 @@ void ModuleBuilder::build_functions()
 		asUINT   length;
 		asDWORD* bytecode = pending.function->GetByteCode(&length);
 
-		builder.read_bytecode(bytecode, length);
+		builder.translate_bytecode(bytecode, length);
 
-		llvm::Function* entry = builder.create_vm_entry();
-		builder.create_proxy();
+		llvm::Function* entry = builder.create_vm_entry_thunk();
+		builder.create_optimization_thunk();
 
 		JitSymbol symbol;
 		symbol.script_function = pending.function;
