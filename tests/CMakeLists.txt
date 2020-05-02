@@ -1,16 +1,17 @@
 add_executable(tests
-	main.cpp
+	booleans.cpp
+	branching.cpp
+	classmanip.cpp
 	common.cpp
 	enums.cpp
-	integermath.cpp
 	floatmath.cpp
 	funcdefs.cpp
 	functions.cpp
-	booleans.cpp
 	globals.cpp
-	branching.cpp
+	integermath.cpp
+	main.cpp
 	recursion.cpp
-	classmanip.cpp
+	typedefs.cpp
 )
 
 target_link_libraries(tests PRIVATE angelscript-llvm angelscript-addons Catch2::Catch2)
