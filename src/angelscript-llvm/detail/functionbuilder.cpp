@@ -21,17 +21,14 @@ FunctionBuilder::FunctionBuilder(
 	m_module_builder{module_builder},
 	m_script_function{script_function},
 	m_llvm_function{llvm_function}
-{
-	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
-	llvm::LLVMContext& context = m_compiler.builder().context();
-
-	ir.SetInsertPoint(llvm::BasicBlock::Create(context, "entry", llvm_function));
-}
+{}
 
 llvm::Function* FunctionBuilder::read_bytecode(asDWORD* bytecode, asUINT length)
 {
 	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
 	llvm::LLVMContext& context = m_compiler.builder().context();
+
+	ir.SetInsertPoint(llvm::BasicBlock::Create(context, "entry", m_llvm_function));
 
 	const auto walk_bytecode = [&](auto&& func) {
 		asDWORD* bytecode_current = bytecode;
@@ -1873,7 +1870,7 @@ void FunctionBuilder::create_function_debug_info(llvm::Function* function, std::
 		file,
 		loc.line,
 		di.createSubroutineType(di.getOrCreateTypeArray(types)),
-		loc.column,
+		loc.line,
 		llvm::DINode::FlagPrototyped,
 		llvm::DISubprogram::SPFlagDefinition);
 
