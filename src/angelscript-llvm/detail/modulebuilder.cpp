@@ -61,6 +61,7 @@ llvm::Function* ModuleBuilder::get_script_function(asCScriptFunction& function)
 
 llvm::FunctionType* ModuleBuilder::get_script_function_type(asCScriptFunction& script_function)
 {
+	asCScriptEngine&   engine  = m_compiler.engine();
 	Builder&           builder = m_compiler.builder();
 	CommonDefinitions& defs    = builder.definitions();
 
@@ -68,16 +69,15 @@ llvm::FunctionType* ModuleBuilder::get_script_function_type(asCScriptFunction& s
 
 	std::vector<llvm::Type*> types;
 
-	if (asCObjectType* object_type = script_function.objectType; object_type != nullptr)
-	{
-		types.push_back(
-			builder.to_llvm_type(m_compiler.engine().GetDataTypeFromTypeId(script_function.objectType->GetTypeId()))
-				->getPointerTo());
-	}
-
+	// TODO: make sret
 	if (script_function.DoesReturnOnStack())
 	{
-		asllvm_assert(false && "unimplemented stack returning fixme");
+		types.push_back(builder.to_llvm_type(script_function.returnType));
+	}
+
+	if (asCObjectType* object_type = script_function.objectType; object_type != nullptr)
+	{
+		types.push_back(builder.to_llvm_type(engine.GetDataTypeFromTypeId(script_function.objectType->GetTypeId())));
 	}
 
 	for (std::size_t i = 0; i < parameter_count; ++i)
