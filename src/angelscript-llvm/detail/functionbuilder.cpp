@@ -146,30 +146,35 @@ llvm::Function* FunctionBuilder::create_vm_entry_thunk()
 	llvm::Argument* arg = &*(wrapper_function->arg_begin() + 1);
 	arg->setName("jitarg");
 
-	llvm::Value* fp = [&] {
+	llvm::Value* frame_pointer = [&] {
 		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(defs.i64, 0), llvm::ConstantInt::get(defs.i32, 1)};
 
 		auto* pointer = ir.CreateGEP(registers, indices);
-		return ir.CreateLoad(llvm::Type::getInt32Ty(context)->getPointerTo(), pointer, "stackFramePointer");
+		return ir.CreateLoad(defs.pi32, pointer, "stackFramePointer");
 	}();
 
-	emit_script_call(m_script_function, fp);
+	llvm::Value* value_register = [&] {
+		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(defs.i64, 0), llvm::ConstantInt::get(defs.i32, 3)};
+		return ir.CreateGEP(registers, indices);
+	}();
 
-	if (m_llvm_function->getReturnType() != llvm::Type::getVoidTy(context))
+	llvm::Value* object_register = [&] {
+		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(defs.i64, 0), llvm::ConstantInt::get(defs.i32, 4)};
+
+		auto* pointer = ir.CreateGEP(registers, indices);
+		return ir.CreateLoad(defs.pvoid, pointer, "objectRegister");
+	}();
+
 	{
-		/*llvm::Value* value_register = [&] {
-			std::array<llvm::Value*, 2> indices{
-				llvm::ConstantInt::get(defs.i64, 0), llvm::ConstantInt::get(defs.i32, 3)};
+		VmEntryCallContext ctx;
+		ctx.vm_frame_pointer = frame_pointer;
+		ctx.value_register   = value_register;
+		ctx.object_register  = object_register;
 
-			return ir.CreateGEP(registers, indices, "valueRegister");
-		}();
-
-		ir.CreateStore(ret, ir.CreateBitCast(value_register, ret->getType()->getPointerTo()));*/
-
-		// FIXME: really
+		emit_script_call(m_script_function, ctx);
 	}
 
-	llvm::Value* pp = [&] {
+	llvm::Value* program_pointer = [&] {
 		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(defs.i64, 0), llvm::ConstantInt::get(defs.i32, 0)};
 
 		return ir.CreateGEP(registers, indices, "programPointer");
@@ -178,7 +183,7 @@ llvm::Function* FunctionBuilder::create_vm_entry_thunk()
 	// Set the program pointer to the RET instruction
 	auto* ret_ptr_value = ir.CreateIntToPtr(
 		llvm::ConstantInt::get(defs.i64, reinterpret_cast<std::uintptr_t>(m_ret_pointer)), defs.pi32);
-	ir.CreateStore(ret_ptr_value, pp);
+	ir.CreateStore(ret_ptr_value, program_pointer);
 
 	ir.CreateRetVoid();
 
@@ -1562,10 +1567,14 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 	}
 }
 
-std::size_t FunctionBuilder::emit_script_call(asCScriptFunction& callee, llvm::Value* parameter_stack)
+std::size_t FunctionBuilder::emit_script_call(asCScriptFunction& callee) { return emit_script_call(callee, {}); }
+
+std::size_t FunctionBuilder::emit_script_call(asCScriptFunction& callee, FunctionBuilder::VmEntryCallContext ctx)
 {
 	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
 	CommonDefinitions& defs = m_compiler.builder().definitions();
+
+	const bool is_vm_entry = ctx.vm_frame_pointer != nullptr;
 
 	// Check supported calls
 	switch (callee.funcType)
@@ -1610,10 +1619,10 @@ std::size_t FunctionBuilder::emit_script_call(asCScriptFunction& callee, llvm::V
 
 		llvm::Type* llvm_parameter_type = m_compiler.builder().to_llvm_type(type);
 
-		if (parameter_stack != nullptr)
+		if (is_vm_entry)
 		{
 			const std::array<llvm::Value*, 1> offsets{llvm::ConstantInt::get(defs.iptr, -long(old_read_dword_count))};
-			llvm::Value*                      dword_pointer = ir.CreateGEP(parameter_stack, offsets);
+			llvm::Value*                      dword_pointer = ir.CreateGEP(ctx.vm_frame_pointer, offsets);
 			llvm::Value* pointer = ir.CreateBitCast(dword_pointer, llvm_parameter_type->getPointerTo());
 			return ir.CreateLoad(llvm_parameter_type, pointer);
 		}
@@ -1622,8 +1631,6 @@ std::size_t FunctionBuilder::emit_script_call(asCScriptFunction& callee, llvm::V
 		m_stack_pointer -= object_dword_size;
 		return value;
 	};
-
-	const auto original_stack_pointer = m_stack_pointer;
 
 	{
 		const std::size_t parameter_count = callee.parameterTypes.GetLength();
@@ -1636,22 +1643,29 @@ std::size_t FunctionBuilder::emit_script_call(asCScriptFunction& callee, llvm::V
 	llvm::CallInst* ret = ir.CreateCall(callee_type, resolved_function, args);
 
 	// HACK: returning not implemented yet when providing that parameter_stack
-	if (parameter_stack == nullptr && callee.returnType.GetTokenType() != ttVoid)
+	if (callee.returnType.GetTokenType() != ttVoid)
 	{
 		if (callee.DoesReturnOnStack())
 		{
-			asllvm_assert(false && "fixme");
+			asllvm_assert(false && "fixme: where is this located?");
 			// m_stack_pointer -= callee.GetSpaceNeededForReturnValue();
 		}
 		else if (callee.returnType.IsObjectHandle() || callee.returnType.IsObject())
 		{
 			// Store to the object register
-			ir.CreateStore(ret, ir.CreateBitCast(m_object_register, ret->getType()->getPointerTo()));
+			llvm::Value* typed_object_register = ir.CreateBitCast(
+				is_vm_entry ? ctx.object_register : m_object_register, ret->getType()->getPointerTo());
+
+			ir.CreateStore(ret, typed_object_register);
 		}
 		else if (callee.returnType.IsPrimitive())
 		{
+			// TODO: code is similar with the above branch
+
 			// Store to the value register
-			llvm::Value* typed_value_register = ir.CreateBitCast(m_value_register, ret->getType()->getPointerTo());
+			llvm::Value* typed_value_register
+				= ir.CreateBitCast(is_vm_entry ? ctx.value_register : m_value_register, ret->getType()->getPointerTo());
+
 			ir.CreateStore(ret, typed_value_register);
 		}
 		else

@@ -4,6 +4,7 @@
 #include <angelscript-llvm/detail/bytecodeinstruction.hpp>
 #include <angelscript-llvm/detail/fwd.hpp>
 #include <angelscript.h>
+#include <functional>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
@@ -30,6 +31,11 @@ class FunctionBuilder
 	{
 		Implementation,
 		VmEntryThunk
+	};
+
+	struct VmEntryCallContext
+	{
+		llvm::Value *vm_frame_pointer = nullptr, *value_register = nullptr, *object_register = nullptr;
 	};
 
 	public:
@@ -119,10 +125,14 @@ class FunctionBuilder
 	//! \brief Performs the call to a non-script function \p function with parameters read from the stack.
 	void emit_system_call(asCScriptFunction& function);
 
-	//! \brief Performs the call to the \p callee script function with parameters read from the stack.
-	//! \param parameter_stack if specified means the parameters will be popped from there instead of from the caller.
+	//! \brief Performs the call to the \p callee script function reading from the currently translated function.
 	//! \returns The amount of DWORDs read.
-	std::size_t emit_script_call(asCScriptFunction& callee, llvm::Value* parameter_stack = nullptr);
+	std::size_t emit_script_call(asCScriptFunction& callee);
+
+	// TODO: seems like this could be moved elsewhere? move vmentry codegen somewhere else?
+	//! \brief Performs the call to the \p callee script function for a vm entry.
+	//! \returns The amount of DWORDs read.
+	std::size_t emit_script_call(asCScriptFunction& callee, VmEntryCallContext ctx);
 
 	//! \brief Performs the call to a script or system function \p function.
 	void emit_call(asCScriptFunction& function);
