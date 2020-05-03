@@ -32,8 +32,7 @@ class Builder
 	llvm::IRBuilder<>& ir() { return m_ir_builder; }
 	CommonDefinitions& definitions() { return m_defs; }
 
-	llvm::Type* to_llvm_type(asCDataType& type) const;
-	bool        is_script_type_64(asCDataType& type) const;
+	llvm::Type* to_llvm_type(const asCDataType& type) const;
 
 	llvm::legacy::PassManager&         optimizer();
 	llvm::LLVMContext&                 context();

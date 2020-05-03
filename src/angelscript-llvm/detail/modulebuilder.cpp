@@ -27,15 +27,7 @@ void ModuleBuilder::append(PendingFunction function) { m_pending_functions.push_
 llvm::Function* ModuleBuilder::create_script_function_skeleton(
 	asCScriptFunction& script_function, llvm::GlobalValue::LinkageTypes linkage, const std::string& name)
 {
-	llvm::Function* llvm_function
-		= llvm::Function::Create(get_script_function_type(script_function), linkage, name, *m_llvm_module);
-
-	// i8* noalias %params
-	(llvm_function->arg_begin() + 0)->setName("params");
-	llvm_function->addParamAttr(0, llvm::Attribute::NoAlias);
-	llvm_function->addParamAttr(0, llvm::Attribute::NoCapture);
-
-	return llvm_function;
+	return llvm::Function::Create(get_script_function_type(script_function), linkage, name, *m_llvm_module);
 }
 
 llvm::Function* ModuleBuilder::get_script_function(asCScriptFunction& function)
@@ -61,7 +53,7 @@ llvm::Function* ModuleBuilder::get_script_function(asCScriptFunction& function)
 	const std::string name = make_function_name(function);
 
 	llvm::Function* internal_function
-		= create_script_function_skeleton(function, llvm::Function::InternalLinkage, fmt::format("{}.internal", name));
+		= create_script_function_skeleton(function, llvm::Function::ExternalLinkage, name);
 
 	m_script_functions.emplace(function.GetId(), internal_function);
 	return internal_function;
@@ -69,9 +61,29 @@ llvm::Function* ModuleBuilder::get_script_function(asCScriptFunction& function)
 
 llvm::FunctionType* ModuleBuilder::get_script_function_type(asCScriptFunction& script_function)
 {
-	CommonDefinitions& defs = m_compiler.builder().definitions();
+	Builder&           builder = m_compiler.builder();
+	CommonDefinitions& defs    = builder.definitions();
 
-	std::array<llvm::Type*, 1> types{llvm::PointerType::getInt32PtrTy(m_compiler.builder().context())};
+	const auto parameter_count = script_function.parameterTypes.GetLength();
+
+	std::vector<llvm::Type*> types;
+
+	if (asCObjectType* object_type = script_function.objectType; object_type != nullptr)
+	{
+		types.push_back(
+			builder.to_llvm_type(m_compiler.engine().GetDataTypeFromTypeId(script_function.objectType->GetTypeId()))
+				->getPointerTo());
+	}
+
+	if (script_function.DoesReturnOnStack())
+	{
+		asllvm_assert(false && "unimplemented stack returning fixme");
+	}
+
+	for (std::size_t i = 0; i < parameter_count; ++i)
+	{
+		types.push_back(m_compiler.builder().to_llvm_type(script_function.parameterTypes[i]));
+	}
 
 	// If returning on stack, this means the return object will be written to a pointer passed as a param (using PSF).
 	// Otherwise, an handle to the actual object is returned.
@@ -451,7 +463,6 @@ void ModuleBuilder::build_functions()
 		builder.translate_bytecode(bytecode, length);
 
 		llvm::Function* entry = builder.create_vm_entry_thunk();
-		builder.create_optimization_thunk();
 
 		JitSymbol symbol;
 		symbol.script_function = pending.function;

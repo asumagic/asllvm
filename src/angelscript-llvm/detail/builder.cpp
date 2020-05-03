@@ -29,7 +29,7 @@ Builder::Builder(JitCompiler& compiler) :
 	m_ir_builder.setFastMathFlags(fast_fp);
 }
 
-llvm::Type* Builder::to_llvm_type(asCDataType& type) const
+llvm::Type* Builder::to_llvm_type(const asCDataType& type) const
 {
 	if (type.IsPrimitive())
 	{
@@ -69,6 +69,7 @@ llvm::Type* Builder::to_llvm_type(asCDataType& type) const
 
 	if (type.IsObject())
 	{
+		asllvm_assert(type.GetTypeInfo() != nullptr);
 		const int type_id = type.GetTypeInfo()->typeId;
 
 		if (const auto it = m_object_types.find(type_id); it != m_object_types.end())
@@ -77,7 +78,6 @@ llvm::Type* Builder::to_llvm_type(asCDataType& type) const
 		}
 
 		std::array<llvm::Type*, 1> types{{llvm::ArrayType::get(m_defs.i8, type.GetSizeInMemoryBytes())}};
-		asllvm_assert(type.GetTypeInfo() != nullptr);
 
 		llvm::StructType* struct_type = llvm::StructType::create(types, type.GetTypeInfo()->GetName());
 		m_object_types.emplace(type_id, struct_type);
@@ -89,12 +89,6 @@ llvm::Type* Builder::to_llvm_type(asCDataType& type) const
 	}
 
 	asllvm_assert(false && "type not supported");
-}
-
-bool Builder::is_script_type_64(asCDataType& type) const
-{
-	asllvm_assert(type.GetSizeOnStackDWords() <= 2);
-	return type.GetSizeOnStackDWords() == 2;
 }
 
 llvm::legacy::PassManager& Builder::optimizer() { return m_pass_manager; }

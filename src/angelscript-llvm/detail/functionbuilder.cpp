@@ -153,20 +153,20 @@ llvm::Function* FunctionBuilder::create_vm_entry_thunk()
 		return ir.CreateLoad(llvm::Type::getInt32Ty(context)->getPointerTo(), pointer, "stackFramePointer");
 	}();
 
-	std::array<llvm::Value*, 1> args{{fp}};
-
-	llvm::Value* ret = ir.CreateCall(m_llvm_function, args);
+	emit_script_call(m_script_function, fp);
 
 	if (m_llvm_function->getReturnType() != llvm::Type::getVoidTy(context))
 	{
-		llvm::Value* value_register = [&] {
+		/*llvm::Value* value_register = [&] {
 			std::array<llvm::Value*, 2> indices{
 				llvm::ConstantInt::get(defs.i64, 0), llvm::ConstantInt::get(defs.i32, 3)};
 
 			return ir.CreateGEP(registers, indices, "valueRegister");
 		}();
 
-		ir.CreateStore(ret, ir.CreateBitCast(value_register, ret->getType()->getPointerTo()));
+		ir.CreateStore(ret, ir.CreateBitCast(value_register, ret->getType()->getPointerTo()));*/
+
+		// FIXME: really
 	}
 
 	llvm::Value* pp = [&] {
@@ -183,33 +183,6 @@ llvm::Function* FunctionBuilder::create_vm_entry_thunk()
 	ir.CreateRetVoid();
 
 	return wrapper_function;
-}
-
-llvm::Function* FunctionBuilder::create_optimization_thunk()
-{
-	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
-	llvm::LLVMContext& context = m_compiler.builder().context();
-
-	llvm::Function* proxy_function = m_module_builder.create_script_function_skeleton(
-		m_script_function, llvm::Function::ExternalLinkage, make_function_name(m_script_function));
-
-	create_function_debug_info(proxy_function, GeneratedFunctionType::OptimizationThunk);
-
-	ir.SetInsertPoint(llvm::BasicBlock::Create(context, "entry", proxy_function));
-
-	std::array<llvm::Value*, 1> args{&*(proxy_function->arg_begin() + 0)};
-	llvm::Value*                ret = ir.CreateCall(m_llvm_function->getFunctionType(), m_llvm_function, args);
-
-	if (proxy_function->getReturnType() != llvm::Type::getVoidTy(context))
-	{
-		ir.CreateRet(ret);
-	}
-	else
-	{
-		ir.CreateRetVoid();
-	}
-
-	return proxy_function;
 }
 
 void FunctionBuilder::preprocess_instruction(BytecodeInstruction instruction, PreprocessContext& ctx)
@@ -1271,9 +1244,29 @@ void FunctionBuilder::emit_allocate_local_structures()
 	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
 	CommonDefinitions& defs = m_compiler.builder().definitions();
 
-	m_locals = ir.CreateAlloca(llvm::ArrayType::get(defs.i32, stack_size() + local_storage_size()), nullptr, "stack");
+	m_locals = ir.CreateAlloca(llvm::ArrayType::get(defs.i32, local_storage_size() + stack_size()), nullptr, "stack");
 	m_value_register  = ir.CreateAlloca(defs.i64, nullptr, "valuereg");
 	m_object_register = ir.CreateAlloca(defs.pvoid, nullptr, "objreg");
+
+	{
+		const std::size_t parameter_count = m_script_function.parameterTypes.GetLength();
+		asllvm_assert(parameter_count == m_llvm_function->arg_size());
+
+		StackVariableIdentifier stack_offset = 0;
+
+		for (std::size_t i = 0; i < parameter_count; ++i)
+		{
+			const auto [it, success] = m_parameter_locals.emplace(
+				stack_offset, ir.CreateAlloca((m_llvm_function->arg_begin() + i)->getType(), nullptr));
+
+			asllvm_assert(success);
+			llvm::Value* parameter_alloca = it->second;
+
+			ir.CreateStore(&*(m_llvm_function->arg_begin() + i), parameter_alloca);
+
+			stack_offset -= m_script_function.parameterTypes[i].GetSizeOnStackDWords();
+		}
+	}
 
 	m_stack_pointer = local_storage_size();
 }
@@ -1569,7 +1562,7 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 	}
 }
 
-void FunctionBuilder::emit_script_call(asCScriptFunction& callee)
+std::size_t FunctionBuilder::emit_script_call(asCScriptFunction& callee, llvm::Value* parameter_stack)
 {
 	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
 	CommonDefinitions& defs = m_compiler.builder().definitions();
@@ -1600,21 +1593,55 @@ void FunctionBuilder::emit_script_call(asCScriptFunction& callee)
 		resolved_function = m_module_builder.get_script_function(callee);
 	}
 
-	llvm::Value*                new_frame_pointer = get_stack_value_pointer(m_stack_pointer, defs.i32);
-	std::array<llvm::Value*, 1> args{{new_frame_pointer}};
-
-	llvm::CallInst* ret = ir.CreateCall(callee_type, resolved_function, args);
+	std::vector<llvm::Value*> args;
 
 	if (callee.GetObjectType() != nullptr)
 	{
-		m_stack_pointer -= AS_PTR_SIZE;
+		asllvm_assert(false && "fixme");
+		// args.push_back(load_stack_value(m_stack_pointer, ))
 	}
 
-	if (callee.returnType.GetTokenType() != ttVoid)
+	std::size_t read_dword_count = 0;
+
+	const auto pop = [&](const asCDataType& type) -> llvm::Value* {
+		const std::size_t old_read_dword_count = read_dword_count;
+		const std::size_t object_dword_size    = type.GetSizeOnStackDWords();
+		read_dword_count += object_dword_size;
+
+		llvm::Type* llvm_parameter_type = m_compiler.builder().to_llvm_type(type);
+
+		if (parameter_stack != nullptr)
+		{
+			const std::array<llvm::Value*, 1> offsets{llvm::ConstantInt::get(defs.iptr, -long(old_read_dword_count))};
+			llvm::Value*                      dword_pointer = ir.CreateGEP(parameter_stack, offsets);
+			llvm::Value* pointer = ir.CreateBitCast(dword_pointer, llvm_parameter_type->getPointerTo());
+			return ir.CreateLoad(llvm_parameter_type, pointer);
+		}
+
+		llvm::Value* value = load_stack_value(m_stack_pointer, llvm_parameter_type);
+		m_stack_pointer -= object_dword_size;
+		return value;
+	};
+
+	const auto original_stack_pointer = m_stack_pointer;
+
+	{
+		const std::size_t parameter_count = callee.parameterTypes.GetLength();
+		for (std::size_t i = 0; i < parameter_count; ++i)
+		{
+			args.push_back(pop(callee.parameterTypes[i]));
+		}
+	}
+
+	llvm::CallInst* ret = ir.CreateCall(callee_type, resolved_function, args);
+
+	// HACK: returning not implemented yet when providing that parameter_stack
+	if (parameter_stack == nullptr && callee.returnType.GetTokenType() != ttVoid)
 	{
 		if (callee.DoesReturnOnStack())
 		{
-			m_stack_pointer -= callee.GetSpaceNeededForReturnValue();
+			asllvm_assert(false && "fixme");
+			// m_stack_pointer -= callee.GetSpaceNeededForReturnValue();
 		}
 		else if (callee.returnType.IsObjectHandle() || callee.returnType.IsObject())
 		{
@@ -1633,7 +1660,9 @@ void FunctionBuilder::emit_script_call(asCScriptFunction& callee)
 		}
 	}
 
-	m_stack_pointer -= callee.GetSpaceNeededForArguments();
+	asllvm_assert(read_dword_count == std::size_t(callee.GetSpaceNeededForArguments()));
+
+	return read_dword_count;
 }
 
 void FunctionBuilder::emit_call(asCScriptFunction& function)
@@ -1745,9 +1774,7 @@ llvm::Value* FunctionBuilder::get_stack_value_pointer(FunctionBuilder::StackVari
 	// Get a pointer to that argument
 	if (i <= 0)
 	{
-		std::array<llvm::Value*, 1> indices{{llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(context), -i)}};
-
-		return ir.CreateGEP(&*(m_llvm_function->arg_begin() + 0), indices);
+		return m_parameter_locals.at(i);
 	}
 
 	// Get a pointer to that value on the local stack
@@ -1755,7 +1782,8 @@ llvm::Value* FunctionBuilder::get_stack_value_pointer(FunctionBuilder::StackVari
 		const long local_offset = local_storage_size() + stack_size() - i;
 
 		// Ensure offset is within alloca boundaries
-		asllvm_assert(local_offset >= 0 && local_offset < local_storage_size() + stack_size());
+		asllvm_assert(local_offset >= 0);
+		asllvm_assert(local_offset < local_storage_size() + stack_size());
 
 		std::array<llvm::Value*, 2> indices{
 			{llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(context), 0),
@@ -1871,7 +1899,6 @@ void FunctionBuilder::create_function_debug_info(llvm::Function* function, Gener
 	switch (type)
 	{
 	case GeneratedFunctionType::Implementation: break;
-	case GeneratedFunctionType::OptimizationThunk: symbol_suffix = "!optthunk"; break;
 	case GeneratedFunctionType::VmEntryThunk: symbol_suffix = "!vmthunk"; break;
 	}
 
@@ -1919,12 +1946,13 @@ void FunctionBuilder::create_locals_debug_info()
 
 			stack_pos += data_type.GetSizeOnStackDWords();
 
-			di.insertDeclare(
+			/*di.insertDeclare(
 				&*(m_llvm_function->arg_begin() + 0),
 				local,
 				di.createExpression(addresses),
 				get_debug_location(0, sp),
-				ir.GetInsertBlock());
+				ir.GetInsertBlock());*/
+			// FIXME: debug info for params
 		}
 	}
 
@@ -1942,8 +1970,7 @@ void FunctionBuilder::create_locals_debug_info()
 				m_module_builder.get_debug_type(engine.GetTypeIdFromDataType(var->type)));
 
 			std::array<std::uint64_t, 2> addresses{
-				llvm::dwarf::DW_OP_plus_uconst,
-				std::uint64_t(local_storage_size() + stack_size() - var->stackOffset) * 4};
+				llvm::dwarf::DW_OP_plus_uconst, std::uint64_t(stack_size() - var->stackOffset) * 4};
 
 			di.insertDeclare(
 				m_locals, local, di.createExpression(addresses), get_debug_location(0, sp), ir.GetInsertBlock());
