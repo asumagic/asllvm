@@ -29,7 +29,7 @@ Builder::Builder(JitCompiler& compiler) :
 	m_ir_builder.setFastMathFlags(fast_fp);
 }
 
-llvm::Type* Builder::to_llvm_type(asCDataType& type) const
+llvm::Type* Builder::to_llvm_type(const asCDataType& type) const
 {
 	if (type.IsPrimitive())
 	{
@@ -60,41 +60,27 @@ llvm::Type* Builder::to_llvm_type(asCDataType& type) const
 		return base_type;
 	}
 
-	// FIXME: this should return a pointer to the object type as determined below. this likely will require a lot of
-	// changes in the codegen where pvoid is used generically instead.
-	if (type.IsReference() || type.IsObjectHandle())
+	if (type.IsReference() || type.IsObjectHandle() || type.IsObject())
 	{
-		return m_defs.pvoid;
-	}
-
-	if (type.IsObject())
-	{
+		asllvm_assert(type.GetTypeInfo() != nullptr);
 		const int type_id = type.GetTypeInfo()->typeId;
 
 		if (const auto it = m_object_types.find(type_id); it != m_object_types.end())
 		{
-			return it->second;
+			return it->second->getPointerTo();
 		}
 
 		std::array<llvm::Type*, 1> types{{llvm::ArrayType::get(m_defs.i8, type.GetSizeInMemoryBytes())}};
-		asllvm_assert(type.GetTypeInfo() != nullptr);
 
 		llvm::StructType* struct_type = llvm::StructType::create(types, type.GetTypeInfo()->GetName());
 		m_object_types.emplace(type_id, struct_type);
 
 		// TODO: what makes most sense between declaring this as non-const and having a non-mutable m_object_types
 		// versus this as a const and m_object_types as mutable?
-
-		return struct_type;
+		return struct_type->getPointerTo();
 	}
 
 	asllvm_assert(false && "type not supported");
-}
-
-bool Builder::is_script_type_64(asCDataType& type) const
-{
-	asllvm_assert(type.GetSizeOnStackDWords() <= 2);
-	return type.GetSizeOnStackDWords() == 2;
 }
 
 llvm::legacy::PassManager& Builder::optimizer() { return m_pass_manager; }
