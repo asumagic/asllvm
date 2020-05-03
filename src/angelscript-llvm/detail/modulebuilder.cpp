@@ -82,7 +82,7 @@ llvm::FunctionType* ModuleBuilder::get_script_function_type(asCScriptFunction& s
 
 	for (std::size_t i = 0; i < parameter_count; ++i)
 	{
-		types.push_back(m_compiler.builder().to_llvm_type(script_function.parameterTypes[i]));
+		types.push_back(builder.to_llvm_type(script_function.parameterTypes[i]));
 	}
 
 	// If returning on stack, this means the return object will be written to a pointer passed as a param (using PSF).

@@ -1623,11 +1623,13 @@ std::size_t FunctionBuilder::emit_script_call(asCScriptFunction& callee, Functio
 		{
 			const std::array<llvm::Value*, 1> offsets{llvm::ConstantInt::get(defs.iptr, -long(old_read_dword_count))};
 			llvm::Value*                      dword_pointer = ir.CreateGEP(ctx.vm_frame_pointer, offsets);
+
 			llvm::Value* pointer = ir.CreateBitCast(dword_pointer, llvm_parameter_type->getPointerTo());
 			return ir.CreateLoad(llvm_parameter_type, pointer);
 		}
 
 		llvm::Value* value = load_stack_value(m_stack_pointer, llvm_parameter_type);
+
 		m_stack_pointer -= object_dword_size;
 		return value;
 	};
@@ -1887,6 +1889,9 @@ void FunctionBuilder::switch_to_block(llvm::BasicBlock* block)
 
 void FunctionBuilder::create_function_debug_info(llvm::Function* function, GeneratedFunctionType type)
 {
+	// FIXME
+	return;
+
 	llvm::IRBuilder<>& ir                = m_compiler.builder().ir();
 	llvm::DIBuilder&   di                = m_module_builder.di_builder();
 	ModuleDebugInfo&   module_debug_info = m_module_builder.debug_info();
@@ -1934,6 +1939,9 @@ void FunctionBuilder::create_function_debug_info(llvm::Function* function, Gener
 
 void FunctionBuilder::create_locals_debug_info()
 {
+	// FIXME
+	return;
+
 	asCScriptEngine&   engine = m_compiler.engine();
 	llvm::IRBuilder<>& ir     = m_compiler.builder().ir();
 	llvm::DIBuilder&   di     = m_module_builder.di_builder();

@@ -60,21 +60,14 @@ llvm::Type* Builder::to_llvm_type(const asCDataType& type) const
 		return base_type;
 	}
 
-	// FIXME: this should return a pointer to the object type as determined below. this likely will require a lot of
-	// changes in the codegen where pvoid is used generically instead.
-	if (type.IsReference() || type.IsObjectHandle())
-	{
-		return m_defs.pvoid;
-	}
-
-	if (type.IsObject())
+	if (type.IsReference() || type.IsObjectHandle() || type.IsObject())
 	{
 		asllvm_assert(type.GetTypeInfo() != nullptr);
 		const int type_id = type.GetTypeInfo()->typeId;
 
 		if (const auto it = m_object_types.find(type_id); it != m_object_types.end())
 		{
-			return it->second;
+			return it->second->getPointerTo();
 		}
 
 		std::array<llvm::Type*, 1> types{{llvm::ArrayType::get(m_defs.i8, type.GetSizeInMemoryBytes())}};
@@ -84,8 +77,7 @@ llvm::Type* Builder::to_llvm_type(const asCDataType& type) const
 
 		// TODO: what makes most sense between declaring this as non-const and having a non-mutable m_object_types
 		// versus this as a const and m_object_types as mutable?
-
-		return struct_type;
+		return struct_type->getPointerTo();
 	}
 
 	asllvm_assert(false && "type not supported");
