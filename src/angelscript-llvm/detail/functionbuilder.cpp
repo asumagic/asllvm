@@ -1999,7 +1999,8 @@ void FunctionBuilder::create_locals_debug_info()
 				m_module_builder.get_debug_type(engine.GetTypeIdFromDataType(var->type)));
 
 			std::array<std::uint64_t, 2> addresses{
-				llvm::dwarf::DW_OP_plus_uconst, std::uint64_t(stack_size() - var->stackOffset) * 4};
+				llvm::dwarf::DW_OP_plus_uconst,
+				std::uint64_t(stack_size() + local_storage_size() - var->stackOffset) * 4};
 
 			di.insertDeclare(
 				m_locals, local, di.createExpression(addresses), get_debug_location(0, sp), ir.GetInsertBlock());
