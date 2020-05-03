@@ -6,7 +6,7 @@
 
 namespace asllvm::detail
 {
-std::string make_module_name(asIScriptModule& module);
+std::string make_module_name(asIScriptModule* module);
 std::string make_function_name(asIScriptFunction& function);
 std::string make_vm_entry_thunk_name(asIScriptFunction& function);
 std::string make_system_function_name(asIScriptFunction& function);
