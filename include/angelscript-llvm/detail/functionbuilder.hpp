@@ -38,6 +38,23 @@ class FunctionBuilder
 		llvm::Value *vm_frame_pointer = nullptr, *value_register = nullptr, *object_register = nullptr;
 	};
 
+	struct Parameter
+	{
+		//! \brief Index of the argument in the argument list of the translated function.
+		std::size_t argument_index = 0;
+
+		//! \brief
+		//!		Local alloca variable where the LLVM argument is stored, which is useful as we often store a pointer to
+		//!		a parameter or modify it.
+		llvm::AllocaInst* local_alloca = nullptr;
+
+		//! \brief AngelScript type id for this parameter.
+		int type_id = 0;
+
+		//! \brief Name that shows up in DWARF debug info.
+		const char* debug_name = "";
+	};
+
 	public:
 	//! \brief Constructor for FunctionBuilder, usually called by ModuleBuilder::create_function_builder().
 	FunctionBuilder(
@@ -216,9 +233,8 @@ class FunctionBuilder
 
 	long m_stack_pointer = 0;
 
-	//! \brief Map from stack identifiers of parameters to their copy in an alloca local variable.
-	//! \details This is used since we usually want to take the pointer to a parameter.
-	std::map<long, llvm::AllocaInst*> m_parameter_locals;
+	//! \brief Map from stack identifiers of parameters to their copy in an alloca local variable, among other info.
+	std::map<long, Parameter> m_parameters;
 
 	//! \brief Array of DWORDs used as a local stack for bytecode operations.
 	//! \details

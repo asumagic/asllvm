@@ -1259,39 +1259,37 @@ void FunctionBuilder::emit_allocate_local_structures()
 		StackVariableIdentifier stack_offset = 0;
 		std::size_t             arg_index    = 0; // TODO: clearer naming for arg_index vs i
 
-		const auto create_alloca_for = [&](llvm::Type* type, std::size_t size_on_stack, const char* name) {
-			const auto [it, success] = m_parameter_locals.emplace(stack_offset, ir.CreateAlloca(type, nullptr, name));
+		const auto create_alloca_for = [&](const asCDataType& data_type, const char* name) {
+			Parameter parameter;
+			parameter.argument_index = arg_index;
+			parameter.local_alloca   = ir.CreateAlloca(builder.to_llvm_type(data_type), nullptr, name);
+			parameter.type_id        = engine.GetTypeIdFromDataType(data_type);
+			parameter.debug_name     = name;
 
+			const auto [it, success] = m_parameters.emplace(stack_offset, parameter);
 			asllvm_assert(success);
-			llvm::Value* parameter_alloca = it->second;
 
-			ir.CreateStore(&*(m_llvm_function->arg_begin() + arg_index), parameter_alloca);
+			ir.CreateStore(&*(m_llvm_function->arg_begin() + arg_index), parameter.local_alloca);
 
-			stack_offset -= size_on_stack;
+			stack_offset -= data_type.GetSizeOnStackDWords();
 
 			++arg_index;
 		};
 
 		if (m_script_function.DoesReturnOnStack())
 		{
-			create_alloca_for(builder.to_llvm_type(m_script_function.returnType), AS_PTR_SIZE, "stackRetPtr");
+			create_alloca_for(m_script_function.returnType, "stackRetPtr");
 		}
 
 		if (m_script_function.objectType != nullptr)
 		{
-			create_alloca_for(
-				builder.to_llvm_type(engine.GetDataTypeFromTypeId(m_script_function.objectType->GetTypeId())),
-				AS_PTR_SIZE,
-				"this");
+			create_alloca_for(engine.GetDataTypeFromTypeId(m_script_function.objectType->GetTypeId()), "this");
 		}
 
 		const std::size_t parameter_count = m_script_function.parameterTypes.GetLength();
 		for (std::size_t i = 0; i < parameter_count; ++i)
 		{
-			create_alloca_for(
-				builder.to_llvm_type(m_script_function.parameterTypes[i]),
-				m_script_function.parameterTypes[i].GetSizeOnStackDWords(),
-				&(m_script_function.parameterNames[i])[0]);
+			create_alloca_for(m_script_function.parameterTypes[i], &(m_script_function.parameterNames[i])[0]);
 		}
 	}
 
@@ -1809,7 +1807,7 @@ llvm::Value* FunctionBuilder::get_stack_value_pointer(FunctionBuilder::StackVari
 	// Get a pointer to that argument
 	if (i <= 0)
 	{
-		return m_parameter_locals.at(i);
+		return m_parameters.at(i).local_alloca;
 	}
 
 	// Get a pointer to that value on the local stack
@@ -1908,9 +1906,7 @@ void FunctionBuilder::switch_to_block(llvm::BasicBlock* block)
 
 void FunctionBuilder::create_function_debug_info(llvm::Function* function, GeneratedFunctionType type)
 {
-	// FIXME
-	return;
-
+	asCScriptEngine&   engine            = m_compiler.engine();
 	llvm::IRBuilder<>& ir                = m_compiler.builder().ir();
 	llvm::DIBuilder&   di                = m_module_builder.di_builder();
 	ModuleDebugInfo&   module_debug_info = m_module_builder.debug_info();
@@ -1918,6 +1914,17 @@ void FunctionBuilder::create_function_debug_info(llvm::Function* function, Gener
 	std::vector<llvm::Metadata*> types;
 	{
 		types.push_back(m_module_builder.get_debug_type(m_script_function.GetReturnTypeId()));
+
+		if (m_script_function.DoesReturnOnStack())
+		{
+			types.push_back(
+				m_module_builder.get_debug_type(engine.GetTypeIdFromDataType(m_script_function.returnType)));
+		}
+
+		if (m_script_function.objectType != nullptr)
+		{
+			types.push_back(m_module_builder.get_debug_type(m_script_function.objectType->typeId));
+		}
 
 		const std::size_t count = m_script_function.GetParamCount();
 		for (std::size_t i = 0; i < count; ++i)
@@ -1958,43 +1965,24 @@ void FunctionBuilder::create_function_debug_info(llvm::Function* function, Gener
 
 void FunctionBuilder::create_locals_debug_info()
 {
-	// FIXME
-	return;
-
 	asCScriptEngine&   engine = m_compiler.engine();
 	llvm::IRBuilder<>& ir     = m_compiler.builder().ir();
 	llvm::DIBuilder&   di     = m_module_builder.di_builder();
 
 	llvm::DISubprogram* sp = m_llvm_function->getSubprogram();
 
+	for (const auto& [stack_offset, param] : m_parameters)
 	{
-		const std::size_t count     = m_script_function.GetParamCount();
-		std::uint64_t     stack_pos = 0;
-		for (std::size_t i = 0; i < count; ++i)
+		llvm::DILocalVariable* local = di.createParameterVariable(
+			sp,
+			param.debug_name,
+			param.argument_index,
+			sp->getFile(),
+			0,
+			m_module_builder.get_debug_type(param.type_id));
 
-		{
-			int          type_id = 0;
-			unsigned int flags   = 0;
-			const char*  name    = nullptr;
-			m_script_function.GetParam(i, &type_id, &flags, &name);
-
-			asCDataType& data_type = m_script_function.parameterTypes[i];
-
-			llvm::DILocalVariable* local = di.createParameterVariable(
-				sp, name, i, sp->getFile(), 0, m_module_builder.get_debug_type(type_id), true);
-
-			std::array<std::uint64_t, 2> addresses{llvm::dwarf::DW_OP_plus_uconst, stack_pos * 4};
-
-			stack_pos += data_type.GetSizeOnStackDWords();
-
-			/*di.insertDeclare(
-				&*(m_llvm_function->arg_begin() + 0),
-				local,
-				di.createExpression(addresses),
-				get_debug_location(0, sp),
-				ir.GetInsertBlock());*/
-			// FIXME: debug info for params
-		}
+		di.insertDeclare(
+			param.local_alloca, local, di.createExpression(), get_debug_location(0, sp), ir.GetInsertBlock());
 	}
 
 	{
