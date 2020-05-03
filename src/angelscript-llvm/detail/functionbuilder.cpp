@@ -149,20 +149,20 @@ llvm::Function* FunctionBuilder::create_vm_entry_thunk()
 	llvm::Value* frame_pointer = [&] {
 		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(defs.i64, 0), llvm::ConstantInt::get(defs.i32, 1)};
 
-		auto* pointer = ir.CreateGEP(registers, indices);
+		auto* pointer = ir.CreateGEP(registers, indices, "stackFramePointerPointer");
 		return ir.CreateLoad(defs.pi32, pointer, "stackFramePointer");
 	}();
 
 	llvm::Value* value_register = [&] {
 		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(defs.i64, 0), llvm::ConstantInt::get(defs.i32, 3)};
-		return ir.CreateGEP(registers, indices);
+		return ir.CreateGEP(registers, indices, "valueRegister");
 	}();
 
 	llvm::Value* object_register = [&] {
 		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(defs.i64, 0), llvm::ConstantInt::get(defs.i32, 4)};
 
-		auto* pointer = ir.CreateGEP(registers, indices);
-		return ir.CreateLoad(defs.pvoid, pointer, "objectRegister");
+		auto* pointer = ir.CreateGEP(registers, indices, "objectRegisterPointerPointer");
+		return ir.CreateLoad(defs.pvoid, pointer, "objectRegisterPointer");
 	}();
 
 	{
