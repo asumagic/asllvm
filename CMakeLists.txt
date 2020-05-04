@@ -27,6 +27,7 @@ add_library(angelscript-llvm
     src/angelscript-llvm/detail/modulebuilder.cpp
     src/angelscript-llvm/detail/modulecommon.cpp
     src/angelscript-llvm/detail/modulemap.cpp
+    src/angelscript-llvm/detail/runtime.cpp
 )
 
 if(NOT DEFINED ANGELSCRIPT_SDK_DIRECTORY)

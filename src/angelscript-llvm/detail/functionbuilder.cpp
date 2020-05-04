@@ -25,8 +25,11 @@ FunctionBuilder::FunctionBuilder(
 
 llvm::Function* FunctionBuilder::translate_bytecode(asDWORD* bytecode, asUINT length)
 {
-	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
-	llvm::LLVMContext& context = m_compiler.builder().context();
+	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
+
+	llvm::orc::ThreadSafeContext& thread_safe_context = m_compiler.builder().context();
+	auto                          context_lock        = thread_safe_context.getLock();
+	auto&                         context             = *thread_safe_context.getContext();
 
 	ir.SetInsertPoint(llvm::BasicBlock::Create(context, "entry", m_llvm_function));
 
@@ -120,9 +123,12 @@ llvm::Function* FunctionBuilder::translate_bytecode(asDWORD* bytecode, asUINT le
 
 llvm::Function* FunctionBuilder::create_vm_entry_thunk()
 {
-	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
-	llvm::LLVMContext& context = m_compiler.builder().context();
-	CommonDefinitions& defs    = m_compiler.builder().definitions();
+	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
+	CommonDefinitions& defs = m_compiler.builder().definitions();
+
+	llvm::orc::ThreadSafeContext& thread_safe_context = m_compiler.builder().context();
+	auto                          context_lock        = thread_safe_context.getLock();
+	auto&                         context             = *thread_safe_context.getContext();
 
 	const std::array<llvm::Type*, 2> types{defs.vm_registers->getPointerTo(), defs.i64};
 
@@ -690,7 +696,13 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	}
 	case asBC_PshNull: unimpl(); break;
 	case asBC_ClrVPtr: unimpl(); break;
-	case asBC_OBJTYPE: unimpl(); break;
+
+	case asBC_OBJTYPE:
+	{
+		push_stack_value(llvm::ConstantInt::get(defs.iptr, ins.arg_pword()), AS_PTR_SIZE);
+		break;
+	}
+
 	case asBC_TYPEID: unimpl(); break;
 
 	case asBC_SetV1:
@@ -1585,6 +1597,9 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 	{
 		ir.CreateStore(result, return_pointer);
 	}
+
+	// Within factory functions, this would cause issues otherwise
+	m_stack_pointer = std::max(m_stack_pointer, local_storage_size());
 }
 
 std::size_t FunctionBuilder::emit_script_call(asCScriptFunction& callee) { return emit_script_call(callee, {}); }
@@ -1797,7 +1812,7 @@ llvm::Value* FunctionBuilder::get_stack_value_pointer(FunctionBuilder::StackVari
 llvm::Value* FunctionBuilder::get_stack_value_pointer(FunctionBuilder::StackVariableIdentifier i)
 {
 	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
-	llvm::LLVMContext& context = m_compiler.builder().context();
+	llvm::LLVMContext& context = *m_compiler.builder().context().getContext(); // we horribly assume callers locked this
 
 	// Get a pointer to that argument
 	if (i <= 0)
@@ -1850,7 +1865,7 @@ llvm::Value* FunctionBuilder::get_value_register_pointer(llvm::Type* type)
 
 void FunctionBuilder::insert_label(long offset)
 {
-	llvm::LLVMContext& context = m_compiler.builder().context();
+	llvm::LLVMContext& context = *m_compiler.builder().context().getContext();
 
 	auto       emplace_result = m_jump_map.emplace(offset, nullptr);
 	const bool success        = emplace_result.second;

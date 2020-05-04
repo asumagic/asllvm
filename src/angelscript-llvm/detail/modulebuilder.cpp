@@ -5,6 +5,7 @@
 #include <angelscript-llvm/detail/jitcompiler.hpp>
 #include <angelscript-llvm/detail/llvmglobals.hpp>
 #include <angelscript-llvm/detail/modulecommon.hpp>
+#include <angelscript-llvm/detail/runtime.hpp>
 #include <array>
 #include <fmt/core.h>
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
@@ -16,19 +17,13 @@ namespace asllvm::detail
 ModuleBuilder::ModuleBuilder(JitCompiler& compiler, asIScriptModule* module) :
 	m_compiler{compiler},
 	m_script_module{module},
-	m_llvm_module{std::make_unique<llvm::Module>(make_module_name(module), compiler.builder().context())},
+	m_llvm_module{std::make_unique<llvm::Module>(make_module_name(module), *compiler.builder().context().getContext())},
 	m_di_builder{std::make_unique<llvm::DIBuilder>(*m_llvm_module)},
 	m_debug_info{setup_debug_info()},
 	m_internal_functions{setup_internal_functions()}
 {}
 
 void ModuleBuilder::append(PendingFunction function) { m_pending_functions.push_back(function); }
-
-llvm::Function* ModuleBuilder::create_script_function_skeleton(
-	asCScriptFunction& script_function, llvm::GlobalValue::LinkageTypes linkage, const std::string& name)
-{
-	return llvm::Function::Create(get_script_function_type(script_function), linkage, name, *m_llvm_module);
-}
 
 llvm::Function* ModuleBuilder::get_script_function(asCScriptFunction& function)
 {
@@ -50,10 +45,11 @@ llvm::Function* ModuleBuilder::get_script_function(asCScriptFunction& function)
 			function.objectType != nullptr ? function.objectType->GetName() : "(null)"));
 	}
 
-	const std::string name = make_function_name(function);
-
-	llvm::Function* internal_function
-		= create_script_function_skeleton(function, llvm::Function::ExternalLinkage, name);
+	llvm::Function* internal_function = llvm::Function::Create(
+		get_script_function_type(function),
+		llvm::Function::ExternalLinkage,
+		make_function_name(function),
+		*m_llvm_module);
 
 	m_script_functions.emplace(function.GetId(), internal_function);
 	return internal_function;
@@ -287,7 +283,7 @@ void ModuleBuilder::build()
 	m_compiler.builder().optimizer().run(*m_llvm_module);
 
 	ExitOnError(m_compiler.jit().addIRModule(
-		llvm::orc::ThreadSafeModule(std::move(m_llvm_module), m_compiler.builder().extract_old_context())));
+		llvm::orc::ThreadSafeModule(std::move(m_llvm_module), m_compiler.builder().context())));
 }
 
 void ModuleBuilder::link()
@@ -310,40 +306,6 @@ void ModuleBuilder::dump_state() const
 	}
 
 	m_llvm_module->print(llvm::errs(), nullptr);
-}
-
-void* ModuleBuilder::script_vtable_lookup(asCScriptObject* object, asCScriptFunction* function)
-{
-	auto& object_type = *static_cast<asCObjectType*>(object->GetObjectType());
-	return reinterpret_cast<void*>(
-		object_type.virtualFunctionTable[function->vfTableIdx]->GetUserData(vtable_userdata_identifier));
-}
-
-void* ModuleBuilder::system_vtable_lookup(void* object, asPWORD func)
-{
-	// TODO: this likely does not have to be a function
-#if defined(__linux__) && defined(__x86_64__)
-	using FunctionPtr = asQWORD (*)();
-	auto vftable      = *(reinterpret_cast<FunctionPtr**>(object));
-	return reinterpret_cast<void*>(vftable[func >> 3]);
-#else
-#	error("virtual function lookups unsupported for this target")
-#endif
-}
-
-void ModuleBuilder::call_object_method(void* object, asCScriptFunction* function)
-{
-	// TODO: this is not very efficient: this performs an extra call into AS that is more generic than we require: we
-	// know a lot of stuff about the function at JIT time.
-	auto& engine = *static_cast<asCScriptEngine*>(function->GetEngine());
-	engine.CallObjectMethod(object, function->GetId());
-}
-
-void* ModuleBuilder::new_script_object(asCObjectType* object_type)
-{
-	auto* object = static_cast<asCScriptObject*>(userAlloc(object_type->size));
-	ScriptObject_Construct(object_type, object);
-	return object;
 }
 
 ModuleDebugInfo ModuleBuilder::setup_debug_info()
@@ -370,76 +332,78 @@ InternalFunctions ModuleBuilder::setup_internal_functions()
 
 	InternalFunctions funcs{};
 
+	const auto linkage = llvm::Function::ExternalLinkage;
+
 	{
-		std::array<llvm::Type*, 1> types{{defs.iptr}};
+		std::array<llvm::Type*, 1> types{defs.iptr};
 		llvm::Type*                return_type = defs.pvoid;
 
 		llvm::FunctionType* function_type = llvm::FunctionType::get(return_type, types, false);
-		funcs.alloc                       = llvm::Function::Create(
-			function_type, llvm::Function::ExternalLinkage, 0, "asllvm.private.alloc", m_llvm_module.get());
-
-		funcs.alloc->addFnAttr(llvm::Attribute::InaccessibleMemOnly);
+		llvm::Function*     function
+			= llvm::Function::Create(function_type, linkage, 0, "asllvm.private.alloc", m_llvm_module.get());
 
 		// The object we created is unique as it was dynamically allocated
-		funcs.alloc->addAttribute(0, llvm::Attribute::NoAlias);
+		function->addAttribute(0, llvm::Attribute::NoAlias);
+
+		function->setOnlyAccessesInaccessibleMemory();
+
+		funcs.alloc = function;
 	}
 
 	{
-		std::array<llvm::Type*, 1> types{{defs.pvoid}};
+		std::array<llvm::Type*, 1> types{defs.pvoid};
 		llvm::Type*                return_type = defs.tvoid;
 
 		llvm::FunctionType* function_type = llvm::FunctionType::get(return_type, types, false);
-		funcs.free                        = llvm::Function::Create(
-			function_type, llvm::Function::ExternalLinkage, 0, "asllvm.private.free", m_llvm_module.get());
+		llvm::Function*     function
+			= llvm::Function::Create(function_type, linkage, 0, "asllvm.private.free", m_llvm_module.get());
+
+		funcs.free = function;
 	}
 
 	{
-		std::array<llvm::Type*, 1> types{{defs.pvoid}};
+		std::array<llvm::Type*, 1> types{defs.pvoid};
 
 		llvm::FunctionType* function_type = llvm::FunctionType::get(defs.pvoid, types, false);
-		funcs.new_script_object           = llvm::Function::Create(
-			function_type, llvm::Function::ExternalLinkage, 0, "asllvm.private.new_script_object", m_llvm_module.get());
+		llvm::Function*     function      = llvm::Function::Create(
+			function_type, linkage, 0, "asllvm.private.new_script_object", m_llvm_module.get());
 
-		funcs.new_script_object->addFnAttr(llvm::Attribute::InaccessibleMemOrArgMemOnly);
+		function->setOnlyAccessesInaccessibleMemOrArgMem();
 
 		// The object we created is unique as it was dynamically allocated
-		funcs.new_script_object->addAttribute(0, llvm::Attribute::NoAlias);
+		function->addAttribute(0, llvm::Attribute::NoAlias);
+
+		funcs.new_script_object = function;
 	}
 
 	{
-		std::array<llvm::Type*, 2> types{{defs.pvoid, defs.pvoid}};
+		std::array<llvm::Type*, 2> types{defs.pvoid, defs.pvoid};
 
 		llvm::FunctionType* function_type = llvm::FunctionType::get(defs.pvoid, types, false);
-		funcs.script_vtable_lookup        = llvm::Function::Create(
-			function_type,
-			llvm::Function::ExternalLinkage,
-			0,
-			"asllvm.private.script_vtable_lookup",
-			m_llvm_module.get());
+		llvm::Function*     function      = llvm::Function::Create(
+			function_type, linkage, 0, "asllvm.private.script_vtable_lookup", m_llvm_module.get());
+
+		funcs.script_vtable_lookup = function;
 	}
 
 	{
-		std::array<llvm::Type*, 2> types{{defs.pvoid, defs.pvoid}};
+		std::array<llvm::Type*, 2> types{defs.pvoid, defs.pvoid};
 
 		llvm::FunctionType* function_type = llvm::FunctionType::get(defs.pvoid, types, false);
-		funcs.system_vtable_lookup        = llvm::Function::Create(
-			function_type,
-			llvm::Function::ExternalLinkage,
-			0,
-			"asllvm.private.system_vtable_lookup",
-			m_llvm_module.get());
+		llvm::Function*     function      = llvm::Function::Create(
+			function_type, linkage, 0, "asllvm.private.system_vtable_lookup", m_llvm_module.get());
+
+		funcs.system_vtable_lookup = function;
 	}
 
 	{
-		std::array<llvm::Type*, 2> types{{defs.pvoid, defs.pvoid}};
+		std::array<llvm::Type*, 2> types{defs.pvoid, defs.pvoid};
 
 		llvm::FunctionType* function_type = llvm::FunctionType::get(defs.tvoid, types, false);
-		funcs.call_object_method          = llvm::Function::Create(
-			function_type,
-			llvm::Function::ExternalLinkage,
-			0,
-			"asllvm.private.call_object_method",
-			m_llvm_module.get());
+		llvm::Function*     function      = llvm::Function::Create(
+			function_type, linkage, 0, "asllvm.private.call_object_method", m_llvm_module.get());
+
+		funcs.call_object_method = function;
 	}
 
 	return funcs;
@@ -483,6 +447,12 @@ void ModuleBuilder::build_functions()
 void ModuleBuilder::link_symbols()
 {
 	const auto define_function = [&](auto* address, const std::string& name) {
+		if (m_compiler.jit().lookup(name))
+		{
+			// Symbol already defined
+			return;
+		}
+
 		llvm::JITEvaluatedSymbol symbol(llvm::pointerToJITTargetAddress(address), llvm::JITSymbolFlags::Callable);
 
 		ExitOnError(m_compiler.jit().defineAbsolute(name, symbol));
@@ -497,10 +467,10 @@ void ModuleBuilder::link_symbols()
 	// TODO: figure out why func->getName() returns an empty string
 	define_function(*userAlloc, "asllvm.private.alloc");
 	define_function(*userFree, "asllvm.private.free");
-	define_function(new_script_object, "asllvm.private.new_script_object");
-	define_function(script_vtable_lookup, "asllvm.private.script_vtable_lookup");
-	define_function(system_vtable_lookup, "asllvm.private.system_vtable_lookup");
-	define_function(call_object_method, "asllvm.private.call_object_method");
+	define_function(runtime::new_script_object, "asllvm.private.new_script_object");
+	define_function(runtime::script_vtable_lookup, "asllvm.private.script_vtable_lookup");
+	define_function(runtime::system_vtable_lookup, "asllvm.private.system_vtable_lookup");
+	define_function(runtime::call_object_method, "asllvm.private.call_object_method");
 
 	define_function(fmodf, "fmodf");
 	define_function(fmod, "fmod");

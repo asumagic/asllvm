@@ -3,6 +3,7 @@
 #include <angelscript-llvm/detail/asinternalheaders.hpp>
 #include <angelscript-llvm/detail/fwd.hpp>
 #include <angelscript.h>
+#include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/LegacyPassManager.h>
@@ -29,14 +30,12 @@ class Builder
 	public:
 	Builder(JitCompiler& compiler);
 
-	llvm::IRBuilder<>& ir() { return m_ir_builder; }
-	CommonDefinitions& definitions() { return m_defs; }
+	llvm::IRBuilder<>&            ir() { return m_ir_builder; }
+	CommonDefinitions&            definitions() { return m_defs; }
+	llvm::legacy::PassManager&    optimizer() { return m_pass_manager; }
+	llvm::orc::ThreadSafeContext& context() { return m_context; }
 
 	llvm::Type* to_llvm_type(const asCDataType& type) const;
-
-	llvm::legacy::PassManager&         optimizer();
-	llvm::LLVMContext&                 context();
-	std::unique_ptr<llvm::LLVMContext> extract_old_context();
 
 	private:
 	CommonDefinitions setup_common_definitions();
@@ -44,11 +43,14 @@ class Builder
 	std::unique_ptr<llvm::LLVMContext> setup_context();
 	llvm::legacy::PassManager          setup_pass_manager();
 
-	JitCompiler&                             m_compiler;
-	std::unique_ptr<llvm::LLVMContext>       m_context;
-	llvm::legacy::PassManager                m_pass_manager;
-	llvm::IRBuilder<>                        m_ir_builder;
-	CommonDefinitions                        m_defs;
+	JitCompiler& m_compiler;
+
+	llvm::orc::ThreadSafeContext m_context;
+	llvm::legacy::PassManager    m_pass_manager;
+	llvm::IRBuilder<>            m_ir_builder;
+
+	CommonDefinitions m_defs;
+
 	mutable std::map<int, llvm::StructType*> m_object_types;
 };
 
