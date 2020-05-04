@@ -5,7 +5,9 @@
 #include <angelscript-llvm/detail/jitcompiler.hpp>
 #include <angelscript-llvm/detail/llvmglobals.hpp>
 #include <angelscript-llvm/detail/modulecommon.hpp>
+#include <angelscript-llvm/detail/runtime.hpp>
 #include <angelscript.h>
+#include <fmt/core.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
@@ -16,7 +18,7 @@ Builder::Builder(JitCompiler& compiler) :
 	m_compiler{compiler},
 	m_context{setup_context()},
 	m_pass_manager{setup_pass_manager()},
-	m_ir_builder{*m_context},
+	m_ir_builder{*m_context.getContext()},
 	m_defs{setup_common_definitions()}
 {
 	llvm::FastMathFlags fast_fp;
@@ -63,7 +65,8 @@ llvm::Type* Builder::to_llvm_type(const asCDataType& type) const
 	if (type.IsReference() || type.IsObjectHandle() || type.IsObject())
 	{
 		asllvm_assert(type.GetTypeInfo() != nullptr);
-		const int type_id = type.GetTypeInfo()->typeId;
+		auto&     object_type = static_cast<asCObjectType&>(*type.GetTypeInfo());
+		const int type_id     = object_type.GetTypeId();
 
 		if (const auto it = m_object_types.find(type_id); it != m_object_types.end())
 		{
@@ -72,7 +75,7 @@ llvm::Type* Builder::to_llvm_type(const asCDataType& type) const
 
 		std::array<llvm::Type*, 1> types{{llvm::ArrayType::get(m_defs.i8, type.GetSizeInMemoryBytes())}};
 
-		llvm::StructType* struct_type = llvm::StructType::create(types, type.GetTypeInfo()->GetName());
+		llvm::StructType* struct_type = llvm::StructType::create(types, object_type.GetName());
 		m_object_types.emplace(type_id, struct_type);
 
 		// TODO: what makes most sense between declaring this as non-const and having a non-mutable m_object_types
@@ -83,41 +86,30 @@ llvm::Type* Builder::to_llvm_type(const asCDataType& type) const
 	asllvm_assert(false && "type not supported");
 }
 
-llvm::legacy::PassManager& Builder::optimizer() { return m_pass_manager; }
-
-llvm::LLVMContext& Builder::context() { return *m_context; }
-
-std::unique_ptr<llvm::LLVMContext> Builder::extract_old_context()
-{
-	auto old_context = std::move(m_context);
-
-	m_context = setup_context();
-	m_defs    = setup_common_definitions();
-
-	return old_context;
-}
-
 CommonDefinitions Builder::setup_common_definitions()
 {
 	CommonDefinitions defs{};
 
-	defs.tvoid = llvm::Type::getVoidTy(*m_context);
-	defs.i1    = llvm::Type::getInt1Ty(*m_context);
-	defs.i8    = llvm::Type::getInt8Ty(*m_context);
-	defs.i16   = llvm::Type::getInt16Ty(*m_context);
-	defs.i32   = llvm::Type::getInt32Ty(*m_context);
-	defs.i64   = llvm::Type::getInt64Ty(*m_context);
-	defs.iptr  = llvm::Type::getInt64Ty(*m_context); // TODO: determine pointer type from target machine
-	defs.f32   = llvm::Type::getFloatTy(*m_context);
-	defs.f64   = llvm::Type::getDoubleTy(*m_context);
+	auto  context_lock = m_context.getLock();
+	auto& context      = *m_context.getContext();
 
-	defs.pvoid = llvm::Type::getInt8PtrTy(*m_context);
-	defs.pi8   = llvm::Type::getInt8PtrTy(*m_context);
-	defs.pi16  = llvm::Type::getInt16PtrTy(*m_context);
-	defs.pi32  = llvm::Type::getInt32PtrTy(*m_context);
-	defs.pi64  = llvm::Type::getInt64PtrTy(*m_context);
-	defs.pf32  = llvm::Type::getFloatPtrTy(*m_context);
-	defs.pf64  = llvm::Type::getDoublePtrTy(*m_context);
+	defs.tvoid = llvm::Type::getVoidTy(context);
+	defs.i1    = llvm::Type::getInt1Ty(context);
+	defs.i8    = llvm::Type::getInt8Ty(context);
+	defs.i16   = llvm::Type::getInt16Ty(context);
+	defs.i32   = llvm::Type::getInt32Ty(context);
+	defs.i64   = llvm::Type::getInt64Ty(context);
+	defs.iptr  = llvm::Type::getInt64Ty(context); // TODO: determine pointer type from target machine
+	defs.f32   = llvm::Type::getFloatTy(context);
+	defs.f64   = llvm::Type::getDoubleTy(context);
+
+	defs.pvoid = llvm::Type::getInt8PtrTy(context);
+	defs.pi8   = llvm::Type::getInt8PtrTy(context);
+	defs.pi16  = llvm::Type::getInt16PtrTy(context);
+	defs.pi32  = llvm::Type::getInt32PtrTy(context);
+	defs.pi64  = llvm::Type::getInt64PtrTy(context);
+	defs.pf32  = llvm::Type::getFloatPtrTy(context);
+	defs.pf64  = llvm::Type::getDoublePtrTy(context);
 
 	{
 		std::array<llvm::Type*, 8> types{

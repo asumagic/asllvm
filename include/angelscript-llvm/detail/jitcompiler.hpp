@@ -33,18 +33,22 @@ class JitCompiler
 	void build_modules();
 
 	private:
+	std::unique_ptr<llvm::orc::LLJIT> setup_jit();
+
 	void dump_state() const;
 
 	[[no_unique_address]] LibraryInitializer m_llvm_initializer;
-	asCScriptEngine*                         m_engine = nullptr;
-	std::unique_ptr<llvm::orc::LLJIT>        m_jit;
-	llvm::JITEventListener*                  m_gdb_listener;
+
+	llvm::JITEventListener* m_gdb_listener;
 #if LLVM_USE_PERF
 	llvm::JITEventListener* m_perf_listener;
 #endif
-	JitConfig m_config;
-	Builder   m_builder;
-	ModuleMap m_module_map;
+	std::unique_ptr<llvm::orc::LLJIT> m_jit;
+
+	asCScriptEngine* m_engine = nullptr;
+	JitConfig        m_config;
+	Builder          m_builder;
+	ModuleMap        m_module_map;
 };
 
 } // namespace asllvm::detail

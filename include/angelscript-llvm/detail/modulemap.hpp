@@ -15,7 +15,7 @@ class ModuleMap
 	public:
 	ModuleMap(JitCompiler& compiler);
 
-	ModuleBuilder& operator[](asIScriptModule& module);
+	ModuleBuilder& operator[](asIScriptModule* module);
 
 	void build_modules();
 
@@ -24,6 +24,7 @@ class ModuleMap
 	private:
 	JitCompiler& m_compiler;
 
+	ModuleBuilder                                  m_shared_module_builder;
 	std::unordered_map<std::string, ModuleBuilder> m_map;
 };
 

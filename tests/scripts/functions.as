@@ -2,7 +2,7 @@
 
 void main()
 {
-    print('' + calc(10, 100));
+    print(/*'' + */calc(10, 100));
 }
 
 int calc(int64 a, int b)

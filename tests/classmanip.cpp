@@ -11,7 +11,7 @@ TEST_CASE("string handling", "[str]")
 	REQUIRE(run_string(R"(print(parseInt("ABCD", 16)))") == "43981\n");
 }
 
-// TEST_CASE("array handling", "[array]") { REQUIRE(run("scripts/arraymanip.as", "void main()") == ""); }
+TEST_CASE("array handling", "[array]") { REQUIRE(run("scripts/arraymanip.as", "void main()") == "123\nhi\n"); }
 
 TEST_CASE("user classes", "[userclass]")
 {

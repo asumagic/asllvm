@@ -48,12 +48,9 @@ struct ModuleDebugInfo
 class ModuleBuilder
 {
 	public:
-	ModuleBuilder(JitCompiler& compiler, asIScriptModule& module);
+	ModuleBuilder(JitCompiler& compiler, asIScriptModule* module = nullptr);
 
 	void append(PendingFunction function);
-
-	llvm::Function* create_script_function_skeleton(
-		asCScriptFunction& script_function, llvm::GlobalValue::LinkageTypes linkage, const std::string& name);
 
 	llvm::Function*     get_script_function(asCScriptFunction& function);
 	llvm::FunctionType* get_script_function_type(asCScriptFunction& script_function);
@@ -64,6 +61,7 @@ class ModuleBuilder
 	llvm::DIType* get_debug_type(ModuleDebugInfo::AsTypeIdentifier type);
 
 	void build();
+	void link();
 
 	llvm::Module&      module() { return *m_llvm_module; }
 	InternalFunctions& internal_functions() { return m_internal_functions; }
@@ -74,12 +72,6 @@ class ModuleBuilder
 	void dump_state() const;
 
 	private:
-	// TODO: move this elsewhere, potentially
-	static void* script_vtable_lookup(asCScriptObject* object, asCScriptFunction* function);
-	static void* system_vtable_lookup(void* object, asPWORD func);
-	static void  call_object_method(void* object, asCScriptFunction* function);
-	static void* new_script_object(asCObjectType* object_type);
-
 	bool is_exposed_directly(asIScriptFunction& function) const;
 
 	ModuleDebugInfo   setup_debug_info();

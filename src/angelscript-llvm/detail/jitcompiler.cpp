@@ -24,26 +24,15 @@ LibraryInitializer::LibraryInitializer()
 
 JitCompiler::JitCompiler(JitConfig config) :
 	m_llvm_initializer{},
-	m_jit{ExitOnError(llvm::orc::LLJITBuilder().create())},
 	m_gdb_listener{llvm::JITEventListener::createGDBRegistrationListener()},
 #if LLVM_USE_PERF
 	m_perf_listener{llvm::JITEventListener::createPerfJITEventListener()},
 #endif
+	m_jit{setup_jit()},
 	m_config{config},
 	m_builder{*this},
 	m_module_map{*this}
-{
-	auto& object_linking_layer = static_cast<llvm::orc::RTDyldObjectLinkingLayer&>(m_jit->getObjLinkingLayer());
-	object_linking_layer.setNotifyLoaded([this](auto a, auto& b, auto& c) {
-		m_gdb_listener->notifyObjectLoaded(a, b, c);
-
-#if LLVM_USE_PERF
-		m_perf_listener->notifyObjectLoaded(a, b, c);
-#endif
-	});
-
-	object_linking_layer.setProcessAllSections(true);
-}
+{}
 
 int JitCompiler::jit_compile(asIScriptFunction* function, asJITFunction* output)
 {
@@ -53,14 +42,7 @@ int JitCompiler::jit_compile(asIScriptFunction* function, asJITFunction* output)
 
 	m_engine = static_cast<asCScriptEngine*>(function->GetEngine());
 
-	asIScriptModule* module = function->GetModule();
-
-	if (module == nullptr)
-	{
-		return -1;
-	}
-
-	m_module_map[*module].append({static_cast<asCScriptFunction*>(function), output});
+	m_module_map[function->GetModule()].append({static_cast<asCScriptFunction*>(function), output});
 	return 0;
 }
 
@@ -80,6 +62,24 @@ void JitCompiler::diagnostic(const std::string& text, asEMsgType message_type) c
 }
 
 void JitCompiler::build_modules() { m_module_map.build_modules(); }
+
+std::unique_ptr<llvm::orc::LLJIT> JitCompiler::setup_jit()
+{
+	auto jit = ExitOnError(llvm::orc::LLJITBuilder().create());
+
+	auto& object_linking_layer = static_cast<llvm::orc::RTDyldObjectLinkingLayer&>(jit->getObjLinkingLayer());
+	object_linking_layer.setNotifyLoaded([this](auto a, auto& b, auto& c) {
+		m_gdb_listener->notifyObjectLoaded(a, b, c);
+
+#if LLVM_USE_PERF
+		m_perf_listener->notifyObjectLoaded(a, b, c);
+#endif
+	});
+
+	object_linking_layer.setProcessAllSections(true);
+
+	return jit;
+}
 
 void JitCompiler::dump_state() const { m_module_map.dump_state(); }
 
