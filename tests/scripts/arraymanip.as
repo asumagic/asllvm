@@ -1,5 +1,8 @@
 void main()
 {
-    string[] strings;
     int[] ints;
+
+    ints.insertLast(123);
+
+    print(ints[0]);
 }

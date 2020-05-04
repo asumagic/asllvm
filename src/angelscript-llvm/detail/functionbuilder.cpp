@@ -511,11 +511,25 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		break;
 	}
 
-	case asBC_PopRPtr: unimpl(); break;
-	case asBC_PshRPtr: unimpl(); break;
+	case asBC_PopRPtr:
+	{
+		llvm::Value* value = load_stack_value(m_stack_pointer, defs.iptr);
+		m_stack_pointer -= AS_PTR_SIZE;
+
+		store_value_register_value(value);
+		break;
+	}
+
+	case asBC_PshRPtr:
+	{
+		push_stack_value(load_value_register_value(defs.iptr), AS_PTR_SIZE);
+		break;
+	}
+
 	case asBC_STR: asllvm_assert(false && "STR is deperecated and should not have been emitted by AS"); break;
 
 	case asBC_CALLSYS:
+	case asBC_Thiscall1:
 	{
 		asCScriptFunction* function = static_cast<asCScriptFunction*>(engine.GetFunctionById(ins.arg_int()));
 		asllvm_assert(function != nullptr);
@@ -687,8 +701,10 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		llvm::Value* pointer = get_stack_value_pointer(m_stack_pointer - ins.arg_word0(), defs.pi32);
 
 		llvm::Value*                      index = ir.CreateLoad(defs.i32, ir.CreateBitCast(pointer, defs.pi32));
-		const std::array<llvm::Value*, 2> indices{{llvm::ConstantInt::get(defs.i64, 0), index}};
-		llvm::Value*                      variable_address = ir.CreateGEP(m_locals, indices);
+		const std::array<llvm::Value*, 2> indices{
+			llvm::ConstantInt::get(defs.i64, 0),
+			ir.CreateSub(llvm::ConstantInt::get(defs.i32, local_storage_size() + stack_size()), index)};
+		llvm::Value* variable_address = ir.CreateGEP(m_locals, indices);
 
 		ir.CreateStore(variable_address, ir.CreateBitCast(pointer, defs.pi32->getPointerTo()));
 
@@ -1118,7 +1134,6 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	case asBC_POWdi: unimpl(); break;
 	case asBC_POWi64: unimpl(); break;
 	case asBC_POWu64: unimpl(); break;
-	case asBC_Thiscall1: unimpl(); break;
 
 	default:
 	{
@@ -1145,6 +1160,7 @@ std::string FunctionBuilder::disassemble(BytecodeInstruction instruction)
 
 	case asBC_CALL:
 	case asBC_CALLSYS:
+	case asBC_Thiscall1:
 	{
 		auto* func = static_cast<asCScriptFunction*>(m_compiler.engine().GetFunctionById(instruction.arg_int()));
 
@@ -1590,7 +1606,15 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 	{
 		if (return_type != defs.tvoid)
 		{
-			store_value_register_value(result);
+			if (function.returnType.IsObjectHandle())
+			{
+				llvm::Value* typed_object_register = ir.CreateBitCast(m_object_register, return_type->getPointerTo());
+				ir.CreateStore(result, typed_object_register);
+			}
+			else
+			{
+				store_value_register_value(result);
+			}
 		}
 	}
 	else
