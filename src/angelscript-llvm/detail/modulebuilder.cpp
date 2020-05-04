@@ -13,10 +13,10 @@
 
 namespace asllvm::detail
 {
-ModuleBuilder::ModuleBuilder(JitCompiler& compiler, asIScriptModule& module) :
+ModuleBuilder::ModuleBuilder(JitCompiler& compiler, asIScriptModule* module) :
 	m_compiler{compiler},
-	m_script_module{&module},
-	m_llvm_module{std::make_unique<llvm::Module>(make_module_name(&module), compiler.builder().context())},
+	m_script_module{module},
+	m_llvm_module{std::make_unique<llvm::Module>(make_module_name(module), compiler.builder().context())},
 	m_di_builder{std::make_unique<llvm::DIBuilder>(*m_llvm_module)},
 	m_debug_info{setup_debug_info()},
 	m_internal_functions{setup_internal_functions()}
@@ -288,7 +288,10 @@ void ModuleBuilder::build()
 
 	ExitOnError(m_compiler.jit().addIRModule(
 		llvm::orc::ThreadSafeModule(std::move(m_llvm_module), m_compiler.builder().extract_old_context())));
+}
 
+void ModuleBuilder::link()
+{
 	for (JitSymbol& symbol : m_jit_functions)
 	{
 		auto function = ExitOnError(m_compiler.jit().lookup(symbol.name));
@@ -347,12 +350,12 @@ ModuleDebugInfo ModuleBuilder::setup_debug_info()
 {
 	ModuleDebugInfo debug_info;
 
-	// FIXME: determine file name properly
-	debug_info.file = m_di_builder->createFile(m_script_module->GetName(), "");
+	debug_info.file
+		= m_di_builder->createFile(m_script_module != nullptr ? m_script_module->GetName() : "<shared>", "");
 
 	debug_info.compile_unit = m_di_builder->createCompileUnit(
 		llvm::dwarf::DW_LANG_C_plus_plus,
-		m_debug_info.file,
+		debug_info.file,
 		"asllvm",
 		m_compiler.config().allow_llvm_optimizations,
 		"",

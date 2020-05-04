@@ -48,7 +48,7 @@ struct ModuleDebugInfo
 class ModuleBuilder
 {
 	public:
-	ModuleBuilder(JitCompiler& compiler, asIScriptModule& module);
+	ModuleBuilder(JitCompiler& compiler, asIScriptModule* module = nullptr);
 
 	void append(PendingFunction function);
 
@@ -64,6 +64,7 @@ class ModuleBuilder
 	llvm::DIType* get_debug_type(ModuleDebugInfo::AsTypeIdentifier type);
 
 	void build();
+	void link();
 
 	llvm::Module&      module() { return *m_llvm_module; }
 	InternalFunctions& internal_functions() { return m_internal_functions; }

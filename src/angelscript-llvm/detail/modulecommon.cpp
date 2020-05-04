@@ -9,7 +9,7 @@ std::string make_module_name(asIScriptModule* module)
 {
 	if (module == nullptr)
 	{
-		return "asllvm.nomodule";
+		return "asllvm.shared";
 	}
 
 	return fmt::format("asllvm.module.{}", module->GetName());
