@@ -58,6 +58,7 @@ This part is fairly incomplete, but provided to give a general idea:
   - [ ] Exception on overflow for some specific arithmetic ops
   - [ ] Support VM register introspection in system calls (for debugging, etc.)
   - [ ] VM suspend support
+  - [ ] Handle application exceptions
 
 \*: `a ** b` (i.e. `pow`) is not implemented yet for any type.
 
