@@ -45,7 +45,7 @@ This part is fairly incomplete, but provided to give a general idea:
     - [x] Return by value (from script function)
     - [x] Virtual method calls
     - [ ] Composite calls
-  - [ ] Reference-counted types
+  - [x] Reference-counted types\*\*\*\*
   - [x] Function calls
 - [x] Script classes
   - [x] Constructing and destructing script classes
@@ -65,6 +65,8 @@ This part is fairly incomplete, but provided to give a general idea:
 \*\*: Reference counting through handles is implemented as stubs and don't actually perform any freeing for now.
 
 \*\*\*: Implemented for trivial cases (method was originally declared as `final`).
+
+\*\*\*\*: Partial
 
 **Due to the design of asllvm, it is not possible to partially JIT modules, or to skip JITting for specific modules.**
 The JIT assumes that only supported features are used by your scripts and application interface, or it will yield an
