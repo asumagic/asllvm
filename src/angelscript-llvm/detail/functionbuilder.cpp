@@ -624,9 +624,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 			if (beh.release != 0)
 			{
-				// emit_object_method_call(static_cast<asCScriptEngine&>(engine).scriptFunctions[beh.release],
-				// object_pointer);
-				m_compiler.diagnostic("STUB: refcounting not well supported yet, not releasing reference!!");
+				emit_object_method_call(*engine.scriptFunctions[beh.release], object_pointer);
 			}
 		}
 		else
@@ -1095,7 +1093,22 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 		if ((object_type.flags & asOBJ_NOCOUNT) == 0)
 		{
-			m_compiler.diagnostic("STUB: asBC_RefCpyV not updating refcount!");
+			if (object_type.beh.release != 0)
+			{
+				m_compiler.diagnostic("STUB: asBC_RefCpyV not calling release on old ref!");
+			}
+
+			m_compiler.diagnostic("STUB: not checking for zero in addref");
+
+			std::array<llvm::Value*, 2> args{
+				s,
+				ir.CreateIntToPtr(
+					llvm::ConstantInt::get(
+						defs.iptr, reinterpret_cast<asPWORD>(engine.GetScriptFunction(object_type.beh.addref))),
+					defs.pvoid)};
+
+			ir.CreateCall(
+				internal_funcs.call_object_method->getFunctionType(), internal_funcs.call_object_method, args);
 		}
 
 		ir.CreateStore(s, destination);

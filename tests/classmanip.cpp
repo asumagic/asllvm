@@ -13,7 +13,7 @@ TEST_CASE("string handling", "[str]")
 
 TEST_CASE("array handling", "[array]") { REQUIRE(run("scripts/arraymanip.as", "void main()") == "123\nhi\n"); }
 
-TEST_CASE("user classes", "[userclass]")
+TEST_CASE("user classes", "[userclass][simpleuserclass]")
 {
 	REQUIRE(run("scripts/userclasses.as", "void test()") == "hello\n");
 	REQUIRE(run("scripts/userclasses.as", "void method_test()") == "hello\n123\n456\n789\n");
