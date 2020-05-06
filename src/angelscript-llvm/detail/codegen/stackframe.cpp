@@ -26,14 +26,10 @@ long StackFrame::variable_space() const { return m_context.script_function->scri
 
 long StackFrame::stack_space() const
 {
-	// TODO: stackNeeded does not appear to be correct when asBC_ALLOC pushes the pointer to the allocated variable
-	// on the stack. As far as I am aware allocating AS_PTR_SIZE extra bytes to the stack unconditionally should
-	// work around the problem. It would be better if asllvm did not require pushing to the stack _at all_ but this
-	// implies some refactoring. See also:
-	// https://www.gamedev.net/forums/topic/706619-scriptfunctiondatastackneeded-does-not-account-for-asbc_alloc-potential-stack-push/
-	constexpr long extra_stack_space_workaround = AS_PTR_SIZE;
+	// 2 pointers reserved for exception handling, 1 for asBC_ALLOC. See RESERVE_STACK in as_context.cpp.
+	constexpr long reserved_space = 2 * AS_PTR_SIZE;
 
-	return m_context.script_function->scriptData->stackNeeded - variable_space() + extra_stack_space_workaround;
+	return m_context.script_function->scriptData->stackNeeded - variable_space() + reserved_space;
 }
 
 long StackFrame::total_space() const { return variable_space() + stack_space(); }
