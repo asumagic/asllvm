@@ -411,18 +411,27 @@ InternalFunctions ModuleBuilder::setup_internal_functions()
 
 void ModuleBuilder::build_functions()
 {
-	for (auto& pending : m_pending_functions)
-	{
-		get_script_function(*static_cast<asCScriptFunction*>(pending.function));
-	}
-
 	for (const auto& pending : m_pending_functions)
 	{
+		if (std::find_if(
+				m_jit_functions.begin(),
+				m_jit_functions.end(),
+				[&](JitSymbol symbol) { return symbol.script_function == pending.function; })
+			!= m_jit_functions.end())
+		{
+			if (m_compiler.config().verbose)
+			{
+				m_compiler.diagnostic("ignoring function that was compiled in module already");
+			}
+
+			continue;
+		}
+
 		FunctionBuilder builder{
 			m_compiler,
 			*this,
 			*static_cast<asCScriptFunction*>(pending.function),
-			m_script_functions.at(pending.function->GetId())};
+			get_script_function(*static_cast<asCScriptFunction*>(pending.function))};
 
 		asUINT   length;
 		asDWORD* bytecode = pending.function->GetByteCode(&length);
