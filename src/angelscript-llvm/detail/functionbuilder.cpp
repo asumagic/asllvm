@@ -20,7 +20,8 @@ FunctionBuilder::FunctionBuilder(
 	m_compiler{compiler},
 	m_module_builder{module_builder},
 	m_script_function{script_function},
-	m_llvm_function{llvm_function}
+	m_llvm_function{llvm_function},
+	m_stack{codegen::Context{&m_compiler.builder(), m_llvm_function, &m_script_function}} // TODO: common context
 {}
 
 llvm::Function* FunctionBuilder::translate_bytecode(asDWORD* bytecode, asUINT length)
@@ -110,7 +111,7 @@ llvm::Function* FunctionBuilder::translate_bytecode(asDWORD* bytecode, asUINT le
 			}
 		});
 
-		asllvm_assert(m_stack_pointer == local_storage_size());
+		m_stack.finalize();
 	}
 	catch (std::exception& exception)
 	{
@@ -253,17 +254,15 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	ir.SetCurrentDebugLocation(get_debug_location(ins.offset, m_llvm_function->getSubprogram()));
 
-	const auto old_stack_pointer = m_stack_pointer;
+	const auto old_stack_pointer = m_stack.current_stack_pointer();
 
 	if (auto it = m_jump_map.find(ins.offset); it != m_jump_map.end())
 	{
-		asllvm_assert(m_stack_pointer == local_storage_size());
+		asllvm_assert(m_stack.empty_stack());
 		switch_to_block(it->second);
 	}
 
-	// Ensure that the stack pointer is within bounds
-	asllvm_assert(m_stack_pointer >= local_storage_size());
-	asllvm_assert(m_stack_pointer <= local_storage_size() + stack_size());
+	m_stack.check_stack_pointer_bounds();
 
 	const auto unimpl = [] { asllvm_assert(false && "unimplemented instruction while translating bytecode"); };
 
@@ -273,7 +272,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	{
 	case asBC_PopPtr:
 	{
-		m_stack_pointer -= AS_PTR_SIZE;
+		m_stack.pop(AS_PTR_SIZE);
 		break;
 	}
 
@@ -283,25 +282,25 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 			= ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, ins.arg_pword()), defs.iptr->getPointerTo());
 		llvm::Value* global_address = ir.CreateLoad(defs.iptr, pointer_to_global_address);
 
-		push_stack_value(global_address, AS_PTR_SIZE);
+		m_stack.push(global_address, AS_PTR_SIZE);
 		break;
 	}
 
 	case asBC_PshC4:
 	{
-		push_stack_value(llvm::ConstantInt::get(defs.i32, ins.arg_dword()), 1);
+		m_stack.push(llvm::ConstantInt::get(defs.i32, ins.arg_dword()), 1);
 		break;
 	}
 
 	case asBC_PshV4:
 	{
-		push_stack_value(load_stack_value(ins.arg_sword0(), defs.i32), 1);
+		m_stack.push(m_stack.load(ins.arg_sword0(), defs.i32), 1);
 		break;
 	}
 
 	case asBC_PSF:
 	{
-		push_stack_value(get_stack_value_pointer(ins.arg_sword0(), defs.iptr), AS_PTR_SIZE);
+		m_stack.push(m_stack.pointer_to(ins.arg_sword0(), defs.iptr), AS_PTR_SIZE);
 		break;
 	}
 
@@ -309,10 +308,10 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_NOT:
 	{
-		llvm::Value* source = load_stack_value(ins.arg_sword0(), defs.i1);
+		llvm::Value* source = m_stack.load(ins.arg_sword0(), defs.i1);
 		llvm::Value* result
 			= ir.CreateSelect(source, llvm::ConstantInt::get(defs.i32, 0), llvm::ConstantInt::get(defs.i32, 1));
-		store_stack_value(ins.arg_sword0(), result);
+		m_stack.store(ins.arg_sword0(), result);
 		break;
 	}
 
@@ -322,7 +321,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		llvm::Value* global_ptr = ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, ins.arg_pword()), defs.pi32);
 		llvm::Value* global     = ir.CreateLoad(defs.i32, global_ptr);
 
-		push_stack_value(global, 1);
+		m_stack.push(global, 1);
 		break;
 	}
 
@@ -392,17 +391,17 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_IncVi:
 	{
-		llvm::Value* value  = load_stack_value(ins.arg_sword0(), defs.i32);
+		llvm::Value* value  = m_stack.load(ins.arg_sword0(), defs.i32);
 		llvm::Value* result = ir.CreateAdd(value, llvm::ConstantInt::get(defs.i32, 1));
-		store_stack_value(ins.arg_sword0(), result);
+		m_stack.store(ins.arg_sword0(), result);
 		break;
 	}
 
 	case asBC_DecVi:
 	{
-		llvm::Value* value  = load_stack_value(ins.arg_sword0(), defs.i32);
+		llvm::Value* value  = m_stack.load(ins.arg_sword0(), defs.i32);
 		llvm::Value* result = ir.CreateSub(value, llvm::ConstantInt::get(defs.i32, 1));
-		store_stack_value(ins.arg_sword0(), result);
+		m_stack.store(ins.arg_sword0(), result);
 		break;
 	}
 
@@ -418,13 +417,13 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_PshC8:
 	{
-		push_stack_value(llvm::ConstantInt::get(defs.i64, ins.arg_qword()), 2);
+		m_stack.push(llvm::ConstantInt::get(defs.i64, ins.arg_qword()), 2);
 		break;
 	}
 
 	case asBC_PshVPtr:
 	{
-		push_stack_value(load_stack_value(ins.arg_sword0(), defs.iptr), AS_PTR_SIZE);
+		m_stack.push(m_stack.load(ins.arg_sword0(), defs.iptr), AS_PTR_SIZE);
 		break;
 	}
 
@@ -433,47 +432,47 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		// Dereference pointer from the top of stack, set the top of the stack to the dereferenced value.
 
 		// TODO: check for null address
-		llvm::Value* address = load_stack_value(m_stack_pointer, defs.pvoid->getPointerTo());
+		llvm::Value* address = m_stack.top(defs.pvoid->getPointerTo());
 		llvm::Value* value   = ir.CreateLoad(defs.pvoid, address);
-		store_stack_value(m_stack_pointer, value);
+		m_stack.store(m_stack.current_stack_pointer(), value);
 		break;
 	}
 
 	case asBC_CMPd:
 	{
-		llvm::Value* lhs = load_stack_value(ins.arg_sword0(), defs.f64);
-		llvm::Value* rhs = load_stack_value(ins.arg_sword1(), defs.f64);
+		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), defs.f64);
+		llvm::Value* rhs = m_stack.load(ins.arg_sword1(), defs.f64);
 		emit_compare(lhs, rhs);
 		break;
 	}
 
 	case asBC_CMPu:
 	{
-		llvm::Value* lhs = load_stack_value(ins.arg_sword0(), defs.i32);
-		llvm::Value* rhs = load_stack_value(ins.arg_sword1(), defs.i32);
+		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), defs.i32);
+		llvm::Value* rhs = m_stack.load(ins.arg_sword1(), defs.i32);
 		emit_compare(lhs, rhs, false);
 		break;
 	}
 
 	case asBC_CMPf:
 	{
-		llvm::Value* lhs = load_stack_value(ins.arg_sword0(), defs.f32);
-		llvm::Value* rhs = load_stack_value(ins.arg_sword1(), defs.f32);
+		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), defs.f32);
+		llvm::Value* rhs = m_stack.load(ins.arg_sword1(), defs.f32);
 		emit_compare(lhs, rhs);
 		break;
 	}
 
 	case asBC_CMPi:
 	{
-		llvm::Value* lhs = load_stack_value(ins.arg_sword0(), defs.i32);
-		llvm::Value* rhs = load_stack_value(ins.arg_sword1(), defs.i32);
+		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), defs.i32);
+		llvm::Value* rhs = m_stack.load(ins.arg_sword1(), defs.i32);
 		emit_compare(lhs, rhs);
 		break;
 	}
 
 	case asBC_CMPIi:
 	{
-		llvm::Value* lhs = load_stack_value(ins.arg_sword0(), defs.i32);
+		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), defs.i32);
 		llvm::Value* rhs = llvm::ConstantInt::get(defs.i32, ins.arg_int());
 		emit_compare(lhs, rhs);
 		break;
@@ -481,7 +480,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_CMPIf:
 	{
-		llvm::Value* lhs = load_stack_value(ins.arg_sword0(), defs.f32);
+		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), defs.f32);
 		llvm::Value* rhs = llvm::ConstantInt::get(defs.f32, ins.arg_float());
 		emit_compare(lhs, rhs);
 		break;
@@ -489,7 +488,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_CMPIu:
 	{
-		llvm::Value* lhs = load_stack_value(ins.arg_sword0(), defs.i32);
+		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), defs.i32);
 		llvm::Value* rhs = llvm::ConstantInt::get(defs.i32, ins.arg_int());
 		emit_compare(lhs, rhs, false);
 		break;
@@ -501,7 +500,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		asllvm_assert(!targets.empty());
 
 		llvm::SwitchInst* inst
-			= ir.CreateSwitch(load_stack_value(ins.arg_sword0(), defs.i32), targets.back(), targets.size());
+			= ir.CreateSwitch(m_stack.load(ins.arg_sword0(), defs.i32), targets.back(), targets.size());
 
 		for (std::size_t i = 0; i < targets.size(); ++i)
 		{
@@ -513,16 +512,13 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_PopRPtr:
 	{
-		llvm::Value* value = load_stack_value(m_stack_pointer, defs.iptr);
-		m_stack_pointer -= AS_PTR_SIZE;
-
-		store_value_register_value(value);
+		store_value_register_value(m_stack.pop(AS_PTR_SIZE, defs.iptr));
 		break;
 	}
 
 	case asBC_PshRPtr:
 	{
-		push_stack_value(load_value_register_value(defs.iptr), AS_PTR_SIZE);
+		m_stack.push(load_value_register_value(defs.iptr), AS_PTR_SIZE);
 		break;
 	}
 
@@ -567,16 +563,16 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 			// Constructor
 			asCScriptFunction& constructor = *static_cast<asCScriptEngine&>(engine).scriptFunctions[constructor_id];
 
-			llvm::Value* target_pointer = load_stack_value(
-				m_stack_pointer - constructor.GetSpaceNeededForArguments(), defs.pvoid->getPointerTo());
+			llvm::Value* target_pointer = m_stack.load(
+				m_stack.current_stack_pointer() - constructor.GetSpaceNeededForArguments(), defs.pvoid->getPointerTo());
 
 			// TODO: check if target_pointer is null before the store (we really should)
 			ir.CreateStore(object_memory_pointer, target_pointer);
 
-			push_stack_value(object_memory_pointer, AS_PTR_SIZE);
+			m_stack.push(object_memory_pointer, AS_PTR_SIZE);
 			emit_script_call(constructor);
 
-			m_stack_pointer -= AS_PTR_SIZE; // pop the target pointer (not done later?? this seems off)
+			m_stack.pop(AS_PTR_SIZE);
 		}
 		else
 		{
@@ -593,13 +589,13 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 			if (constructor_id != 0)
 			{
-				push_stack_value(object_memory_pointer, AS_PTR_SIZE);
+				m_stack.push(object_memory_pointer, AS_PTR_SIZE);
 				emit_system_call(*static_cast<asCScriptEngine&>(engine).scriptFunctions[constructor_id]);
 			}
 
-			llvm::Value* target_address = load_stack_value(m_stack_pointer, defs.pvoid->getPointerTo());
-			m_stack_pointer -= AS_PTR_SIZE;
-			// TODO: check for null
+			llvm::Value* target_address = m_stack.pop(AS_PTR_SIZE, defs.pvoid->getPointerTo());
+
+			// FIXME: check for null
 			ir.CreateStore(object_memory_pointer, target_address);
 
 			// TODO: check for suspend?
@@ -615,7 +611,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 		// TODO: check for null pointer (and ignore if so)
 
-		llvm::Value* variable_pointer = get_stack_value_pointer(ins.arg_sword0(), defs.pvoid);
+		llvm::Value* variable_pointer = m_stack.pointer_to(ins.arg_sword0(), defs.pvoid);
 		llvm::Value* object_pointer   = ir.CreateLoad(defs.pvoid, variable_pointer);
 
 		if ((object_type.flags & asOBJ_REF) != 0)
@@ -650,16 +646,16 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_LOADOBJ:
 	{
-		llvm::Value* pointer_to_object = load_stack_value(ins.arg_sword0(), defs.pvoid);
+		llvm::Value* pointer_to_object = m_stack.load(ins.arg_sword0(), defs.pvoid);
 		ir.CreateStore(pointer_to_object, m_object_register);
-		store_stack_value(ins.arg_sword0(), ir.CreatePtrToInt(llvm::ConstantInt::get(defs.iptr, 0), defs.pvoid));
+		m_stack.store(ins.arg_sword0(), ir.CreatePtrToInt(llvm::ConstantInt::get(defs.iptr, 0), defs.pvoid));
 
 		break;
 	}
 
 	case asBC_STOREOBJ:
 	{
-		store_stack_value(ins.arg_sword0(), ir.CreateLoad(defs.pvoid, m_object_register));
+		m_stack.store(ins.arg_sword0(), ir.CreateLoad(defs.pvoid, m_object_register));
 		ir.CreateStore(ir.CreatePtrToInt(llvm::ConstantInt::get(defs.iptr, 0), defs.pvoid), m_object_register);
 		break;
 	}
@@ -668,17 +664,17 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	{
 		// Replace a variable index by a pointer to the value
 
-		llvm::Value* offset_pointer = get_stack_value_pointer(m_stack_pointer - ins.arg_word0(), defs.iptr);
+		llvm::Value* offset_pointer = m_stack.pointer_to(m_stack.current_stack_pointer() - ins.arg_word0(), defs.iptr);
 		llvm::Value* offset         = ir.CreateLoad(defs.iptr, offset_pointer);
 
 		// Get pointer to where the pointer value on the stack is
 		std::array<llvm::Value*, 2> gep_offset{
 			llvm::ConstantInt::get(defs.iptr, 0),
-			ir.CreateSub(
-				llvm::ConstantInt::get(defs.iptr, local_storage_size() + stack_size()), offset, "addr", true, true)};
+			ir.CreateSub(llvm::ConstantInt::get(defs.iptr, m_stack.total_space()), offset, "addr", true, true)};
 
-		llvm::Value* variable_pointer = ir.CreateBitCast(ir.CreateGEP(m_locals, gep_offset), defs.iptr->getPointerTo());
-		llvm::Value* variable         = ir.CreateLoad(defs.iptr, variable_pointer);
+		llvm::Value* variable_pointer
+			= ir.CreateBitCast(ir.CreateGEP(m_stack.storage_alloca(), gep_offset), defs.iptr->getPointerTo());
+		llvm::Value* variable = ir.CreateLoad(defs.iptr, variable_pointer);
 
 		ir.CreateStore(variable, offset_pointer);
 		ir.CreateStore(llvm::ConstantInt::get(defs.iptr, 0), variable_pointer);
@@ -696,13 +692,13 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	case asBC_GETOBJREF: unimpl(); break;
 	case asBC_GETREF:
 	{
-		llvm::Value* pointer = get_stack_value_pointer(m_stack_pointer - ins.arg_word0(), defs.pi32);
+		llvm::Value* pointer = m_stack.pointer_to(m_stack.current_stack_pointer() - ins.arg_word0(), defs.pi32);
 
 		llvm::Value*                      index = ir.CreateLoad(defs.i32, ir.CreateBitCast(pointer, defs.pi32));
 		const std::array<llvm::Value*, 2> indices{
 			llvm::ConstantInt::get(defs.i64, 0),
-			ir.CreateSub(llvm::ConstantInt::get(defs.i32, local_storage_size() + stack_size()), index)};
-		llvm::Value* variable_address = ir.CreateGEP(m_locals, indices);
+			ir.CreateSub(llvm::ConstantInt::get(defs.i32, m_stack.total_space()), index)};
+		llvm::Value* variable_address = ir.CreateGEP(m_stack.storage_alloca(), indices);
 
 		ir.CreateStore(variable_address, ir.CreateBitCast(pointer, defs.pi32->getPointerTo()));
 
@@ -713,7 +709,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_OBJTYPE:
 	{
-		push_stack_value(llvm::ConstantInt::get(defs.iptr, ins.arg_pword()), AS_PTR_SIZE);
+		m_stack.push(llvm::ConstantInt::get(defs.iptr, ins.arg_pword()), AS_PTR_SIZE);
 		break;
 	}
 
@@ -723,19 +719,19 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	case asBC_SetV2:
 	case asBC_SetV4:
 	{
-		store_stack_value(ins.arg_sword0(), llvm::ConstantInt::get(defs.i32, ins.arg_dword()));
+		m_stack.store(ins.arg_sword0(), llvm::ConstantInt::get(defs.i32, ins.arg_dword()));
 		break;
 	}
 
 	case asBC_SetV8:
 	{
-		store_stack_value(ins.arg_sword0(), llvm::ConstantInt::get(defs.i64, ins.arg_qword()));
+		m_stack.store(ins.arg_sword0(), llvm::ConstantInt::get(defs.i64, ins.arg_qword()));
 		break;
 	}
 
 	case asBC_ADDSi:
 	{
-		llvm::Value* stack_pointer = get_stack_value_pointer(m_stack_pointer, defs.iptr);
+		llvm::Value* stack_pointer = m_stack.pointer_to(m_stack.current_stack_pointer(), defs.iptr);
 
 		// TODO: Check for null pointer
 		llvm::Value* original_value = ir.CreateLoad(defs.iptr, stack_pointer);
@@ -751,7 +747,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		auto target = ins.arg_sword0();
 		auto source = ins.arg_sword1();
 
-		store_stack_value(target, load_stack_value(source, defs.i32));
+		m_stack.store(target, m_stack.load(source, defs.i32));
 
 		break;
 	}
@@ -761,53 +757,53 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		auto target = ins.arg_sword0();
 		auto source = ins.arg_sword1();
 
-		store_stack_value(target, load_stack_value(source, defs.i64));
+		m_stack.store(target, m_stack.load(source, defs.i64));
 
 		break;
 	}
 
 	case asBC_CpyVtoR4:
 	{
-		store_value_register_value(load_stack_value(ins.arg_sword0(), defs.i32));
+		store_value_register_value(m_stack.load(ins.arg_sword0(), defs.i32));
 		break;
 	}
 
 	case asBC_CpyVtoR8:
 	{
-		store_value_register_value(load_stack_value(ins.arg_sword0(), defs.i64));
+		store_value_register_value(m_stack.load(ins.arg_sword0(), defs.i64));
 		break;
 	}
 
 	case asBC_CpyVtoG4:
 	{
 		llvm::Value* global_ptr = ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, ins.arg_pword()), defs.pi32);
-		llvm::Value* value      = load_stack_value(ins.arg_sword0(), defs.i32);
+		llvm::Value* value      = m_stack.load(ins.arg_sword0(), defs.i32);
 		ir.CreateStore(value, global_ptr);
 		break;
 	}
 
 	case asBC_CpyRtoV4:
 	{
-		store_stack_value(ins.arg_sword0(), load_value_register_value(defs.i32));
+		m_stack.store(ins.arg_sword0(), load_value_register_value(defs.i32));
 		break;
 	}
 
 	case asBC_CpyRtoV8:
 	{
-		store_stack_value(ins.arg_sword0(), load_value_register_value(defs.i64));
+		m_stack.store(ins.arg_sword0(), load_value_register_value(defs.i64));
 		break;
 	}
 
 	case asBC_CpyGtoV4:
 	{
 		llvm::Value* global_ptr = ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, ins.arg_pword()), defs.pi32);
-		store_stack_value(ins.arg_sword0(), ir.CreateLoad(global_ptr, defs.i32));
+		m_stack.store(ins.arg_sword0(), ir.CreateLoad(global_ptr, defs.i32));
 		break;
 	}
 
 	case asBC_WRTV1:
 	{
-		llvm::Value* value  = load_stack_value(ins.arg_sword0(), defs.i8);
+		llvm::Value* value  = m_stack.load(ins.arg_sword0(), defs.i8);
 		llvm::Value* target = load_value_register_value(defs.pi8);
 		ir.CreateStore(value, target);
 		break;
@@ -815,7 +811,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_WRTV2:
 	{
-		llvm::Value* value  = load_stack_value(ins.arg_sword0(), defs.i16);
+		llvm::Value* value  = m_stack.load(ins.arg_sword0(), defs.i16);
 		llvm::Value* target = load_value_register_value(defs.pi16);
 		ir.CreateStore(value, target);
 		break;
@@ -823,7 +819,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_WRTV4:
 	{
-		llvm::Value* value  = load_stack_value(ins.arg_sword0(), defs.i32);
+		llvm::Value* value  = m_stack.load(ins.arg_sword0(), defs.i32);
 		llvm::Value* target = load_value_register_value(defs.pi32);
 		ir.CreateStore(value, target);
 		break;
@@ -831,7 +827,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_WRTV8:
 	{
-		llvm::Value* value  = load_stack_value(ins.arg_sword0(), defs.i64);
+		llvm::Value* value  = m_stack.load(ins.arg_sword0(), defs.i64);
 		llvm::Value* target = load_value_register_value(defs.pi64);
 		ir.CreateStore(value, target);
 		break;
@@ -842,7 +838,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		llvm::Value* source_pointer = load_value_register_value(defs.pi8);
 		llvm::Value* source_word    = ir.CreateLoad(defs.i8, source_pointer);
 		llvm::Value* source         = ir.CreateZExt(source_word, defs.i32);
-		store_stack_value(ins.arg_sword0(), source);
+		m_stack.store(ins.arg_sword0(), source);
 		break;
 	}
 
@@ -851,7 +847,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		llvm::Value* source_pointer = load_value_register_value(defs.pi16);
 		llvm::Value* source_word    = ir.CreateLoad(defs.i16, source_pointer);
 		llvm::Value* source         = ir.CreateZExt(source_word, defs.i32);
-		store_stack_value(ins.arg_sword0(), source);
+		m_stack.store(ins.arg_sword0(), source);
 		break;
 	}
 
@@ -859,7 +855,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	{
 		llvm::Value* source_pointer = load_value_register_value(defs.pi32);
 		llvm::Value* source         = ir.CreateLoad(defs.i32, source_pointer);
-		store_stack_value(ins.arg_sword0(), source);
+		m_stack.store(ins.arg_sword0(), source);
 		break;
 	}
 
@@ -867,7 +863,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	{
 		llvm::Value* source_pointer = load_value_register_value(defs.pi64);
 		llvm::Value* source         = ir.CreateLoad(defs.i64, source_pointer);
-		store_stack_value(ins.arg_sword0(), source);
+		m_stack.store(ins.arg_sword0(), source);
 		break;
 	}
 
@@ -879,13 +875,13 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_LDV:
 	{
-		store_value_register_value(get_stack_value_pointer(ins.arg_sword0(), defs.pvoid));
+		store_value_register_value(m_stack.pointer_to(ins.arg_sword0(), defs.pvoid));
 		break;
 	}
 
 	case asBC_PGA:
 	{
-		push_stack_value(llvm::ConstantInt::get(defs.i64, ins.arg_pword()), AS_PTR_SIZE);
+		m_stack.push(llvm::ConstantInt::get(defs.i64, ins.arg_pword()), AS_PTR_SIZE);
 		break;
 	}
 
@@ -893,7 +889,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_VAR:
 	{
-		push_stack_value(llvm::ConstantInt::get(defs.i64, ins.arg_sword0()), AS_PTR_SIZE);
+		m_stack.push(llvm::ConstantInt::get(defs.i64, ins.arg_sword0()), AS_PTR_SIZE);
 		break;
 	}
 
@@ -1003,16 +999,16 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_CMPi64:
 	{
-		llvm::Value* lhs = load_stack_value(ins.arg_sword0(), defs.i64);
-		llvm::Value* rhs = load_stack_value(ins.arg_sword1(), defs.i64);
+		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), defs.i64);
+		llvm::Value* rhs = m_stack.load(ins.arg_sword1(), defs.i64);
 		emit_compare(lhs, rhs);
 		break;
 	}
 
 	case asBC_CMPu64:
 	{
-		llvm::Value* lhs = load_stack_value(ins.arg_sword0(), defs.i64);
-		llvm::Value* rhs = load_stack_value(ins.arg_sword1(), defs.i64);
+		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), defs.i64);
+		llvm::Value* rhs = m_stack.load(ins.arg_sword1(), defs.i64);
 		emit_compare(lhs, rhs, false);
 		break;
 	}
@@ -1047,7 +1043,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_LoadThisR:
 	{
-		llvm::Value* object = load_stack_value(0, defs.pvoid);
+		llvm::Value* object = m_stack.load(0, defs.pvoid);
 
 		// TODO: check for null object
 
@@ -1059,7 +1055,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		break;
 	}
 
-	case asBC_PshV8: push_stack_value(load_stack_value(ins.arg_sword0(), defs.i64), 2); break;
+	case asBC_PshV8: m_stack.push(m_stack.load(ins.arg_sword0(), defs.i64), 2); break;
 
 	case asBC_DIVu: emit_binop(ins, llvm::Instruction::UDiv, defs.i32); break;
 	case asBC_MODu: emit_binop(ins, llvm::Instruction::URem, defs.i32); break;
@@ -1069,7 +1065,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_LoadRObjR:
 	{
-		llvm::Value* base_pointer = load_stack_value(ins.arg_sword0(), defs.pvoid);
+		llvm::Value* base_pointer = m_stack.load(ins.arg_sword0(), defs.pvoid);
 
 		// FIXME: check for null base_pointer
 
@@ -1088,8 +1084,8 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		auto& object_type = *reinterpret_cast<asCObjectType*>(ins.arg_pword());
 		// asSTypeBehaviour& beh         = object_type.beh;
 
-		llvm::Value* destination = get_stack_value_pointer(ins.arg_sword0(), defs.pvoid);
-		llvm::Value* s           = load_stack_value(m_stack_pointer, defs.pvoid);
+		llvm::Value* destination = m_stack.pointer_to(ins.arg_sword0(), defs.pvoid);
+		llvm::Value* s           = m_stack.top(defs.pvoid);
 
 		if ((object_type.flags & asOBJ_NOCOUNT) == 0)
 		{
@@ -1156,7 +1152,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	if (const auto expected_increment = ins.info->stackInc; expected_increment != 0xFFFF)
 	{
-		asllvm_assert(m_stack_pointer - old_stack_pointer == expected_increment);
+		asllvm_assert(m_stack.current_stack_pointer() - old_stack_pointer == expected_increment);
 	}
 }
 
@@ -1287,54 +1283,13 @@ std::string FunctionBuilder::disassemble(BytecodeInstruction instruction)
 
 void FunctionBuilder::emit_allocate_local_structures()
 {
-	asCScriptEngine&   engine  = m_compiler.engine();
 	Builder&           builder = m_compiler.builder();
 	llvm::IRBuilder<>& ir      = builder.ir();
 	CommonDefinitions& defs    = builder.definitions();
 
-	m_locals = ir.CreateAlloca(llvm::ArrayType::get(defs.i32, local_storage_size() + stack_size()), nullptr, "stack");
 	m_value_register  = ir.CreateAlloca(defs.i64, nullptr, "valuereg");
 	m_object_register = ir.CreateAlloca(defs.pvoid, nullptr, "objreg");
-
-	{
-		StackVariableIdentifier stack_offset = 0;
-		std::size_t             arg_index    = 0; // TODO: clearer naming for arg_index vs i
-
-		const auto create_alloca_for = [&](const asCDataType& data_type, const char* name) {
-			Parameter parameter;
-			parameter.argument_index = arg_index;
-			parameter.local_alloca   = ir.CreateAlloca(builder.to_llvm_type(data_type), nullptr, name);
-			parameter.type_id        = engine.GetTypeIdFromDataType(data_type);
-			parameter.debug_name     = name;
-
-			const auto [it, success] = m_parameters.emplace(stack_offset, parameter);
-			asllvm_assert(success);
-
-			ir.CreateStore(&*(m_llvm_function->arg_begin() + arg_index), parameter.local_alloca);
-
-			stack_offset -= data_type.GetSizeOnStackDWords();
-
-			++arg_index;
-		};
-
-		if (m_script_function.DoesReturnOnStack())
-		{
-			create_alloca_for(m_script_function.returnType, "stackRetPtr");
-		}
-
-		if (m_script_function.objectType != nullptr)
-		{
-			create_alloca_for(engine.GetDataTypeFromTypeId(m_script_function.objectType->GetTypeId()), "this");
-		}
-
-		const std::size_t parameter_count = m_script_function.parameterTypes.GetLength();
-		for (std::size_t i = 0; i < parameter_count; ++i)
-		{
-			create_alloca_for(m_script_function.parameterTypes[i], &(m_script_function.parameterNames[i])[0]);
-		}
-	}
-
-	m_stack_pointer = local_storage_size();
+	m_stack.setup();
 }
 
 void FunctionBuilder::emit_cast(
@@ -1352,20 +1307,20 @@ void FunctionBuilder::emit_cast(
 	// TODO: more robust check for this
 	const auto stack_offset = (source_64 != destination_64) ? instruction.arg_sword1() : instruction.arg_sword0();
 
-	llvm::Value* converted = ir.CreateCast(op, load_stack_value(stack_offset, source_type), destination_type);
+	llvm::Value* converted = ir.CreateCast(op, m_stack.load(stack_offset, source_type), destination_type);
 
-	store_stack_value(instruction.arg_sword0(), converted);
+	m_stack.store(instruction.arg_sword0(), converted);
 }
 
 void FunctionBuilder::emit_binop(BytecodeInstruction instruction, llvm::Instruction::BinaryOps op, llvm::Type* type)
 {
-	return emit_binop(instruction, op, load_stack_value(instruction.arg_sword2(), type));
+	return emit_binop(instruction, op, m_stack.load(instruction.arg_sword2(), type));
 }
 
 void FunctionBuilder::emit_binop(BytecodeInstruction instruction, llvm::Instruction::BinaryOps op, llvm::Value* rhs)
 {
 	llvm::Type* type = rhs->getType();
-	return emit_binop(instruction, op, load_stack_value(instruction.arg_sword1(), type), rhs);
+	return emit_binop(instruction, op, m_stack.load(instruction.arg_sword1(), type), rhs);
 }
 
 void FunctionBuilder::emit_binop(
@@ -1373,7 +1328,7 @@ void FunctionBuilder::emit_binop(
 {
 	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
 
-	store_stack_value(instruction.arg_sword0(), ir.CreateBinOp(op, lhs, rhs));
+	m_stack.store(instruction.arg_sword0(), ir.CreateBinOp(op, lhs, rhs));
 }
 
 void FunctionBuilder::emit_neg(BytecodeInstruction instruction, llvm::Type* type)
@@ -1383,9 +1338,9 @@ void FunctionBuilder::emit_neg(BytecodeInstruction instruction, llvm::Type* type
 	const bool is_float = type->isFloatingPointTy();
 
 	llvm::Value* lhs    = is_float ? llvm::ConstantFP::get(type, 0.0) : llvm::ConstantInt::get(type, 0);
-	llvm::Value* rhs    = load_stack_value(instruction.arg_sword0(), type);
+	llvm::Value* rhs    = m_stack.load(instruction.arg_sword0(), type);
 	llvm::Value* result = ir.CreateBinOp(is_float ? llvm::Instruction::FSub : llvm::Instruction::Sub, lhs, rhs);
-	store_stack_value(instruction.arg_sword0(), result);
+	m_stack.store(instruction.arg_sword0(), result);
 }
 
 void FunctionBuilder::emit_bit_not(BytecodeInstruction instruction, llvm::Type* type)
@@ -1393,9 +1348,9 @@ void FunctionBuilder::emit_bit_not(BytecodeInstruction instruction, llvm::Type* 
 	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
 
 	llvm::Value* lhs    = llvm::ConstantInt::get(type, -1);
-	llvm::Value* rhs    = load_stack_value(instruction.arg_sword0(), type);
+	llvm::Value* rhs    = m_stack.load(instruction.arg_sword0(), type);
 	llvm::Value* result = ir.CreateXor(lhs, rhs);
-	store_stack_value(instruction.arg_sword0(), result);
+	m_stack.store(instruction.arg_sword0(), result);
 }
 
 void FunctionBuilder::emit_condition(llvm::CmpInst::Predicate pred)
@@ -1484,14 +1439,12 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 
 	if (function.DoesReturnOnStack() && !intf.hostReturnInMemory)
 	{
-		return_pointer = load_stack_value(m_stack_pointer, return_type->getPointerTo());
-		m_stack_pointer -= AS_PTR_SIZE;
+		return_pointer = m_stack.pop(AS_PTR_SIZE, return_type->getPointerTo());
 	}
 
 	const auto pop_sret_pointer = [&] {
 		llvm::Type*  param_type = callee_type->getParamType(0);
-		llvm::Value* value      = load_stack_value(m_stack_pointer, param_type);
-		m_stack_pointer -= AS_PTR_SIZE;
+		llvm::Value* value      = m_stack.pop(AS_PTR_SIZE, param_type);
 		return value;
 	};
 
@@ -1500,8 +1453,8 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 		const auto pop_param = [&] {
 			llvm::Type* param_type = callee_type->getParamType(insert_index);
 
-			args[insert_index] = load_stack_value(m_stack_pointer, param_type);
-			m_stack_pointer -= function.parameterTypes[script_param_index].GetSizeOnStackDWords();
+			args[insert_index]
+				= m_stack.pop(function.parameterTypes[script_param_index].GetSizeOnStackDWords(), param_type);
 
 			++insert_index;
 			++script_param_index;
@@ -1518,8 +1471,7 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 				// 'this' pointer
 				if (i == 0)
 				{
-					args[1] = object = load_stack_value(m_stack_pointer, callee_type->getParamType(1));
-					m_stack_pointer -= AS_PTR_SIZE;
+					args[1] = object = m_stack.pop(AS_PTR_SIZE, callee_type->getParamType(1));
 					break;
 				}
 
@@ -1535,9 +1487,8 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 				// 'this' pointer
 				if (i == 0)
 				{
-					args[0] = object = load_stack_value(m_stack_pointer, callee_type->getParamType(0));
-					m_stack_pointer -= AS_PTR_SIZE;
-					insert_index = 1;
+					args[0] = object = m_stack.pop(AS_PTR_SIZE, callee_type->getParamType(0));
+					insert_index     = 1;
 					break;
 				}
 			}
@@ -1553,8 +1504,7 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 			if (i == 0)
 			{
 				args.back() = object
-					= load_stack_value(m_stack_pointer, callee_type->getParamType(callee_type->getNumParams() - 1));
-				m_stack_pointer -= AS_PTR_SIZE;
+					= m_stack.pop(AS_PTR_SIZE, callee_type->getParamType(callee_type->getNumParams() - 1));
 				break;
 			}
 
@@ -1635,8 +1585,9 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 		ir.CreateStore(result, return_pointer);
 	}
 
-	// Within factory functions, this would cause issues otherwise
-	m_stack_pointer = std::max(m_stack_pointer, local_storage_size());
+	// Factory functions pop into the parameters, not just the temporary stack.
+	// Our checks expect the stack pointer to be within variable_space() <= sp, so this would cause issues otherwise.
+	m_stack.ugly_hack_stack_pointer_within_bounds();
 }
 
 std::size_t FunctionBuilder::emit_script_call(asCScriptFunction& callee) { return emit_script_call(callee, {}); }
@@ -1663,7 +1614,7 @@ std::size_t FunctionBuilder::emit_script_call(asCScriptFunction& callee, Functio
 
 	if (callee.funcType == asFUNC_VIRTUAL)
 	{
-		resolved_function = resolve_virtual_script_function(load_stack_value(m_stack_pointer, defs.pvoid), callee);
+		resolved_function = resolve_virtual_script_function(m_stack.top(defs.pvoid), callee);
 	}
 	else
 	{
@@ -1688,9 +1639,7 @@ std::size_t FunctionBuilder::emit_script_call(asCScriptFunction& callee, Functio
 			return ir.CreateLoad(llvm_parameter_type, pointer);
 		}
 
-		llvm::Value* value = load_stack_value(m_stack_pointer, llvm_parameter_type);
-
-		m_stack_pointer -= object_dword_size;
+		llvm::Value* value = m_stack.pop(object_dword_size, llvm_parameter_type);
 		return value;
 	};
 
@@ -1825,58 +1774,6 @@ llvm::Value* FunctionBuilder::resolve_virtual_script_function(llvm::Value* scrip
 			m_module_builder.get_script_function_type(callee)->getPointerTo(),
 			"resolved_vcall");
 	}
-}
-
-llvm::Value* FunctionBuilder::load_stack_value(StackVariableIdentifier i, llvm::Type* type)
-{
-	return m_compiler.builder().ir().CreateLoad(
-		type, get_stack_value_pointer(i, type), fmt::format("local@{}.value", i));
-}
-
-void FunctionBuilder::store_stack_value(StackVariableIdentifier i, llvm::Value* value)
-{
-	m_compiler.builder().ir().CreateStore(value, get_stack_value_pointer(i, value->getType()));
-}
-
-llvm::Value* FunctionBuilder::get_stack_value_pointer(FunctionBuilder::StackVariableIdentifier i, llvm::Type* type)
-{
-	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
-
-	llvm::Value* pointer = get_stack_value_pointer(i);
-	return ir.CreateBitCast(pointer, type->getPointerTo(), fmt::format("local@{}.castedptr", i));
-}
-
-llvm::Value* FunctionBuilder::get_stack_value_pointer(FunctionBuilder::StackVariableIdentifier i)
-{
-	llvm::IRBuilder<>& ir      = m_compiler.builder().ir();
-	llvm::LLVMContext& context = *m_compiler.builder().context().getContext(); // we horribly assume callers locked this
-
-	// Get a pointer to that argument
-	if (i <= 0)
-	{
-		return m_parameters.at(i).local_alloca;
-	}
-
-	// Get a pointer to that value on the local stack
-	{
-		const long local_offset = local_storage_size() + stack_size() - i;
-
-		// Ensure offset is within alloca boundaries
-		asllvm_assert(local_offset >= 0);
-		asllvm_assert(local_offset < local_storage_size() + stack_size());
-
-		std::array<llvm::Value*, 2> indices{
-			{llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(context), 0),
-			 llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(context), local_offset)}};
-
-		return ir.CreateGEP(m_locals, indices, fmt::format("local@{}.ptr", i));
-	}
-}
-
-void FunctionBuilder::push_stack_value(llvm::Value* value, std::size_t bytes)
-{
-	m_stack_pointer += bytes;
-	store_stack_value(m_stack_pointer, value);
 }
 
 void FunctionBuilder::store_value_register_value(llvm::Value* value)
@@ -2018,7 +1915,7 @@ void FunctionBuilder::create_locals_debug_info()
 
 	llvm::DISubprogram* sp = m_llvm_function->getSubprogram();
 
-	for (const auto& [stack_offset, param] : m_parameters)
+	/*for (const auto& [stack_offset, param] : m_parameters)
 	{
 		llvm::DILocalVariable* local = di.createParameterVariable(
 			sp,
@@ -2052,7 +1949,7 @@ void FunctionBuilder::create_locals_debug_info()
 			di.insertDeclare(
 				m_locals, local, di.createExpression(addresses), get_debug_location(0, sp), ir.GetInsertBlock());
 		}
-	}
+	}*/
 }
 
 FunctionBuilder::SourceLocation FunctionBuilder::get_source_location(std::size_t bytecode_offset)
@@ -2068,20 +1965,6 @@ llvm::DebugLoc FunctionBuilder::get_debug_location(std::size_t bytecode_offset, 
 {
 	const SourceLocation loc = get_source_location(bytecode_offset);
 	return llvm::DebugLoc::get(loc.line, loc.column, sp);
-}
-
-long FunctionBuilder::local_storage_size() const { return m_script_function.scriptData->variableSpace; }
-
-long FunctionBuilder::stack_size() const
-{
-	// TODO: stackNeeded does not appear to be correct when asBC_ALLOC pushes the pointer to the allocated variable
-	// on the stack. As far as I am aware allocating AS_PTR_SIZE extra bytes to the stack unconditionally should
-	// work around the problem. It would be better if asllvm did not require pushing to the stack _at all_ but this
-	// implies some refactoring. See also:
-	// https://www.gamedev.net/forums/topic/706619-scriptfunctiondatastackneeded-does-not-account-for-asbc_alloc-potential-stack-push/
-	constexpr long extra_stack_space_workaround = AS_PTR_SIZE;
-
-	return m_script_function.scriptData->stackNeeded - local_storage_size() + extra_stack_space_workaround;
 }
 
 } // namespace asllvm::detail

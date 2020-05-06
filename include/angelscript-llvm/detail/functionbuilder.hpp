@@ -2,6 +2,7 @@
 
 #include <angelscript-llvm/detail/asinternalheaders.hpp>
 #include <angelscript-llvm/detail/bytecodeinstruction.hpp>
+#include <angelscript-llvm/detail/codegen/stackframe.hpp>
 #include <angelscript-llvm/detail/fwd.hpp>
 #include <angelscript.h>
 #include <functional>
@@ -36,23 +37,6 @@ class FunctionBuilder
 	struct VmEntryCallContext
 	{
 		llvm::Value *vm_frame_pointer = nullptr, *value_register = nullptr, *object_register = nullptr;
-	};
-
-	struct Parameter
-	{
-		//! \brief Index of the argument in the argument list of the translated function.
-		std::size_t argument_index = 0;
-
-		//! \brief
-		//!		Local alloca variable where the LLVM argument is stored, which is useful as we often store a pointer to
-		//!		a parameter or modify it.
-		llvm::AllocaInst* local_alloca = nullptr;
-
-		//! \brief AngelScript type id for this parameter.
-		int type_id = 0;
-
-		//! \brief Name that shows up in DWARF debug info.
-		const char* debug_name = "";
 	};
 
 	public:
@@ -161,20 +145,6 @@ class FunctionBuilder
 
 	llvm::Value* resolve_virtual_script_function(llvm::Value* script_object, asCScriptFunction& callee);
 
-	//! \brief Load a LLVM value of type \p type from a stack variable of identifier \p i.
-	llvm::Value* load_stack_value(StackVariableIdentifier i, llvm::Type* type);
-
-	//! \brief Store a LLVM value to a stack variable of identifier \p i.
-	void store_stack_value(StackVariableIdentifier i, llvm::Value* value);
-
-	//! \brief Get a pointer to a stack value of type \p type and identifier \p i.
-	llvm::Value* get_stack_value_pointer(StackVariableIdentifier i, llvm::Type* type);
-
-	//! \brief Get a pointer to a stack value of type i32* and identifier \p i.
-	llvm::Value* get_stack_value_pointer(StackVariableIdentifier i);
-
-	void push_stack_value(llvm::Value* value, std::size_t bytes);
-
 	//! \brief Store \p value into the value register.
 	//! \details
 	//!		Any data can be stored in the value register as long as it is less than 64-bit, otherwise, UB will occur.
@@ -219,9 +189,6 @@ class FunctionBuilder
 	SourceLocation get_source_location(std::size_t bytecode_offset = 0);
 	llvm::DebugLoc get_debug_location(std::size_t bytecode_offset, llvm::DISubprogram* sp);
 
-	long local_storage_size() const;
-	long stack_size() const;
-
 	JitCompiler&   m_compiler;
 	ModuleBuilder& m_module_builder;
 
@@ -231,18 +198,6 @@ class FunctionBuilder
 	//! \see read_bytecode(asDWORD*, asUINT)
 	llvm::Function* m_llvm_function;
 
-	long m_stack_pointer = 0;
-
-	//! \brief Map from stack identifiers of parameters to their copy in an alloca local variable, among other info.
-	std::map<long, Parameter> m_parameters;
-
-	//! \brief Array of DWORDs used as a local stack for bytecode operations.
-	//! \details
-	//!		This array can really be thought to be split in two:
-	//!		1. Locals, which are addressed relative to the frame pointer (loaded at a fixed index)
-	//!		2. The temporary stack, which is used, among other things, to push parameters to pass to functions.
-	llvm::AllocaInst* m_locals;
-
 	//! \brief
 	//!		Value register, used to temporarily store small (<= 64-bit) values (and sometimes for returning data from
 	//!		functions).
@@ -251,6 +206,8 @@ class FunctionBuilder
 	//! \brief
 	//!		Object register, a temporary register to hold objects.
 	llvm::AllocaInst* m_object_register;
+
+	codegen::StackFrame m_stack;
 
 	//! \brief Map from a bytecode offset to a BasicBlock.
 	//! \see InstructionContext::offset
