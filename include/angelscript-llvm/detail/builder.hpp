@@ -33,7 +33,7 @@ class Builder
 	llvm::IRBuilder<>&            ir() { return m_ir_builder; }
 	CommonDefinitions&            definitions() { return m_defs; }
 	llvm::legacy::PassManager&    optimizer() { return m_pass_manager; }
-	llvm::orc::ThreadSafeContext& context() { return m_context; }
+	llvm::orc::ThreadSafeContext& llvm_context() { return m_context; }
 
 	llvm::Type* to_llvm_type(const asCDataType& type) const;
 

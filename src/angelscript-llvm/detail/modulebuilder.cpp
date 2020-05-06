@@ -17,7 +17,8 @@ namespace asllvm::detail
 ModuleBuilder::ModuleBuilder(JitCompiler& compiler, asIScriptModule* module) :
 	m_compiler{compiler},
 	m_script_module{module},
-	m_llvm_module{std::make_unique<llvm::Module>(make_module_name(module), *compiler.builder().context().getContext())},
+	m_llvm_module{
+		std::make_unique<llvm::Module>(make_module_name(module), *compiler.builder().llvm_context().getContext())},
 	m_di_builder{std::make_unique<llvm::DIBuilder>(*m_llvm_module)},
 	m_debug_info{setup_debug_info()},
 	m_internal_functions{setup_internal_functions()}
@@ -25,7 +26,7 @@ ModuleBuilder::ModuleBuilder(JitCompiler& compiler, asIScriptModule* module) :
 
 void ModuleBuilder::append(PendingFunction function) { m_pending_functions.push_back(function); }
 
-llvm::Function* ModuleBuilder::get_script_function(asCScriptFunction& function)
+llvm::Function* ModuleBuilder::get_script_function(const asCScriptFunction& function)
 {
 	asllvm_assert(
 		function.vfTableIdx < 0
@@ -55,7 +56,7 @@ llvm::Function* ModuleBuilder::get_script_function(asCScriptFunction& function)
 	return internal_function;
 }
 
-llvm::FunctionType* ModuleBuilder::get_script_function_type(asCScriptFunction& script_function)
+llvm::FunctionType* ModuleBuilder::get_script_function_type(const asCScriptFunction& script_function)
 {
 	asCScriptEngine&   engine  = m_compiler.engine();
 	Builder&           builder = m_compiler.builder();
@@ -102,7 +103,7 @@ llvm::FunctionType* ModuleBuilder::get_script_function_type(asCScriptFunction& s
 	return llvm::FunctionType::get(return_type, types, false);
 }
 
-llvm::Function* ModuleBuilder::get_system_function(asCScriptFunction& system_function)
+llvm::Function* ModuleBuilder::get_system_function(const asCScriptFunction& system_function)
 {
 	asSSystemFunctionInterface& intf = *system_function.sysFuncIntf;
 
@@ -134,7 +135,7 @@ llvm::Function* ModuleBuilder::get_system_function(asCScriptFunction& system_fun
 	return function;
 }
 
-llvm::FunctionType* ModuleBuilder::get_system_function_type(asCScriptFunction& system_function)
+llvm::FunctionType* ModuleBuilder::get_system_function_type(const asCScriptFunction& system_function)
 {
 	CommonDefinitions&          defs = m_compiler.builder().definitions();
 	asSSystemFunctionInterface& intf = *system_function.sysFuncIntf;
@@ -283,7 +284,7 @@ void ModuleBuilder::build()
 	m_compiler.builder().optimizer().run(*m_llvm_module);
 
 	ExitOnError(m_compiler.jit().addIRModule(
-		llvm::orc::ThreadSafeModule(std::move(m_llvm_module), m_compiler.builder().context())));
+		llvm::orc::ThreadSafeModule(std::move(m_llvm_module), m_compiler.builder().llvm_context())));
 }
 
 void ModuleBuilder::link()

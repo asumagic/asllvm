@@ -124,26 +124,26 @@ class FunctionBuilder
 	void emit_compare(llvm::Value* lhs, llvm::Value* rhs, bool is_signed = true);
 
 	//! \brief Performs the call to a non-script function \p function with parameters read from the stack.
-	void emit_system_call(asCScriptFunction& function);
+	void emit_system_call(const asCScriptFunction& function);
 
 	//! \brief Performs the call to the \p callee script function reading from the currently translated function.
 	//! \returns The amount of DWORDs read.
-	std::size_t emit_script_call(asCScriptFunction& callee);
+	std::size_t emit_script_call(const asCScriptFunction& callee);
 
 	// TODO: seems like this could be moved elsewhere? move vmentry codegen somewhere else?
 	//! \brief Performs the call to the \p callee script function for a vm entry.
 	//! \returns The amount of DWORDs read.
-	std::size_t emit_script_call(asCScriptFunction& callee, VmEntryCallContext ctx);
+	std::size_t emit_script_call(const asCScriptFunction& callee, VmEntryCallContext ctx);
 
 	//! \brief Performs the call to a script or system function \p function.
-	void emit_call(asCScriptFunction& function);
+	void emit_call(const asCScriptFunction& function);
 
 	//! \brief Match for asCScriptEngine::CallObjectMethod, for lack of a better name.
-	void emit_object_method_call(asCScriptFunction& function, llvm::Value* object);
+	void emit_object_method_call(const asCScriptFunction& function, llvm::Value* object);
 
 	void emit_conditional_branch(BytecodeInstruction ins, llvm::CmpInst::Predicate predicate);
 
-	llvm::Value* resolve_virtual_script_function(llvm::Value* script_object, asCScriptFunction& callee);
+	llvm::Value* resolve_virtual_script_function(llvm::Value* script_object, const asCScriptFunction& callee);
 
 	//! \brief Store \p value into the value register.
 	//! \details
@@ -184,19 +184,11 @@ class FunctionBuilder
 	void switch_to_block(llvm::BasicBlock* block);
 
 	void create_function_debug_info(llvm::Function* function, GeneratedFunctionType type);
-	void create_locals_debug_info();
 
 	SourceLocation get_source_location(std::size_t bytecode_offset = 0);
 	llvm::DebugLoc get_debug_location(std::size_t bytecode_offset, llvm::DISubprogram* sp);
 
-	JitCompiler&   m_compiler;
-	ModuleBuilder& m_module_builder;
-
-	asCScriptFunction& m_script_function;
-
-	//! \brief Pointer to the LLVM function being generated or that has been generated.
-	//! \see read_bytecode(asDWORD*, asUINT)
-	llvm::Function* m_llvm_function;
+	codegen::FunctionContext m_context;
 
 	//! \brief
 	//!		Value register, used to temporarily store small (<= 64-bit) values (and sometimes for returning data from

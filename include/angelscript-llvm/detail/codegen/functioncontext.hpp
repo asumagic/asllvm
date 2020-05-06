@@ -6,15 +6,11 @@
 
 namespace asllvm::detail::codegen
 {
-struct Context
+struct FunctionContext
 {
-	Builder* builder;
-	llvm::Function* llvm_function;
+	JitCompiler*             compiler;
+	ModuleBuilder*           module_builder;
+	llvm::Function*          llvm_function;
 	const asCScriptFunction* script_function;
-
-	asCScriptEngine& engine()
-	{
-		return *static_cast<asCScriptEngine*>(script_function->GetEngine());
-	}
 };
-}
+} // namespace asllvm::detail::codegen

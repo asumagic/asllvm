@@ -2,22 +2,28 @@
 
 #include <angelscript-llvm/detail/assert.hpp>
 #include <angelscript-llvm/detail/builder.hpp>
+#include <angelscript-llvm/detail/jitcompiler.hpp>
+#include <angelscript-llvm/detail/modulebuilder.hpp>
 #include <array>
 #include <fmt/core.h>
+#include <llvm/IR/DIBuilder.h>
 
 namespace asllvm::detail::codegen
 {
-StackFrame::StackFrame(Context context) : m_context{context} {}
+StackFrame::StackFrame(FunctionContext context) : m_context{context} {}
 
 void StackFrame::setup()
 {
-	llvm::IRBuilder<>& ir   = m_context.builder->ir();
-	CommonDefinitions& defs = m_context.builder->definitions();
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
+	CommonDefinitions& defs    = builder.definitions();
 
 	m_storage = ir.CreateAlloca(llvm::ArrayType::get(defs.i32, total_space()), nullptr, "storage");
 	allocate_parameter_storage();
 
 	m_stack_pointer = variable_space();
+
+	emit_debug_info();
 }
 
 void StackFrame::finalize() { asllvm_assert(empty_stack()); }
@@ -69,21 +75,24 @@ llvm::Value* StackFrame::top(llvm::Type* type) { return load(m_stack_pointer, ty
 
 llvm::Value* StackFrame::load(StackFrame::AsStackOffset offset, llvm::Type* type)
 {
-	llvm::IRBuilder<>& ir = m_context.builder->ir();
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
 
 	return ir.CreateLoad(type, pointer_to(offset, type), fmt::format("local@{}.value", offset));
 }
 
 void StackFrame::store(StackFrame::AsStackOffset offset, llvm::Value* value)
 {
-	llvm::IRBuilder<>& ir = m_context.builder->ir();
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
 
 	ir.CreateStore(value, pointer_to(offset, value->getType()));
 }
 
 llvm::Value* StackFrame::pointer_to(StackFrame::AsStackOffset offset, llvm::Type* pointee_type)
 {
-	llvm::IRBuilder<>& ir = m_context.builder->ir();
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
 
 	llvm::Value* pointer = pointer_to(offset);
 	return ir.CreateBitCast(pointer, pointee_type->getPointerTo(), fmt::format("local@{}.castedptr", offset));
@@ -91,8 +100,9 @@ llvm::Value* StackFrame::pointer_to(StackFrame::AsStackOffset offset, llvm::Type
 
 llvm::Value* StackFrame::pointer_to(StackFrame::AsStackOffset offset)
 {
-	llvm::IRBuilder<>& ir   = m_context.builder->ir();
-	CommonDefinitions& defs = m_context.builder->definitions();
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
+	CommonDefinitions& defs    = builder.definitions();
 
 	// Value at stack offset is a parameter
 	if (offset <= 0)
@@ -118,8 +128,9 @@ llvm::AllocaInst* StackFrame::storage_alloca() { return m_storage; }
 
 void StackFrame::allocate_parameter_storage()
 {
-	asCScriptEngine&   engine = m_context.engine();
-	llvm::IRBuilder<>& ir     = m_context.builder->ir();
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
+	asCScriptEngine&   engine  = m_context.compiler->engine();
 
 	AsStackOffset stack_offset = 0;
 	auto          argument_it  = m_context.llvm_function->arg_begin();
@@ -127,7 +138,7 @@ void StackFrame::allocate_parameter_storage()
 	const auto allocate_parameter = [&](const asCDataType& data_type, const char* name) -> void {
 		Parameter parameter;
 		parameter.argument_index = std::distance(m_context.llvm_function->arg_begin(), argument_it);
-		parameter.local_alloca   = ir.CreateAlloca(m_context.builder->to_llvm_type(data_type), nullptr, name);
+		parameter.local_alloca   = ir.CreateAlloca(builder.to_llvm_type(data_type), nullptr, name);
 		parameter.type_id        = engine.GetTypeIdFromDataType(data_type);
 		parameter.debug_name     = name;
 
@@ -156,5 +167,51 @@ void StackFrame::allocate_parameter_storage()
 		allocate_parameter(
 			m_context.script_function->parameterTypes[i], &(m_context.script_function->parameterNames[i])[0]);
 	}
+}
+
+void StackFrame::emit_debug_info()
+{
+	// FIXME: debug info
+	/*asCScriptEngine&   engine = m_context.engine();
+	llvm::IRBuilder<>& ir     = m_context.builder->ir();
+	llvm::DIBuilder&   di     = m_context.module_builder->di_builder();
+
+	llvm::DISubprogram* sp = m_context.llvm_function->getSubprogram();
+
+	for (const auto& [stack_offset, param] : m_parameters)
+	{
+		llvm::DILocalVariable* local = di.createParameterVariable(
+			sp,
+			param.debug_name,
+			param.argument_index,
+			sp->getFile(),
+			0,
+			m_context.module_builder->get_debug_type(param.type_id));
+
+		di.insertDeclare(
+			param.local_alloca, local, di.createExpression(), get_debug_location(0, sp), ir.GetInsertBlock());
+	}
+
+	{
+		const auto& vars = m_script_function.scriptData->variables;
+		for (std::size_t i = m_script_function.GetParamCount(); i < vars.GetLength(); ++i)
+		{
+			const auto& var = vars[i];
+
+			llvm::DILocalVariable* local = di.createAutoVariable(
+				sp,
+				&var->name[0],
+				sp->getFile(),
+				0,
+				m_module_builder.get_debug_type(engine.GetTypeIdFromDataType(var->type)));
+
+			std::array<std::uint64_t, 2> addresses{
+				llvm::dwarf::DW_OP_plus_uconst,
+				std::uint64_t(stack_size() + local_storage_size() - var->stackOffset) * 4};
+
+			di.insertDeclare(
+				m_locals, local, di.createExpression(addresses), get_debug_location(0, sp), ir.GetInsertBlock());
+		}
+	}*/
 }
 } // namespace asllvm::detail::codegen

@@ -17,22 +17,19 @@ FunctionBuilder::FunctionBuilder(
 	ModuleBuilder&     module_builder,
 	asCScriptFunction& script_function,
 	llvm::Function*    llvm_function) :
-	m_compiler{compiler},
-	m_module_builder{module_builder},
-	m_script_function{script_function},
-	m_llvm_function{llvm_function},
-	m_stack{codegen::Context{&m_compiler.builder(), m_llvm_function, &m_script_function}} // TODO: common context
+	m_context{&compiler, &module_builder, llvm_function, &script_function}, m_stack{m_context}
 {}
 
 llvm::Function* FunctionBuilder::translate_bytecode(asDWORD* bytecode, asUINT length)
 {
-	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
 
-	llvm::orc::ThreadSafeContext& thread_safe_context = m_compiler.builder().context();
+	llvm::orc::ThreadSafeContext& thread_safe_context = builder.llvm_context();
 	auto                          context_lock        = thread_safe_context.getLock();
 	auto&                         context             = *thread_safe_context.getContext();
 
-	ir.SetInsertPoint(llvm::BasicBlock::Create(context, "entry", m_llvm_function));
+	ir.SetInsertPoint(llvm::BasicBlock::Create(context, "entry", m_context.llvm_function));
 
 	const auto walk_bytecode = [&](auto&& func) {
 		asDWORD* bytecode_current = bytecode;
@@ -56,15 +53,15 @@ llvm::Function* FunctionBuilder::translate_bytecode(asDWORD* bytecode, asUINT le
 
 	try
 	{
-		if (m_compiler.config().verbose)
+		if (m_context.compiler->config().verbose)
 		{
-			fmt::print(stderr, "Function {}\n", m_script_function.GetDeclaration(true, true, true));
+			fmt::print(stderr, "Function {}\n", m_context.script_function->GetDeclaration(true, true, true));
 			fmt::print(
 				stderr,
 				"scriptData.variableSpace: {}\n"
 				"scriptData.stackNeeded: {}\n",
-				m_script_function.scriptData->variableSpace,
-				m_script_function.scriptData->stackNeeded);
+				m_context.script_function->scriptData->variableSpace,
+				m_context.script_function->scriptData->stackNeeded);
 
 			fmt::print(stderr, "Disassembly:\n");
 			walk_bytecode([this](BytecodeInstruction instruction) {
@@ -83,15 +80,14 @@ llvm::Function* FunctionBuilder::translate_bytecode(asDWORD* bytecode, asUINT le
 			walk_bytecode([&](BytecodeInstruction instruction) { preprocess_instruction(instruction, context); });
 		}
 
-		create_function_debug_info(m_llvm_function, GeneratedFunctionType::Implementation);
+		create_function_debug_info(m_context.llvm_function, GeneratedFunctionType::Implementation);
 		emit_allocate_local_structures();
-		create_locals_debug_info();
 
 		walk_bytecode([&](BytecodeInstruction instruction) {
 			translate_instruction(instruction);
 
 			// Emit metadata on last inserted instruction for debugging
-			if (m_compiler.config().verbose)
+			if (m_context.compiler->config().verbose)
 			{
 				llvm::BasicBlock* block = ir.GetInsertBlock();
 				if (block->empty())
@@ -115,19 +111,20 @@ llvm::Function* FunctionBuilder::translate_bytecode(asDWORD* bytecode, asUINT le
 	}
 	catch (std::exception& exception)
 	{
-		m_llvm_function->removeFromParent();
+		m_context.llvm_function->removeFromParent();
 		throw;
 	}
 
-	return m_llvm_function;
+	return m_context.llvm_function;
 }
 
 llvm::Function* FunctionBuilder::create_vm_entry_thunk()
 {
-	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
-	CommonDefinitions& defs = m_compiler.builder().definitions();
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
+	CommonDefinitions& defs    = builder.definitions();
 
-	llvm::orc::ThreadSafeContext& thread_safe_context = m_compiler.builder().context();
+	llvm::orc::ThreadSafeContext& thread_safe_context = builder.llvm_context();
 	auto                          context_lock        = thread_safe_context.getLock();
 	auto&                         context             = *thread_safe_context.getContext();
 
@@ -138,8 +135,8 @@ llvm::Function* FunctionBuilder::create_vm_entry_thunk()
 	llvm::Function* wrapper_function = llvm::Function::Create(
 		llvm::FunctionType::get(return_type, types, false),
 		llvm::Function::ExternalLinkage,
-		make_vm_entry_thunk_name(m_script_function),
-		m_module_builder.module());
+		make_vm_entry_thunk_name(*m_context.script_function),
+		m_context.module_builder->module());
 
 	create_function_debug_info(wrapper_function, GeneratedFunctionType::VmEntryThunk);
 
@@ -178,7 +175,7 @@ llvm::Function* FunctionBuilder::create_vm_entry_thunk()
 		ctx.value_register   = value_register;
 		ctx.object_register  = object_register;
 
-		emit_script_call(m_script_function, ctx);
+		emit_script_call(*m_context.script_function, ctx);
 	}
 
 	llvm::Value* program_pointer = [&] {
@@ -247,12 +244,13 @@ void FunctionBuilder::preprocess_instruction(BytecodeInstruction instruction, Pr
 
 void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 {
-	asCScriptEngine&   engine         = m_compiler.engine();
-	llvm::IRBuilder<>& ir             = m_compiler.builder().ir();
-	CommonDefinitions& defs           = m_compiler.builder().definitions();
-	InternalFunctions& internal_funcs = m_module_builder.internal_functions();
+	asCScriptEngine&   engine         = m_context.compiler->engine();
+	Builder&           builder        = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir             = builder.ir();
+	CommonDefinitions& defs           = builder.definitions();
+	InternalFunctions& internal_funcs = m_context.module_builder->internal_functions();
 
-	ir.SetCurrentDebugLocation(get_debug_location(ins.offset, m_llvm_function->getSubprogram()));
+	ir.SetCurrentDebugLocation(get_debug_location(ins.offset, m_context.llvm_function->getSubprogram()));
 
 	const auto old_stack_pointer = m_stack.current_stack_pointer();
 
@@ -336,20 +334,20 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_RET:
 	{
-		asCDataType& type = m_script_function.returnType;
+		const asCDataType& type = m_context.script_function->returnType;
 
-		if (m_llvm_function->getReturnType() == defs.tvoid)
+		if (m_context.llvm_function->getReturnType() == defs.tvoid)
 		{
 			ir.CreateRetVoid();
 		}
 		else if (type.IsObjectHandle() || type.IsObject())
 		{
-			ir.CreateRet(
-				ir.CreateBitCast(ir.CreateLoad(defs.pvoid, m_object_register), m_llvm_function->getReturnType()));
+			ir.CreateRet(ir.CreateBitCast(
+				ir.CreateLoad(defs.pvoid, m_object_register), m_context.llvm_function->getReturnType()));
 		}
 		else
 		{
-			ir.CreateRet(load_value_register_value(m_llvm_function->getReturnType()));
+			ir.CreateRet(load_value_register_value(m_context.llvm_function->getReturnType()));
 		}
 
 		m_ret_pointer = ins.pointer;
@@ -538,9 +536,9 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_SUSPEND:
 	{
-		if (m_compiler.config().verbose)
+		if (m_context.compiler->config().verbose)
 		{
-			m_compiler.diagnostic("Found VM suspend, these are unsupported and ignored", asMSGTYPE_WARNING);
+			m_context.compiler->diagnostic("Found VM suspend, these are unsupported and ignored", asMSGTYPE_WARNING);
 		}
 
 		break;
@@ -632,7 +630,8 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 			}
 			else if ((object_type.flags & asOBJ_LIST_PATTERN) != 0)
 			{
-				m_compiler.diagnostic("STUB: asOBJ_LIST_PATTERN free. this will result in a leak.", asMSGTYPE_WARNING);
+				m_context.compiler->diagnostic(
+					"STUB: asOBJ_LIST_PATTERN free. this will result in a leak.", asMSGTYPE_WARNING);
 			}
 
 			{
@@ -1026,14 +1025,14 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_JitEntry:
 	{
-		if (m_compiler.config().verbose)
+		if (m_context.compiler->config().verbose)
 		{
-			m_compiler.diagnostic("Found JIT entry point, patching as valid entry point");
+			m_context.compiler->diagnostic("Found JIT entry point, patching as valid entry point");
 		}
 
 		// Pass the JitCompiler as the jitArg value, which can be used by lazy_jit_compiler().
 		// TODO: this is probably UB
-		ins.arg_pword() = reinterpret_cast<asPWORD>(&m_compiler);
+		ins.arg_pword() = reinterpret_cast<asPWORD>(m_context.compiler);
 
 		break;
 	}
@@ -1091,10 +1090,10 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		{
 			if (object_type.beh.release != 0)
 			{
-				m_compiler.diagnostic("STUB: asBC_RefCpyV not calling release on old ref!");
+				m_context.compiler->diagnostic("STUB: asBC_RefCpyV not calling release on old ref!");
 			}
 
-			m_compiler.diagnostic("STUB: not checking for zero in addref");
+			m_context.compiler->diagnostic("STUB: not checking for zero in addref");
 
 			std::array<llvm::Value*, 2> args{
 				s,
@@ -1171,7 +1170,8 @@ std::string FunctionBuilder::disassemble(BytecodeInstruction instruction)
 	case asBC_CALLSYS:
 	case asBC_Thiscall1:
 	{
-		auto* func = static_cast<asCScriptFunction*>(m_compiler.engine().GetFunctionById(instruction.arg_int()));
+		auto* func
+			= static_cast<asCScriptFunction*>(m_context.compiler->engine().GetFunctionById(instruction.arg_int()));
 
 		asllvm_assert(func != nullptr);
 
@@ -1283,7 +1283,7 @@ std::string FunctionBuilder::disassemble(BytecodeInstruction instruction)
 
 void FunctionBuilder::emit_allocate_local_structures()
 {
-	Builder&           builder = m_compiler.builder();
+	Builder&           builder = m_context.compiler->builder();
 	llvm::IRBuilder<>& ir      = builder.ir();
 	CommonDefinitions& defs    = builder.definitions();
 
@@ -1298,8 +1298,9 @@ void FunctionBuilder::emit_cast(
 	llvm::Type*                source_type,
 	llvm::Type*                destination_type)
 {
-	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
-	CommonDefinitions& defs = m_compiler.builder().definitions();
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
+	CommonDefinitions& defs    = builder.definitions();
 
 	const bool source_64      = source_type == defs.i64 || source_type == defs.f64;
 	const bool destination_64 = destination_type == defs.i64 || destination_type == defs.f64;
@@ -1326,14 +1327,16 @@ void FunctionBuilder::emit_binop(BytecodeInstruction instruction, llvm::Instruct
 void FunctionBuilder::emit_binop(
 	BytecodeInstruction instruction, llvm::Instruction::BinaryOps op, llvm::Value* lhs, llvm::Value* rhs)
 {
-	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
 
 	m_stack.store(instruction.arg_sword0(), ir.CreateBinOp(op, lhs, rhs));
 }
 
 void FunctionBuilder::emit_neg(BytecodeInstruction instruction, llvm::Type* type)
 {
-	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
 
 	const bool is_float = type->isFloatingPointTy();
 
@@ -1345,7 +1348,8 @@ void FunctionBuilder::emit_neg(BytecodeInstruction instruction, llvm::Type* type
 
 void FunctionBuilder::emit_bit_not(BytecodeInstruction instruction, llvm::Type* type)
 {
-	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
 
 	llvm::Value* lhs    = llvm::ConstantInt::get(type, -1);
 	llvm::Value* rhs    = m_stack.load(instruction.arg_sword0(), type);
@@ -1355,8 +1359,9 @@ void FunctionBuilder::emit_bit_not(BytecodeInstruction instruction, llvm::Type* 
 
 void FunctionBuilder::emit_condition(llvm::CmpInst::Predicate pred)
 {
-	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
-	CommonDefinitions& defs = m_compiler.builder().definitions();
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
+	CommonDefinitions& defs    = builder.definitions();
 
 	llvm::Value* lhs    = load_value_register_value(defs.i32);
 	llvm::Value* rhs    = llvm::ConstantInt::get(defs.i32, 0);
@@ -1366,7 +1371,8 @@ void FunctionBuilder::emit_condition(llvm::CmpInst::Predicate pred)
 
 void FunctionBuilder::emit_increment(llvm::Type* value_type, long by)
 {
-	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
 
 	const bool is_float = value_type->isFloatingPointTy();
 
@@ -1381,8 +1387,9 @@ void FunctionBuilder::emit_increment(llvm::Type* value_type, long by)
 
 void FunctionBuilder::emit_compare(llvm::Value* lhs, llvm::Value* rhs, bool is_signed)
 {
-	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
-	CommonDefinitions& defs = m_compiler.builder().definitions();
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
+	CommonDefinitions& defs    = builder.definitions();
 
 	asllvm_assert(lhs->getType() == rhs->getType());
 
@@ -1420,14 +1427,15 @@ void FunctionBuilder::emit_compare(llvm::Value* lhs, llvm::Value* rhs, bool is_s
 	store_value_register_value(cmp);
 }
 
-void FunctionBuilder::emit_system_call(asCScriptFunction& function)
+void FunctionBuilder::emit_system_call(const asCScriptFunction& function)
 {
-	llvm::IRBuilder<>&          ir             = m_compiler.builder().ir();
-	CommonDefinitions&          defs           = m_compiler.builder().definitions();
-	InternalFunctions&          internal_funcs = m_module_builder.internal_functions();
+	Builder&                    builder        = m_context.compiler->builder();
+	llvm::IRBuilder<>&          ir             = builder.ir();
+	CommonDefinitions&          defs           = builder.definitions();
+	InternalFunctions&          internal_funcs = m_context.module_builder->internal_functions();
 	asSSystemFunctionInterface& intf           = *function.sysFuncIntf;
 
-	llvm::FunctionType* callee_type = m_module_builder.get_system_function_type(function);
+	llvm::FunctionType* callee_type = m_context.module_builder->get_system_function_type(function);
 
 	const std::size_t         argument_count = callee_type->getNumParams();
 	std::vector<llvm::Value*> args(argument_count);
@@ -1558,7 +1566,7 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 
 	default:
 	{
-		callee = m_module_builder.get_system_function(function);
+		callee = m_context.module_builder->get_system_function(function);
 		break;
 	}
 	}
@@ -1590,11 +1598,11 @@ void FunctionBuilder::emit_system_call(asCScriptFunction& function)
 	m_stack.ugly_hack_stack_pointer_within_bounds();
 }
 
-std::size_t FunctionBuilder::emit_script_call(asCScriptFunction& callee) { return emit_script_call(callee, {}); }
+std::size_t FunctionBuilder::emit_script_call(const asCScriptFunction& callee) { return emit_script_call(callee, {}); }
 
-std::size_t FunctionBuilder::emit_script_call(asCScriptFunction& callee, FunctionBuilder::VmEntryCallContext ctx)
+std::size_t FunctionBuilder::emit_script_call(const asCScriptFunction& callee, FunctionBuilder::VmEntryCallContext ctx)
 {
-	Builder&           builder = m_compiler.builder();
+	Builder&           builder = m_context.compiler->builder();
 	llvm::IRBuilder<>& ir      = builder.ir();
 	CommonDefinitions& defs    = builder.definitions();
 
@@ -1608,7 +1616,7 @@ std::size_t FunctionBuilder::emit_script_call(asCScriptFunction& callee, Functio
 	default: asllvm_assert(false && "unsupported script type for script function call");
 	}
 
-	llvm::FunctionType* callee_type = m_module_builder.get_script_function_type(callee);
+	llvm::FunctionType* callee_type = m_context.module_builder->get_script_function_type(callee);
 
 	llvm::Value* resolved_function = nullptr;
 
@@ -1618,7 +1626,7 @@ std::size_t FunctionBuilder::emit_script_call(asCScriptFunction& callee, Functio
 	}
 	else
 	{
-		resolved_function = m_module_builder.get_script_function(callee);
+		resolved_function = m_context.module_builder->get_script_function(callee);
 	}
 
 	std::size_t read_dword_count = 0;
@@ -1628,7 +1636,7 @@ std::size_t FunctionBuilder::emit_script_call(asCScriptFunction& callee, Functio
 		const std::size_t object_dword_size    = type.GetSizeOnStackDWords();
 		read_dword_count += object_dword_size;
 
-		llvm::Type* llvm_parameter_type = m_compiler.builder().to_llvm_type(type);
+		llvm::Type* llvm_parameter_type = m_context.compiler->builder().to_llvm_type(type);
 
 		if (is_vm_entry)
 		{
@@ -1652,7 +1660,7 @@ std::size_t FunctionBuilder::emit_script_call(asCScriptFunction& callee, Functio
 
 	if (callee.GetObjectType() != nullptr)
 	{
-		args.push_back(pop(m_compiler.engine().GetDataTypeFromTypeId(callee.objectType->GetTypeId())));
+		args.push_back(pop(m_context.compiler->engine().GetDataTypeFromTypeId(callee.objectType->GetTypeId())));
 	}
 
 	{
@@ -1694,7 +1702,7 @@ std::size_t FunctionBuilder::emit_script_call(asCScriptFunction& callee, Functio
 	return read_dword_count;
 }
 
-void FunctionBuilder::emit_call(asCScriptFunction& function)
+void FunctionBuilder::emit_call(const asCScriptFunction& function)
 {
 	switch (function.funcType)
 	{
@@ -1720,11 +1728,12 @@ void FunctionBuilder::emit_call(asCScriptFunction& function)
 	}
 }
 
-void FunctionBuilder::emit_object_method_call(asCScriptFunction& function, llvm::Value* object)
+void FunctionBuilder::emit_object_method_call(const asCScriptFunction& function, llvm::Value* object)
 {
-	llvm::IRBuilder<>& ir             = m_compiler.builder().ir();
-	CommonDefinitions& defs           = m_compiler.builder().definitions();
-	InternalFunctions& internal_funcs = m_module_builder.internal_functions();
+	Builder&           builder        = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir             = builder.ir();
+	CommonDefinitions& defs           = builder.definitions();
+	InternalFunctions& internal_funcs = m_context.module_builder->internal_functions();
 
 	std::array<llvm::Value*, 2> args{
 		object, ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, reinterpret_cast<asPWORD>(&function)), defs.pvoid)};
@@ -1734,8 +1743,9 @@ void FunctionBuilder::emit_object_method_call(asCScriptFunction& function, llvm:
 
 void FunctionBuilder::emit_conditional_branch(BytecodeInstruction ins, llvm::CmpInst::Predicate predicate)
 {
-	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
-	CommonDefinitions& defs = m_compiler.builder().definitions();
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
+	CommonDefinitions& defs    = builder.definitions();
 
 	llvm::Value* condition
 		= ir.CreateICmp(predicate, load_value_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
@@ -1743,21 +1753,23 @@ void FunctionBuilder::emit_conditional_branch(BytecodeInstruction ins, llvm::Cmp
 	ir.CreateCondBr(condition, get_branch_target(ins), get_conditional_fail_branch_target(ins));
 }
 
-llvm::Value* FunctionBuilder::resolve_virtual_script_function(llvm::Value* script_object, asCScriptFunction& callee)
+llvm::Value*
+FunctionBuilder::resolve_virtual_script_function(llvm::Value* script_object, const asCScriptFunction& callee)
 {
-	llvm::IRBuilder<>& ir   = m_compiler.builder().ir();
-	CommonDefinitions& defs = m_compiler.builder().definitions();
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
+	CommonDefinitions& defs    = builder.definitions();
 
 	// FIXME: null check for script_object
 
 	const bool is_final = callee.IsFinal() || ((callee.objectType->flags & asOBJ_NOINHERIT) != 0);
 
-	if (m_compiler.config().allow_devirtualization && is_final)
+	if (m_context.compiler->config().allow_devirtualization && is_final)
 	{
 		asCScriptFunction* resolved_script_function = get_nonvirtual_match(callee);
 		asllvm_assert(resolved_script_function != nullptr);
 
-		return m_module_builder.get_script_function(*resolved_script_function);
+		return m_context.module_builder->get_script_function(*resolved_script_function);
 	}
 	else
 	{
@@ -1766,40 +1778,43 @@ llvm::Value* FunctionBuilder::resolve_virtual_script_function(llvm::Value* scrip
 			defs.pvoid,
 			"virtual_script_function");
 
-		llvm::Function*             lookup = m_module_builder.internal_functions().script_vtable_lookup;
+		llvm::Function*             lookup = m_context.module_builder->internal_functions().script_vtable_lookup;
 		std::array<llvm::Value*, 2> lookup_args{{script_object, function_value}};
 
 		return ir.CreateBitCast(
 			ir.CreateCall(lookup->getFunctionType(), lookup, lookup_args),
-			m_module_builder.get_script_function_type(callee)->getPointerTo(),
+			m_context.module_builder->get_script_function_type(callee)->getPointerTo(),
 			"resolved_vcall");
 	}
 }
 
 void FunctionBuilder::store_value_register_value(llvm::Value* value)
 {
-	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
 
 	ir.CreateStore(value, get_value_register_pointer(value->getType()));
 }
 
 llvm::Value* FunctionBuilder::load_value_register_value(llvm::Type* type)
 {
-	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
 
 	return ir.CreateLoad(type, get_value_register_pointer(type));
 }
 
 llvm::Value* FunctionBuilder::get_value_register_pointer(llvm::Type* type)
 {
-	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
 
 	return ir.CreateBitCast(m_value_register, type->getPointerTo());
 }
 
 void FunctionBuilder::insert_label(long offset)
 {
-	llvm::LLVMContext& context = *m_compiler.builder().context().getContext();
+	llvm::LLVMContext& context = *m_context.compiler->builder().llvm_context().getContext(); // long boi
 
 	auto       emplace_result = m_jump_map.emplace(offset, nullptr);
 	const bool success        = emplace_result.second;
@@ -1811,7 +1826,7 @@ void FunctionBuilder::insert_label(long offset)
 	}
 
 	auto it    = emplace_result.first;
-	it->second = llvm::BasicBlock::Create(context, fmt::format("branch_to_{:04x}", offset), m_llvm_function);
+	it->second = llvm::BasicBlock::Create(context, fmt::format("branch_to_{:04x}", offset), m_context.llvm_function);
 }
 
 void FunctionBuilder::preprocess_conditional_branch(BytecodeInstruction instruction)
@@ -1837,7 +1852,8 @@ llvm::BasicBlock* FunctionBuilder::get_conditional_fail_branch_target(BytecodeIn
 
 void FunctionBuilder::switch_to_block(llvm::BasicBlock* block)
 {
-	llvm::IRBuilder<>& ir = m_compiler.builder().ir();
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
 
 	if (auto* current_terminator = ir.GetInsertBlock()->getTerminator(); current_terminator == nullptr)
 	{
@@ -1850,36 +1866,36 @@ void FunctionBuilder::switch_to_block(llvm::BasicBlock* block)
 
 void FunctionBuilder::create_function_debug_info(llvm::Function* function, GeneratedFunctionType type)
 {
-	asCScriptEngine&   engine            = m_compiler.engine();
-	llvm::IRBuilder<>& ir                = m_compiler.builder().ir();
-	llvm::DIBuilder&   di                = m_module_builder.di_builder();
-	ModuleDebugInfo&   module_debug_info = m_module_builder.debug_info();
+	asCScriptEngine&   engine            = m_context.compiler->engine();
+	llvm::IRBuilder<>& ir                = m_context.compiler->builder().ir();
+	llvm::DIBuilder&   di                = m_context.module_builder->di_builder();
+	ModuleDebugInfo&   module_debug_info = m_context.module_builder->debug_info();
 
 	std::vector<llvm::Metadata*> types;
 	{
-		types.push_back(m_module_builder.get_debug_type(m_script_function.GetReturnTypeId()));
+		types.push_back(m_context.module_builder->get_debug_type(m_context.script_function->GetReturnTypeId()));
 
-		if (m_script_function.DoesReturnOnStack())
+		if (m_context.script_function->DoesReturnOnStack())
 		{
-			types.push_back(
-				m_module_builder.get_debug_type(engine.GetTypeIdFromDataType(m_script_function.returnType)));
+			types.push_back(m_context.module_builder->get_debug_type(
+				engine.GetTypeIdFromDataType(m_context.script_function->returnType)));
 		}
 
-		if (m_script_function.objectType != nullptr)
+		if (m_context.script_function->objectType != nullptr)
 		{
-			types.push_back(m_module_builder.get_debug_type(m_script_function.objectType->typeId));
+			types.push_back(m_context.module_builder->get_debug_type(m_context.script_function->objectType->typeId));
 		}
 
-		const std::size_t count = m_script_function.GetParamCount();
+		const std::size_t count = m_context.script_function->GetParamCount();
 		for (std::size_t i = 0; i < count; ++i)
 		{
 			int type_id = 0;
-			m_script_function.GetParam(i, &type_id);
-			types.push_back(m_module_builder.get_debug_type(type_id));
+			m_context.script_function->GetParam(i, &type_id);
+			types.push_back(m_context.module_builder->get_debug_type(type_id));
 		}
 	}
 
-	llvm::DIFile* file = di.createFile(m_script_function.GetScriptSectionName(), ".");
+	llvm::DIFile* file = di.createFile(m_context.script_function->GetScriptSectionName(), ".");
 
 	const SourceLocation loc = get_source_location();
 
@@ -1893,7 +1909,7 @@ void FunctionBuilder::create_function_debug_info(llvm::Function* function, Gener
 
 	llvm::DISubprogram* sp = di.createFunction(
 		module_debug_info.compile_unit,
-		fmt::format("{}{}", make_debug_name(m_script_function), symbol_suffix),
+		fmt::format("{}{}", make_debug_name(*m_context.script_function), symbol_suffix),
 		llvm::StringRef{},
 		file,
 		loc.line,
@@ -1907,55 +1923,11 @@ void FunctionBuilder::create_function_debug_info(llvm::Function* function, Gener
 	ir.SetCurrentDebugLocation(get_debug_location(0, sp));
 }
 
-void FunctionBuilder::create_locals_debug_info()
-{
-	asCScriptEngine&   engine = m_compiler.engine();
-	llvm::IRBuilder<>& ir     = m_compiler.builder().ir();
-	llvm::DIBuilder&   di     = m_module_builder.di_builder();
-
-	llvm::DISubprogram* sp = m_llvm_function->getSubprogram();
-
-	/*for (const auto& [stack_offset, param] : m_parameters)
-	{
-		llvm::DILocalVariable* local = di.createParameterVariable(
-			sp,
-			param.debug_name,
-			param.argument_index,
-			sp->getFile(),
-			0,
-			m_module_builder.get_debug_type(param.type_id));
-
-		di.insertDeclare(
-			param.local_alloca, local, di.createExpression(), get_debug_location(0, sp), ir.GetInsertBlock());
-	}
-
-	{
-		const auto& vars = m_script_function.scriptData->variables;
-		for (std::size_t i = m_script_function.GetParamCount(); i < vars.GetLength(); ++i)
-		{
-			const auto& var = vars[i];
-
-			llvm::DILocalVariable* local = di.createAutoVariable(
-				sp,
-				&var->name[0],
-				sp->getFile(),
-				0,
-				m_module_builder.get_debug_type(engine.GetTypeIdFromDataType(var->type)));
-
-			std::array<std::uint64_t, 2> addresses{
-				llvm::dwarf::DW_OP_plus_uconst,
-				std::uint64_t(stack_size() + local_storage_size() - var->stackOffset) * 4};
-
-			di.insertDeclare(
-				m_locals, local, di.createExpression(addresses), get_debug_location(0, sp), ir.GetInsertBlock());
-		}
-	}*/
-}
-
 FunctionBuilder::SourceLocation FunctionBuilder::get_source_location(std::size_t bytecode_offset)
 {
 	int       section;
-	const int encoded_line = m_script_function.GetLineNumber(bytecode_offset, &section);
+	const int encoded_line
+		= const_cast<asCScriptFunction*>(m_context.script_function)->GetLineNumber(bytecode_offset, &section);
 
 	const int line = encoded_line & 0xFFFFF, column = encoded_line >> 20;
 	return {line, column};
@@ -1966,5 +1938,4 @@ llvm::DebugLoc FunctionBuilder::get_debug_location(std::size_t bytecode_offset, 
 	const SourceLocation loc = get_source_location(bytecode_offset);
 	return llvm::DebugLoc::get(loc.line, loc.column, sp);
 }
-
 } // namespace asllvm::detail

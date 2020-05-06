@@ -2,7 +2,7 @@
 
 #include <string>
 
-asCScriptFunction* asllvm::detail::get_nonvirtual_match(asCScriptFunction& script_function)
+asCScriptFunction* asllvm::detail::get_nonvirtual_match(const asCScriptFunction& script_function)
 {
 	// TODO: find a way to make it less garbage
 	const auto method_count = script_function.objectType->GetMethodCount();

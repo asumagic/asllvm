@@ -4,7 +4,6 @@
 
 namespace asllvm::detail
 {
-
-asCScriptFunction* get_nonvirtual_match(asCScriptFunction& script_function);
+asCScriptFunction* get_nonvirtual_match(const asCScriptFunction& script_function);
 
 }

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <angelscript-llvm/detail/asinternalheaders.hpp>
-#include <angelscript-llvm/detail/codegen/context.hpp>
+#include <angelscript-llvm/detail/codegen/functioncontext.hpp>
 #include <llvm/IR/Instructions.h>
 #include <map>
 
@@ -36,7 +36,7 @@ class StackFrame
 	//!		  Can be `== variable_space` when full.
 	using AsStackOffset = long;
 
-	StackFrame(Context context);
+	StackFrame(FunctionContext context);
 
 	void setup();
 	void finalize();
@@ -66,8 +66,9 @@ class StackFrame
 
 	private:
 	void allocate_parameter_storage();
+	void emit_debug_info();
 
-	Context m_context;
+	FunctionContext m_context;
 
 	//! \brief Array of DWORDs used as local storage for bytecode operations.
 	//! \details

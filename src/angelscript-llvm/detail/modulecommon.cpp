@@ -5,7 +5,7 @@
 
 namespace asllvm::detail
 {
-std::string make_module_name(asIScriptModule* module)
+std::string make_module_name(const asIScriptModule* module)
 {
 	if (module == nullptr)
 	{
@@ -15,19 +15,22 @@ std::string make_module_name(asIScriptModule* module)
 	return fmt::format("asllvm.module.{}", module->GetName());
 }
 
-std::string make_function_name(asIScriptFunction& function)
+std::string make_function_name(const asIScriptFunction& function)
 {
 	return fmt::format("{}.{}", make_module_name(function.GetModule()), function.GetDeclaration(true, true, false));
 }
 
-std::string make_vm_entry_thunk_name(asIScriptFunction& function) { return make_function_name(function) + ".vmthunk"; }
+std::string make_vm_entry_thunk_name(const asIScriptFunction& function)
+{
+	return make_function_name(function) + ".vmthunk";
+}
 
-std::string make_system_function_name(asIScriptFunction& function)
+std::string make_system_function_name(const asIScriptFunction& function)
 {
 	return fmt::format("asllvm.external.{}", function.GetDeclaration(true, true, false));
 }
 
-std::string make_debug_name(asIScriptFunction& function)
+std::string make_debug_name(const asIScriptFunction& function)
 {
 	std::string name;
 

@@ -52,11 +52,11 @@ class ModuleBuilder
 
 	void append(PendingFunction function);
 
-	llvm::Function*     get_script_function(asCScriptFunction& function);
-	llvm::FunctionType* get_script_function_type(asCScriptFunction& script_function);
+	llvm::Function*     get_script_function(const asCScriptFunction& function);
+	llvm::FunctionType* get_script_function_type(const asCScriptFunction& script_function);
 
-	llvm::Function*     get_system_function(asCScriptFunction& system_function);
-	llvm::FunctionType* get_system_function_type(asCScriptFunction& system_function);
+	llvm::Function*     get_system_function(const asCScriptFunction& system_function);
+	llvm::FunctionType* get_system_function_type(const asCScriptFunction& system_function);
 
 	llvm::DIType* get_debug_type(ModuleDebugInfo::AsTypeIdentifier type);
 
