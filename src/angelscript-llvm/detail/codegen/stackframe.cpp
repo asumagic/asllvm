@@ -2,6 +2,7 @@
 
 #include <angelscript-llvm/detail/assert.hpp>
 #include <angelscript-llvm/detail/builder.hpp>
+#include <angelscript-llvm/detail/codegen/debuginfo.hpp>
 #include <angelscript-llvm/detail/jitcompiler.hpp>
 #include <angelscript-llvm/detail/modulebuilder.hpp>
 #include <array>
@@ -172,8 +173,8 @@ void StackFrame::allocate_parameter_storage()
 void StackFrame::emit_debug_info()
 {
 	// FIXME: debug info
-	/*asCScriptEngine&   engine = m_context.engine();
-	llvm::IRBuilder<>& ir     = m_context.builder->ir();
+	asCScriptEngine&   engine = m_context.compiler->engine();
+	llvm::IRBuilder<>& ir     = m_context.compiler->builder().ir();
 	llvm::DIBuilder&   di     = m_context.module_builder->di_builder();
 
 	llvm::DISubprogram* sp = m_context.llvm_function->getSubprogram();
@@ -189,12 +190,16 @@ void StackFrame::emit_debug_info()
 			m_context.module_builder->get_debug_type(param.type_id));
 
 		di.insertDeclare(
-			param.local_alloca, local, di.createExpression(), get_debug_location(0, sp), ir.GetInsertBlock());
+			param.local_alloca,
+			local,
+			di.createExpression(),
+			get_debug_location(m_context, 0, sp),
+			ir.GetInsertBlock());
 	}
 
 	{
-		const auto& vars = m_script_function.scriptData->variables;
-		for (std::size_t i = m_script_function.GetParamCount(); i < vars.GetLength(); ++i)
+		const auto& vars = m_context.script_function->scriptData->variables;
+		for (std::size_t i = m_context.script_function->GetParamCount(); i < vars.GetLength(); ++i)
 		{
 			const auto& var = vars[i];
 
@@ -203,15 +208,18 @@ void StackFrame::emit_debug_info()
 				&var->name[0],
 				sp->getFile(),
 				0,
-				m_module_builder.get_debug_type(engine.GetTypeIdFromDataType(var->type)));
+				m_context.module_builder->get_debug_type(engine.GetTypeIdFromDataType(var->type)));
 
 			std::array<std::uint64_t, 2> addresses{
-				llvm::dwarf::DW_OP_plus_uconst,
-				std::uint64_t(stack_size() + local_storage_size() - var->stackOffset) * 4};
+				llvm::dwarf::DW_OP_plus_uconst, std::uint64_t(total_space() - var->stackOffset) * 4};
 
 			di.insertDeclare(
-				m_locals, local, di.createExpression(addresses), get_debug_location(0, sp), ir.GetInsertBlock());
+				m_storage,
+				local,
+				di.createExpression(addresses),
+				get_debug_location(m_context, 0, sp),
+				ir.GetInsertBlock());
 		}
-	}*/
+	}
 }
 } // namespace asllvm::detail::codegen

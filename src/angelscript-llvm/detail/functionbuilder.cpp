@@ -3,6 +3,7 @@
 #include <angelscript-llvm/detail/ashelper.hpp>
 #include <angelscript-llvm/detail/asinternalheaders.hpp>
 #include <angelscript-llvm/detail/assert.hpp>
+#include <angelscript-llvm/detail/codegen/debuginfo.hpp>
 #include <angelscript-llvm/detail/jitcompiler.hpp>
 #include <angelscript-llvm/detail/llvmglobals.hpp>
 #include <angelscript-llvm/detail/modulebuilder.hpp>
@@ -250,7 +251,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	CommonDefinitions& defs           = builder.definitions();
 	InternalFunctions& internal_funcs = m_context.module_builder->internal_functions();
 
-	ir.SetCurrentDebugLocation(get_debug_location(ins.offset, m_context.llvm_function->getSubprogram()));
+	ir.SetCurrentDebugLocation(get_debug_location(m_context, ins.offset, m_context.llvm_function->getSubprogram()));
 
 	const auto old_stack_pointer = m_stack.current_stack_pointer();
 
@@ -1897,7 +1898,7 @@ void FunctionBuilder::create_function_debug_info(llvm::Function* function, Gener
 
 	llvm::DIFile* file = di.createFile(m_context.script_function->GetScriptSectionName(), ".");
 
-	const SourceLocation loc = get_source_location();
+	const auto location = get_source_location(m_context);
 
 	std::string_view symbol_suffix;
 
@@ -1912,30 +1913,14 @@ void FunctionBuilder::create_function_debug_info(llvm::Function* function, Gener
 		fmt::format("{}{}", make_debug_name(*m_context.script_function), symbol_suffix),
 		llvm::StringRef{},
 		file,
-		loc.line,
+		location.line,
 		di.createSubroutineType(di.getOrCreateTypeArray(types)),
-		loc.line,
+		location.line,
 		llvm::DINode::FlagPrototyped | llvm::DINode::FlagThunk,
 		llvm::DISubprogram::SPFlagDefinition);
 
 	function->setSubprogram(sp);
 
-	ir.SetCurrentDebugLocation(get_debug_location(0, sp));
-}
-
-FunctionBuilder::SourceLocation FunctionBuilder::get_source_location(std::size_t bytecode_offset)
-{
-	int       section;
-	const int encoded_line
-		= const_cast<asCScriptFunction*>(m_context.script_function)->GetLineNumber(bytecode_offset, &section);
-
-	const int line = encoded_line & 0xFFFFF, column = encoded_line >> 20;
-	return {line, column};
-}
-
-llvm::DebugLoc FunctionBuilder::get_debug_location(std::size_t bytecode_offset, llvm::DISubprogram* sp)
-{
-	const SourceLocation loc = get_source_location(bytecode_offset);
-	return llvm::DebugLoc::get(loc.line, loc.column, sp);
+	ir.SetCurrentDebugLocation(get_debug_location(m_context, 0, sp));
 }
 } // namespace asllvm::detail

@@ -23,11 +23,6 @@ class FunctionBuilder
 		bool handling_jump_table = false;
 	};
 
-	struct SourceLocation
-	{
-		int line, column;
-	};
-
 	enum class GeneratedFunctionType
 	{
 		Implementation,
@@ -184,9 +179,6 @@ class FunctionBuilder
 	void switch_to_block(llvm::BasicBlock* block);
 
 	void create_function_debug_info(llvm::Function* function, GeneratedFunctionType type);
-
-	SourceLocation get_source_location(std::size_t bytecode_offset = 0);
-	llvm::DebugLoc get_debug_location(std::size_t bytecode_offset, llvm::DISubprogram* sp);
 
 	codegen::FunctionContext m_context;
 
