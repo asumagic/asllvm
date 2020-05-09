@@ -1132,9 +1132,44 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		break;
 	}
 
-	case asBC_AllocMem: unimpl(); break;
-	case asBC_SetListSize: unimpl(); break;
-	case asBC_PshListElmnt: unimpl(); break;
+	case asBC_AllocMem:
+	{
+		const auto bytes = ins.arg_dword();
+
+		std::array<llvm::Value*, 1> args{llvm::ConstantInt::get(defs.iptr, bytes)};
+		m_stack.store(
+			ins.arg_sword0(),
+			ir.CreateCall(internal_funcs.alloc->getFunctionType(), internal_funcs.alloc, args, "listMemory"));
+
+		break;
+	}
+
+	case asBC_SetListSize:
+	{
+		llvm::Value* list_pointer       = m_stack.load(ins.arg_sword0(), defs.pvoid);
+		const auto   offset_within_list = ins.arg_dword();
+		const auto   size               = ins.arg_dword(1);
+
+		std::array<llvm::Value*, 1> indices{llvm::ConstantInt::get(defs.iptr, offset_within_list)};
+		llvm::Value*                target_pointer = ir.CreateGEP(list_pointer, indices);
+		llvm::Value* typed_target_pointer          = ir.CreatePointerCast(target_pointer, defs.pi32, "listSizePointer");
+
+		ir.CreateStore(llvm::ConstantInt::get(defs.i32, size), typed_target_pointer);
+		break;
+	}
+
+	case asBC_PshListElmnt:
+	{
+		llvm::Value* list_pointer       = m_stack.load(ins.arg_sword0(), defs.pvoid);
+		const auto   offset_within_list = ins.arg_dword();
+
+		std::array<llvm::Value*, 1> indices{llvm::ConstantInt::get(defs.iptr, offset_within_list)};
+		llvm::Value*                target_pointer = ir.CreateGEP(list_pointer, indices);
+
+		m_stack.push(target_pointer, AS_PTR_SIZE);
+		break;
+	}
+
 	case asBC_SetListType: unimpl(); break;
 	case asBC_POWi: unimpl(); break;
 	case asBC_POWu: unimpl(); break;
