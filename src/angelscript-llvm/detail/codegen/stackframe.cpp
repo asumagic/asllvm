@@ -96,7 +96,7 @@ llvm::Value* StackFrame::pointer_to(StackFrame::AsStackOffset offset, llvm::Type
 	llvm::IRBuilder<>& ir      = builder.ir();
 
 	llvm::Value* pointer = pointer_to(offset);
-	return ir.CreateBitCast(pointer, pointee_type->getPointerTo(), fmt::format("local@{}.castedptr", offset));
+	return ir.CreatePointerCast(pointer, pointee_type->getPointerTo(), fmt::format("local@{}.castedptr", offset));
 }
 
 llvm::Value* StackFrame::pointer_to(StackFrame::AsStackOffset offset)

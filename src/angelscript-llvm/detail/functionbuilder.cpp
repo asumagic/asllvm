@@ -335,7 +335,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		}
 		else if (type.IsObjectHandle() || type.IsObject())
 		{
-			ir.CreateRet(ir.CreateBitCast(
+			ir.CreateRet(ir.CreatePointerCast(
 				ir.CreateLoad(defs.pvoid, m_object_register), m_context.llvm_function->getReturnType()));
 		}
 		else
@@ -665,7 +665,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 			ir.CreateSub(llvm::ConstantInt::get(defs.iptr, m_stack.total_space()), offset, "addr", true, true)};
 
 		llvm::Value* variable_pointer
-			= ir.CreateBitCast(ir.CreateGEP(m_stack.storage_alloca(), gep_offset), defs.piptr);
+			= ir.CreatePointerCast(ir.CreateGEP(m_stack.storage_alloca(), gep_offset), defs.piptr);
 		llvm::Value* variable = ir.CreateLoad(defs.iptr, variable_pointer);
 
 		ir.CreateStore(variable, offset_pointer);
@@ -706,13 +706,13 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	{
 		llvm::Value* pointer = m_stack.pointer_to(m_stack.current_stack_pointer() - ins.arg_word0(), defs.pi32);
 
-		llvm::Value*                      index = ir.CreateLoad(defs.i32, ir.CreateBitCast(pointer, defs.pi32));
+		llvm::Value*                      index = ir.CreateLoad(defs.i32, ir.CreatePointerCast(pointer, defs.pi32));
 		const std::array<llvm::Value*, 2> indices{
 			llvm::ConstantInt::get(defs.i64, 0),
 			ir.CreateSub(llvm::ConstantInt::get(defs.i32, m_stack.total_space()), index)};
 		llvm::Value* variable_address = ir.CreateGEP(m_stack.storage_alloca(), indices);
 
-		ir.CreateStore(variable_address, ir.CreateBitCast(pointer, defs.pi32->getPointerTo()));
+		ir.CreateStore(variable_address, ir.CreatePointerCast(pointer, defs.pi32->getPointerTo()));
 
 		break;
 	}
@@ -1603,7 +1603,7 @@ void FunctionBuilder::emit_system_call(const asCScriptFunction& function)
 			object,
 			ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, reinterpret_cast<asPWORD>(intf.func)), defs.pvoid)};
 
-		callee = ir.CreateBitCast(
+		callee = ir.CreatePointerCast(
 			ir.CreateCall(
 				internal_funcs.system_vtable_lookup->getFunctionType(),
 				internal_funcs.system_vtable_lookup,
@@ -1628,7 +1628,8 @@ void FunctionBuilder::emit_system_call(const asCScriptFunction& function)
 		{
 			if (function.returnType.IsObjectHandle())
 			{
-				llvm::Value* typed_object_register = ir.CreateBitCast(m_object_register, return_type->getPointerTo());
+				llvm::Value* typed_object_register
+					= ir.CreatePointerCast(m_object_register, return_type->getPointerTo());
 				ir.CreateStore(result, typed_object_register);
 			}
 			else
@@ -1692,7 +1693,7 @@ std::size_t FunctionBuilder::emit_script_call(const asCScriptFunction& callee, F
 			const std::array<llvm::Value*, 1> offsets{llvm::ConstantInt::get(defs.iptr, -long(old_read_dword_count))};
 			llvm::Value*                      dword_pointer = ir.CreateGEP(ctx.vm_frame_pointer, offsets);
 
-			llvm::Value* pointer = ir.CreateBitCast(dword_pointer, llvm_parameter_type->getPointerTo());
+			llvm::Value* pointer = ir.CreatePointerCast(dword_pointer, llvm_parameter_type->getPointerTo());
 			return ir.CreateLoad(llvm_parameter_type, pointer);
 		}
 
@@ -1727,7 +1728,7 @@ std::size_t FunctionBuilder::emit_script_call(const asCScriptFunction& callee, F
 		if (callee.returnType.IsObjectHandle() || callee.returnType.IsObject())
 		{
 			// Store to the object register
-			llvm::Value* typed_object_register = ir.CreateBitCast(
+			llvm::Value* typed_object_register = ir.CreatePointerCast(
 				is_vm_entry ? ctx.object_register : m_object_register, ret->getType()->getPointerTo());
 
 			ir.CreateStore(ret, typed_object_register);
@@ -1737,8 +1738,8 @@ std::size_t FunctionBuilder::emit_script_call(const asCScriptFunction& callee, F
 			// TODO: code is similar with the above branch
 
 			// Store to the value register
-			llvm::Value* typed_value_register
-				= ir.CreateBitCast(is_vm_entry ? ctx.value_register : m_value_register, ret->getType()->getPointerTo());
+			llvm::Value* typed_value_register = ir.CreatePointerCast(
+				is_vm_entry ? ctx.value_register : m_value_register, ret->getType()->getPointerTo());
 
 			ir.CreateStore(ret, typed_value_register);
 		}
@@ -1830,7 +1831,7 @@ FunctionBuilder::resolve_virtual_script_function(llvm::Value* script_object, con
 		llvm::Function*             lookup = m_context.module_builder->internal_functions().script_vtable_lookup;
 		std::array<llvm::Value*, 2> lookup_args{{script_object, function_value}};
 
-		return ir.CreateBitCast(
+		return ir.CreatePointerCast(
 			ir.CreateCall(lookup->getFunctionType(), lookup, lookup_args),
 			m_context.module_builder->get_script_function_type(callee)->getPointerTo(),
 			"resolved_vcall");
@@ -1858,7 +1859,7 @@ llvm::Value* FunctionBuilder::get_value_register_pointer(llvm::Type* type)
 	Builder&           builder = m_context.compiler->builder();
 	llvm::IRBuilder<>& ir      = builder.ir();
 
-	return ir.CreateBitCast(m_value_register, type->getPointerTo());
+	return ir.CreatePointerCast(m_value_register, type->getPointerTo());
 }
 
 void FunctionBuilder::insert_label(long offset)
