@@ -122,7 +122,7 @@ llvm::Value* StackFrame::pointer_to(StackFrame::AsStackOffset offset)
 	std::array<llvm::Value*, 2> indices{
 		llvm::ConstantInt::get(defs.iptr, 0), llvm::ConstantInt::get(defs.iptr, real_offset)};
 
-	return ir.CreateGEP(m_storage, indices, fmt::format("local@{}.ptr", offset));
+	return ir.CreateInBoundsGEP(m_storage, indices, fmt::format("local@{}.ptr", offset));
 }
 
 llvm::AllocaInst* StackFrame::storage_alloca() { return m_storage; }

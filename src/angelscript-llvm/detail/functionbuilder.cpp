@@ -154,19 +154,19 @@ llvm::Function* FunctionBuilder::create_vm_entry_thunk()
 	llvm::Value* frame_pointer = [&] {
 		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(defs.i64, 0), llvm::ConstantInt::get(defs.i32, 1)};
 
-		auto* pointer = ir.CreateGEP(registers, indices, "stackFramePointerPointer");
+		auto* pointer = ir.CreateInBoundsGEP(registers, indices, "stackFramePointerPointer");
 		return ir.CreateLoad(defs.pi32, pointer, "stackFramePointer");
 	}();
 
 	llvm::Value* value_register = [&] {
 		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(defs.i64, 0), llvm::ConstantInt::get(defs.i32, 3)};
-		return ir.CreateGEP(registers, indices, "valueRegister");
+		return ir.CreateInBoundsGEP(registers, indices, "valueRegister");
 	}();
 
 	llvm::Value* object_register = [&] {
 		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(defs.i64, 0), llvm::ConstantInt::get(defs.i32, 4)};
 
-		auto* pointer = ir.CreateGEP(registers, indices, "objectRegisterPointerPointer");
+		auto* pointer = ir.CreateInBoundsGEP(registers, indices, "objectRegisterPointerPointer");
 		return ir.CreateLoad(defs.pvoid, pointer, "objectRegisterPointer");
 	}();
 
@@ -182,7 +182,7 @@ llvm::Function* FunctionBuilder::create_vm_entry_thunk()
 	llvm::Value* program_pointer = [&] {
 		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(defs.i64, 0), llvm::ConstantInt::get(defs.i32, 0)};
 
-		return ir.CreateGEP(registers, indices, "programPointer");
+		return ir.CreateInBoundsGEP(registers, indices, "programPointer");
 	}();
 
 	// Set the program pointer to the RET instruction
@@ -665,7 +665,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 			ir.CreateSub(llvm::ConstantInt::get(defs.iptr, m_stack.total_space()), offset, "addr", true, true)};
 
 		llvm::Value* variable_pointer
-			= ir.CreatePointerCast(ir.CreateGEP(m_stack.storage_alloca(), gep_offset), defs.piptr);
+			= ir.CreatePointerCast(ir.CreateInBoundsGEP(m_stack.storage_alloca(), gep_offset), defs.piptr);
 		llvm::Value* variable = ir.CreateLoad(defs.iptr, variable_pointer);
 
 		ir.CreateStore(variable, offset_pointer);
@@ -692,7 +692,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 			ir.CreateSub(llvm::ConstantInt::get(defs.i32, m_stack.total_space()), index)};
 
 		llvm::Value* variable_address = ir.CreatePointerCast(
-			ir.CreateGEP(m_stack.storage_alloca(), indices), defs.iptr->getPointerTo()->getPointerTo());
+			ir.CreateInBoundsGEP(m_stack.storage_alloca(), indices), defs.iptr->getPointerTo()->getPointerTo());
 
 		llvm::Value* variable = ir.CreateLoad(defs.iptr->getPointerTo(), variable_address);
 
@@ -710,7 +710,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		const std::array<llvm::Value*, 2> indices{
 			llvm::ConstantInt::get(defs.i64, 0),
 			ir.CreateSub(llvm::ConstantInt::get(defs.i32, m_stack.total_space()), index)};
-		llvm::Value* variable_address = ir.CreateGEP(m_stack.storage_alloca(), indices);
+		llvm::Value* variable_address = ir.CreateInBoundsGEP(m_stack.storage_alloca(), indices);
 
 		ir.CreateStore(variable_address, ir.CreatePointerCast(pointer, defs.pi32->getPointerTo()));
 
@@ -1061,7 +1061,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		// TODO: check for null object
 
 		std::array<llvm::Value*, 1> indices{{llvm::ConstantInt::get(defs.iptr, ins.arg_sword0())}};
-		llvm::Value*                field = ir.CreateGEP(object, indices);
+		llvm::Value*                field = ir.CreateInBoundsGEP(object, indices);
 
 		store_value_register_value(field);
 
@@ -1083,7 +1083,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		// FIXME: check for null base_pointer
 
 		std::array<llvm::Value*, 1> offsets{llvm::ConstantInt::get(defs.iptr, ins.arg_sword1())};
-		llvm::Value*                pointer = ir.CreateGEP(base_pointer, offsets, "fieldptr");
+		llvm::Value*                pointer = ir.CreateInBoundsGEP(base_pointer, offsets, "fieldptr");
 
 		store_value_register_value(pointer);
 
@@ -1164,7 +1164,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		const auto   size               = ins.arg_dword(1);
 
 		std::array<llvm::Value*, 1> indices{llvm::ConstantInt::get(defs.iptr, offset_within_list)};
-		llvm::Value*                target_pointer = ir.CreateGEP(list_pointer, indices);
+		llvm::Value*                target_pointer = ir.CreateInBoundsGEP(list_pointer, indices);
 		llvm::Value* typed_target_pointer          = ir.CreatePointerCast(target_pointer, defs.pi32, "listSizePointer");
 
 		ir.CreateStore(llvm::ConstantInt::get(defs.i32, size), typed_target_pointer);
@@ -1177,7 +1177,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		const auto   offset_within_list = ins.arg_dword();
 
 		std::array<llvm::Value*, 1> indices{llvm::ConstantInt::get(defs.iptr, offset_within_list)};
-		llvm::Value*                target_pointer = ir.CreateGEP(list_pointer, indices);
+		llvm::Value*                target_pointer = ir.CreateInBoundsGEP(list_pointer, indices);
 
 		m_stack.push(target_pointer, AS_PTR_SIZE);
 		break;
@@ -1691,7 +1691,7 @@ std::size_t FunctionBuilder::emit_script_call(const asCScriptFunction& callee, F
 		if (is_vm_entry)
 		{
 			const std::array<llvm::Value*, 1> offsets{llvm::ConstantInt::get(defs.iptr, -long(old_read_dword_count))};
-			llvm::Value*                      dword_pointer = ir.CreateGEP(ctx.vm_frame_pointer, offsets);
+			llvm::Value*                      dword_pointer = ir.CreateInBoundsGEP(ctx.vm_frame_pointer, offsets);
 
 			llvm::Value* pointer = ir.CreatePointerCast(dword_pointer, llvm_parameter_type->getPointerTo());
 			return ir.CreateLoad(llvm_parameter_type, pointer);
