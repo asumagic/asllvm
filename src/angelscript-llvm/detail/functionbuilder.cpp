@@ -277,11 +277,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_PshGPtr:
 	{
-		llvm::Value* pointer_to_global_address
-			= ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, ins.arg_pword()), defs.piptr);
-		llvm::Value* global_address = ir.CreateLoad(defs.iptr, pointer_to_global_address);
-
-		m_stack.push(global_address, AS_PTR_SIZE);
+		m_stack.push(load_global(ins.arg_pword(), defs.iptr), AS_PTR_SIZE);
 		break;
 	}
 
@@ -316,11 +312,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_PshG4:
 	{
-		// TODO: common code for global_ptr
-		llvm::Value* global_ptr = ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, ins.arg_pword()), defs.pi32);
-		llvm::Value* global     = ir.CreateLoad(defs.i32, global_ptr);
-
-		m_stack.push(global, 1);
+		m_stack.push(load_global(ins.arg_pword(), defs.i32), 1);
 		break;
 	}
 
@@ -1978,5 +1970,15 @@ void FunctionBuilder::create_function_debug_info(llvm::Function* function, Gener
 	function->setSubprogram(sp);
 
 	ir.SetCurrentDebugLocation(get_debug_location(m_context, 0, sp));
+}
+
+llvm::Value* FunctionBuilder::load_global(asPWORD address, llvm::Type* type)
+{
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
+	CommonDefinitions& defs    = builder.definitions();
+
+	llvm::Value* global_address = ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, address), defs.pi32);
+	return ir.CreateLoad(type, global_address);
 }
 } // namespace asllvm::detail

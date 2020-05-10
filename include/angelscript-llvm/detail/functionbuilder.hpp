@@ -180,6 +180,8 @@ class FunctionBuilder
 
 	void create_function_debug_info(llvm::Function* function, GeneratedFunctionType type);
 
+	llvm::Value* load_global(asPWORD address, llvm::Type* type);
+
 	codegen::FunctionContext m_context;
 
 	//! \brief
