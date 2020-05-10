@@ -103,13 +103,14 @@ CommonDefinitions Builder::setup_common_definitions()
 	defs.f32   = llvm::Type::getFloatTy(context);
 	defs.f64   = llvm::Type::getDoubleTy(context);
 
-	defs.pvoid = llvm::Type::getInt8PtrTy(context);
-	defs.pi8   = llvm::Type::getInt8PtrTy(context);
-	defs.pi16  = llvm::Type::getInt16PtrTy(context);
-	defs.pi32  = llvm::Type::getInt32PtrTy(context);
-	defs.pi64  = llvm::Type::getInt64PtrTy(context);
-	defs.pf32  = llvm::Type::getFloatPtrTy(context);
-	defs.pf64  = llvm::Type::getDoublePtrTy(context);
+	defs.pvoid = defs.i8->getPointerTo();
+	defs.pi8   = defs.i8->getPointerTo();
+	defs.pi16  = defs.i16->getPointerTo();
+	defs.pi32  = defs.i32->getPointerTo();
+	defs.pi64  = defs.i64->getPointerTo();
+	defs.piptr = defs.iptr->getPointerTo();
+	defs.pf32  = defs.f32->getPointerTo();
+	defs.pf64  = defs.f64->getPointerTo();
 
 	{
 		std::array<llvm::Type*, 8> types{

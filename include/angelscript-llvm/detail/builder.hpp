@@ -14,15 +14,18 @@ namespace asllvm::detail
 {
 struct CommonDefinitions
 {
+	//! \brief asSVMRegisters type.
 	llvm::Type* vm_registers;
 
+	//! \brief void data type.
 	llvm::Type* tvoid;
 
 	llvm::IntegerType *i1, *i8, *i16, *i32, *i64, *iptr;
 
 	llvm::Type *f32, *f64;
 
-	llvm::Type *pvoid, *pi8, *pi16, *pi32, *pi64, *pf32, *pf64;
+	// Shorthands for someCommonType->getPointerTo()
+	llvm::Type *pvoid, *pi8, *pi16, *pi32, *pi64, *pf32, *pf64, *piptr;
 };
 
 class Builder
