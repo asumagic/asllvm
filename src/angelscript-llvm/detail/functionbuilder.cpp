@@ -689,7 +689,27 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		break;
 	}
 
-	case asBC_GETOBJREF: unimpl(); break;
+	// Replace a variable index on the stack with the object handle stored in that variable.
+	case asBC_GETOBJREF:
+	{
+		llvm::Value* pointer = m_stack.pointer_to(m_stack.current_stack_pointer() - ins.arg_word0(), defs.iptr);
+
+		llvm::Value*                      index = ir.CreateLoad(defs.iptr, pointer);
+		const std::array<llvm::Value*, 2> indices{
+			llvm::ConstantInt::get(defs.iptr, 0),
+			ir.CreateSub(llvm::ConstantInt::get(defs.i32, m_stack.total_space()), index)};
+
+		llvm::Value* variable_address = ir.CreatePointerCast(
+			ir.CreateGEP(m_stack.storage_alloca(), indices), defs.iptr->getPointerTo()->getPointerTo());
+
+		llvm::Value* variable = ir.CreateLoad(defs.iptr->getPointerTo(), variable_address);
+
+		ir.CreateStore(variable, ir.CreatePointerCast(pointer, defs.iptr->getPointerTo()));
+
+		break;
+	}
+
+	// Replace a variable index on the stack with the address of the variable.
 	case asBC_GETREF:
 	{
 		llvm::Value* pointer = m_stack.pointer_to(m_stack.current_stack_pointer() - ins.arg_word0(), defs.pi32);
@@ -704,6 +724,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 		break;
 	}
+
 	case asBC_PshNull: unimpl(); break;
 	case asBC_ClrVPtr: unimpl(); break;
 
