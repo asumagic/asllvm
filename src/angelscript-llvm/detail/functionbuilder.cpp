@@ -278,7 +278,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	case asBC_PshGPtr:
 	{
 		llvm::Value* pointer_to_global_address
-			= ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, ins.arg_pword()), defs.iptr->getPointerTo());
+			= ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, ins.arg_pword()), defs.piptr);
 		llvm::Value* global_address = ir.CreateLoad(defs.iptr, pointer_to_global_address);
 
 		m_stack.push(global_address, AS_PTR_SIZE);
@@ -673,7 +673,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 			ir.CreateSub(llvm::ConstantInt::get(defs.iptr, m_stack.total_space()), offset, "addr", true, true)};
 
 		llvm::Value* variable_pointer
-			= ir.CreateBitCast(ir.CreateGEP(m_stack.storage_alloca(), gep_offset), defs.iptr->getPointerTo());
+			= ir.CreateBitCast(ir.CreateGEP(m_stack.storage_alloca(), gep_offset), defs.piptr);
 		llvm::Value* variable = ir.CreateLoad(defs.iptr, variable_pointer);
 
 		ir.CreateStore(variable, offset_pointer);
@@ -704,7 +704,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 		llvm::Value* variable = ir.CreateLoad(defs.iptr->getPointerTo(), variable_address);
 
-		ir.CreateStore(variable, ir.CreatePointerCast(pointer, defs.iptr->getPointerTo()));
+		ir.CreateStore(variable, ir.CreatePointerCast(pointer, defs.piptr));
 
 		break;
 	}
