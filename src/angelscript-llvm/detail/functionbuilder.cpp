@@ -165,9 +165,7 @@ llvm::Function* FunctionBuilder::create_vm_entry_thunk()
 
 	llvm::Value* object_register = [&] {
 		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(defs.i64, 0), llvm::ConstantInt::get(defs.i32, 4)};
-
-		auto* pointer = ir.CreateInBoundsGEP(registers, indices, "objectRegisterPointerPointer");
-		return ir.CreateLoad(defs.pvoid, pointer, "objectRegisterPointer");
+		return ir.CreateInBoundsGEP(registers, indices, "objectRegister");
 	}();
 
 	{
@@ -549,7 +547,10 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 				{ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, reinterpret_cast<asPWORD>(&type)), defs.pvoid)}};
 
 			llvm::Value* object_memory_pointer = ir.CreateCall(
-				internal_funcs.new_script_object->getFunctionType(), internal_funcs.new_script_object, args);
+				internal_funcs.new_script_object->getFunctionType(),
+				internal_funcs.new_script_object,
+				args,
+				fmt::format("dynamic.{}", type.GetName()));
 
 			// Constructor
 			asCScriptFunction& constructor = *static_cast<asCScriptEngine&>(engine).scriptFunctions[constructor_id];
@@ -689,14 +690,14 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		llvm::Value*                      index = ir.CreateLoad(defs.iptr, pointer);
 		const std::array<llvm::Value*, 2> indices{
 			llvm::ConstantInt::get(defs.iptr, 0),
-			ir.CreateSub(llvm::ConstantInt::get(defs.i32, m_stack.total_space()), index)};
+			ir.CreateSub(llvm::ConstantInt::get(defs.iptr, m_stack.total_space()), index)};
 
 		llvm::Value* variable_address = ir.CreatePointerCast(
 			ir.CreateInBoundsGEP(m_stack.storage_alloca(), indices), defs.iptr->getPointerTo()->getPointerTo());
 
 		llvm::Value* variable = ir.CreateLoad(defs.iptr->getPointerTo(), variable_address);
 
-		ir.CreateStore(variable, ir.CreatePointerCast(pointer, defs.piptr));
+		ir.CreateStore(variable, ir.CreatePointerCast(pointer, defs.iptr->getPointerTo()->getPointerTo()));
 
 		break;
 	}
