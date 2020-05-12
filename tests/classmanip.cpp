@@ -19,7 +19,7 @@ TEST_REQUIRE(
 TEST_REQUIRE(
 	"arrays and initialization lists",
 	"[array][factory]",
-	run("scripts/arrays/initializationlists.as") == "123\n456\n789\nhello\nhi\n");
+	run("scripts/arrays/initializationlists.as") == "123\n456\n789\nhello\nhi\n123\n");
 
 TEST_CASE("user classes", "[userclass][simpleuserclass]")
 {
