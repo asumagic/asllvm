@@ -674,7 +674,44 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		break;
 	}
 
-	case asBC_REFCPY: unimpl(); break;
+	case asBC_REFCPY:
+	{
+		asCObjectType&    object_type = *reinterpret_cast<asCObjectType*>(ins.arg_pword());
+		asSTypeBehaviour& beh         = object_type.beh;
+
+		llvm::Value* destination = m_stack.pop(AS_PTR_SIZE, defs.pvoid->getPointerTo());
+		llvm::Value* reference   = m_stack.top(defs.pvoid);
+
+		if ((object_type.flags & asOBJ_NOCOUNT) == 0)
+		{
+			if (beh.release != 0)
+			{
+				m_context.compiler->diagnostic(
+					"STUB: asBC_REFCPY release of old pointer. this may result in a leak.", asMSGTYPE_WARNING);
+			}
+
+			// FIXME: check reference pointer and do nothing if null.
+
+			if (beh.addref != 0)
+			{
+				m_context.compiler->diagnostic("STUB: not checking for zero in addref");
+
+				std::array<llvm::Value*, 2> args{
+					reference,
+					ir.CreateIntToPtr(
+						llvm::ConstantInt::get(
+							defs.iptr, reinterpret_cast<asPWORD>(engine.GetScriptFunction(object_type.beh.addref))),
+						defs.pvoid)};
+
+				ir.CreateCall(
+					internal_funcs.call_object_method->getFunctionType(), internal_funcs.call_object_method, args);
+			}
+		}
+
+		ir.CreateStore(reference, destination);
+
+		break;
+	}
 
 	case asBC_CHKREF:
 	{
