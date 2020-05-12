@@ -11,11 +11,15 @@ TEST_CASE("string handling", "[str]")
 	REQUIRE(run_string(R"(print(parseInt("ABCD", 16)))") == "43981\n");
 }
 
-TEST_CASE("array handling", "[array]")
-{
-	REQUIRE(run("scripts/arraymanip.as") == "123\nhi\n");
-	// REQUIRE(run("scripts/initializationlists.as") == "123\n456\n789\nhello\nhi\n");
-}
+TEST_REQUIRE("simple array logic", "[array][factory]", run("scripts/arrays/simple.as") == "123\nhi\n");
+
+TEST_REQUIRE(
+	"arrays with user class types", "[array][factory]", run("scripts/arrays/userclass.as") == "123\n456\n789\n");
+
+TEST_REQUIRE(
+	"arrays and initialization lists",
+	"[array][factory]",
+	run("scripts/arrays/initializationlists.as") == "123\n456\n789\nhello\nhi\n");
 
 TEST_CASE("user classes", "[userclass][simpleuserclass]")
 {

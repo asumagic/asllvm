@@ -10,7 +10,7 @@
 #include <string>
 
 #define TEST_REQUIRE(name, tag, cond)                                                                                  \
-	TEST_CASE(name, tag) { REQUIRE(cond) }
+	TEST_CASE(name, tag) { REQUIRE(cond); }
 
 #define asllvm_test_check(x)                                                                                           \
 	if (!(x))                                                                                                          \
