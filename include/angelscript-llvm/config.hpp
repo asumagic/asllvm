@@ -20,6 +20,11 @@ struct JitConfig
 	//! \details
 	//!		This is a very aggressive optimization and may cause issues, but if your interface is designed so that this
 	//!		is a valid assumption to make, this can yield some benefits.
+	//!
+	//!		In particular, this disallows const functions from:
+	//!		- Modifying global variables
+	//!		- Modifying any global state - e.g. i/o
+	//!		- Modifying `mutable` variables within the class.
 	bool assume_const_is_pure : 1;
 
 	//! \brief Whether to emit a lot of diagnostics for debugging.
