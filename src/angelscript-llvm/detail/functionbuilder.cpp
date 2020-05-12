@@ -420,7 +420,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	{
 		// Dereference pointer from the top of stack, set the top of the stack to the dereferenced value.
 
-		// TODO: check for null address
+		// FIXME: check pointer and raise VM exception TXT_NULL_POINTER_ACCESS when null
 		llvm::Value* address = m_stack.top(defs.pvoid->getPointerTo());
 		llvm::Value* value   = ir.CreateLoad(defs.pvoid, address);
 		m_stack.store(m_stack.current_stack_pointer(), value);
@@ -587,7 +587,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 			llvm::Value* target_address = m_stack.pop(AS_PTR_SIZE, defs.pvoid->getPointerTo());
 
-			// FIXME: check for null
+			// FIXME: check for null pointer (check what VM does in that context)
 			ir.CreateStore(object_memory_pointer, target_address);
 
 			// TODO: check for suspend?
@@ -601,7 +601,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		asCObjectType&    object_type = *reinterpret_cast<asCObjectType*>(ins.arg_pword());
 		asSTypeBehaviour& beh         = object_type.beh;
 
-		// TODO: check for null pointer (and ignore if so)
+		// FIXME: check pointer and _ignore if null_
 
 		llvm::Value* variable_pointer = m_stack.pointer_to(ins.arg_sword0(), defs.pvoid);
 		llvm::Value* object_pointer   = ir.CreateLoad(defs.pvoid, variable_pointer);
@@ -678,7 +678,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_CHKREF:
 	{
-		// TODO: check if pointer is null
+		// FIXME: check pointer and raise VM exception TXT_NULL_POINTER_ACCESS when null
 		break;
 	}
 
@@ -963,7 +963,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_ChkNullV:
 	{
-		// FIXME: Check for null pointer in ChkNullV
+		// FIXME: check pointer and raise VM exception TXT_NULL_POINTER_ACCESS when null
 		break;
 	}
 
@@ -1059,7 +1059,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	{
 		llvm::Value* object = m_stack.load(0, defs.pvoid);
 
-		// TODO: check for null object
+		// FIXME: check pointer and raise VM exception TXT_NULL_POINTER_ACCESS when null
 
 		std::array<llvm::Value*, 1> indices{{llvm::ConstantInt::get(defs.iptr, ins.arg_sword0())}};
 		llvm::Value*                field = ir.CreateInBoundsGEP(object, indices);
@@ -1081,7 +1081,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	{
 		llvm::Value* base_pointer = m_stack.load(ins.arg_sword0(), defs.pvoid);
 
-		// FIXME: check for null base_pointer
+		// FIXME: check pointer and raise VM exception TXT_NULL_POINTER_ACCESS when null
 
 		std::array<llvm::Value*, 1> offsets{llvm::ConstantInt::get(defs.iptr, ins.arg_sword1())};
 		llvm::Value*                pointer = ir.CreateInBoundsGEP(base_pointer, offsets, "fieldptr");
@@ -1811,7 +1811,7 @@ FunctionBuilder::resolve_virtual_script_function(llvm::Value* script_object, con
 	llvm::IRBuilder<>& ir      = builder.ir();
 	CommonDefinitions& defs    = builder.definitions();
 
-	// FIXME: null check for script_object
+	// FIXME: check script_object pointer and raise VM exception TXT_NULL_POINTER_ACCESS when null
 
 	const bool is_final = callee.IsFinal() || ((callee.objectType->flags & asOBJ_NOINHERIT) != 0);
 
