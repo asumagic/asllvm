@@ -45,6 +45,7 @@ void print(const std::string& message) { out << message << '\n'; }
 
 void print_int(long value) { out << value << '\n'; }
 void print_uint(unsigned long value) { out << value << '\n'; }
+void print_char(char value) { out << value; }
 } // namespace bindings
 
 EngineContext::EngineContext(asllvm::JitConfig config) : engine{asCreateScriptEngine()}, jit{config}
@@ -70,6 +71,9 @@ void EngineContext::register_interface()
 		engine->RegisterGlobalFunction("void print(int64)", asFUNCTION(bindings::print_int), asCALL_CDECL) >= 0);
 	asllvm_test_check(
 		engine->RegisterGlobalFunction("void print(uint64)", asFUNCTION(bindings::print_uint), asCALL_CDECL) >= 0);
+	asllvm_test_check(
+		engine->RegisterGlobalFunction("void putchar(uint8)", asFUNCTION(bindings::print_char), asCALL_CDECL) >= 0);
+
 	asllvm_test_check(engine->SetMessageCallback(asFUNCTION(bindings::message_callback), nullptr, asCALL_CDECL) >= 0);
 }
 

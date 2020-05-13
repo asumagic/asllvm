@@ -10,6 +10,7 @@ add_executable(tests
 	globals.cpp
 	integermath.cpp
 	main.cpp
+	megatests.cpp
 	recursion.cpp
 	typedefs.cpp
 )
