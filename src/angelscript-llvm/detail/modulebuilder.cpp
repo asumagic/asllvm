@@ -21,7 +21,7 @@ ModuleBuilder::ModuleBuilder(JitCompiler& compiler, asIScriptModule* module) :
 		std::make_unique<llvm::Module>(make_module_name(module), *compiler.builder().llvm_context().getContext())},
 	m_di_builder{std::make_unique<llvm::DIBuilder>(*m_llvm_module)},
 	m_debug_info{setup_debug_info()},
-	m_internal_functions{setup_internal_functions()}
+	m_internal_functions{setup_runtime()}
 {}
 
 void ModuleBuilder::append(PendingFunction function) { m_pending_functions.push_back(function); }
@@ -327,11 +327,11 @@ ModuleDebugInfo ModuleBuilder::setup_debug_info()
 	return debug_info;
 }
 
-InternalFunctions ModuleBuilder::setup_internal_functions()
+Runtime ModuleBuilder::setup_runtime()
 {
 	CommonDefinitions& defs = m_compiler.builder().definitions();
 
-	InternalFunctions funcs{};
+	Runtime funcs{};
 
 	const auto linkage = llvm::Function::ExternalLinkage;
 

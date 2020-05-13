@@ -18,7 +18,7 @@
 
 namespace asllvm::detail
 {
-struct InternalFunctions
+struct Runtime
 {
 	llvm::FunctionCallee alloc, free, new_script_object, script_vtable_lookup, system_vtable_lookup, call_object_method;
 };
@@ -63,8 +63,8 @@ class ModuleBuilder
 	void build();
 	void link();
 
-	llvm::Module&      module() { return *m_llvm_module; }
-	InternalFunctions& internal_functions() { return m_internal_functions; }
+	llvm::Module& module() { return *m_llvm_module; }
+	Runtime&      runtime() { return m_internal_functions; }
 
 	llvm::DIBuilder& di_builder() { return *m_di_builder; }
 	ModuleDebugInfo& debug_info() { return m_debug_info; }
@@ -74,8 +74,8 @@ class ModuleBuilder
 	private:
 	bool is_exposed_directly(asIScriptFunction& function) const;
 
-	ModuleDebugInfo   setup_debug_info();
-	InternalFunctions setup_internal_functions();
+	ModuleDebugInfo setup_debug_info();
+	Runtime         setup_runtime();
 
 	void build_functions();
 	void link_symbols();
@@ -89,7 +89,7 @@ class ModuleBuilder
 	std::vector<JitSymbol>           m_jit_functions;
 	std::map<int, llvm::Function*>   m_script_functions;
 	std::map<int, llvm::Function*>   m_system_functions;
-	InternalFunctions                m_internal_functions;
+	Runtime                          m_internal_functions;
 };
 
 } // namespace asllvm::detail
