@@ -20,7 +20,7 @@ namespace asllvm::detail
 {
 struct InternalFunctions
 {
-	llvm::Function *alloc, *free, *new_script_object, *script_vtable_lookup, *system_vtable_lookup, *call_object_method;
+	llvm::FunctionCallee alloc, free, new_script_object, script_vtable_lookup, system_vtable_lookup, call_object_method;
 };
 
 struct PendingFunction
