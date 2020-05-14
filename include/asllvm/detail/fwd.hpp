@@ -9,7 +9,7 @@ namespace detail
 {
 struct BytecodeInstruction;
 struct LibraryInitializer;
-struct CommonDefinitions;
+struct StandardTypes;
 class JitCompiler;
 class Builder;
 class FunctionBuilder;

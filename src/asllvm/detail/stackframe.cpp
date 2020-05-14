@@ -17,9 +17,9 @@ void StackFrame::setup()
 {
 	Builder&           builder = m_context.compiler->builder();
 	llvm::IRBuilder<>& ir      = builder.ir();
-	CommonDefinitions& defs    = builder.definitions();
+	StandardTypes&     types   = builder.standard_types();
 
-	m_storage = ir.CreateAlloca(llvm::ArrayType::get(defs.i32, total_space()), nullptr, "storage");
+	m_storage = ir.CreateAlloca(llvm::ArrayType::get(types.i32, total_space()), nullptr, "storage");
 	allocate_parameter_storage();
 
 	m_stack_pointer = variable_space();
@@ -103,7 +103,7 @@ llvm::Value* StackFrame::pointer_to(StackFrame::AsStackOffset offset)
 {
 	Builder&           builder = m_context.compiler->builder();
 	llvm::IRBuilder<>& ir      = builder.ir();
-	CommonDefinitions& defs    = builder.definitions();
+	StandardTypes&     types   = builder.standard_types();
 
 	// Value at stack offset is a parameter
 	if (offset <= 0)
@@ -120,7 +120,7 @@ llvm::Value* StackFrame::pointer_to(StackFrame::AsStackOffset offset)
 	asllvm_assert(real_offset <= total_space());
 
 	std::array<llvm::Value*, 2> indices{
-		llvm::ConstantInt::get(defs.iptr, 0), llvm::ConstantInt::get(defs.iptr, real_offset)};
+		llvm::ConstantInt::get(types.iptr, 0), llvm::ConstantInt::get(types.iptr, real_offset)};
 
 	return ir.CreateInBoundsGEP(m_storage, indices, fmt::format("local@{}.ptr", offset));
 }

@@ -117,18 +117,18 @@ llvm::Function* FunctionBuilder::create_vm_entry_thunk()
 {
 	Builder&           builder = m_context.compiler->builder();
 	llvm::IRBuilder<>& ir      = builder.ir();
-	CommonDefinitions& defs    = builder.definitions();
+	StandardTypes&     types   = builder.standard_types();
 
 	llvm::orc::ThreadSafeContext& thread_safe_context = builder.llvm_context();
 	auto                          context_lock        = thread_safe_context.getLock();
 	auto&                         context             = *thread_safe_context.getContext();
 
-	const std::array<llvm::Type*, 2> types{defs.vm_registers->getPointerTo(), defs.i64};
+	const std::array<llvm::Type*, 2> parameter_types{types.vm_registers->getPointerTo(), types.i64};
 
-	llvm::Type* return_type = defs.tvoid;
+	llvm::Type* return_type = types.tvoid;
 
 	llvm::Function* wrapper_function = llvm::Function::Create(
-		llvm::FunctionType::get(return_type, types, false),
+		llvm::FunctionType::get(return_type, parameter_types, false),
 		llvm::Function::ExternalLinkage,
 		make_vm_entry_thunk_name(*m_context.script_function),
 		m_context.module_builder->module());
@@ -146,19 +146,19 @@ llvm::Function* FunctionBuilder::create_vm_entry_thunk()
 	arg->setName("jitarg");
 
 	llvm::Value* frame_pointer = [&] {
-		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(defs.i64, 0), llvm::ConstantInt::get(defs.i32, 1)};
+		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(types.i64, 0), llvm::ConstantInt::get(types.i32, 1)};
 
 		auto* pointer = ir.CreateInBoundsGEP(registers, indices, "stackFramePointerPointer");
-		return ir.CreateLoad(defs.pi32, pointer, "stackFramePointer");
+		return ir.CreateLoad(types.pi32, pointer, "stackFramePointer");
 	}();
 
 	llvm::Value* value_register = [&] {
-		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(defs.i64, 0), llvm::ConstantInt::get(defs.i32, 3)};
+		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(types.i64, 0), llvm::ConstantInt::get(types.i32, 3)};
 		return ir.CreateInBoundsGEP(registers, indices, "valueRegister");
 	}();
 
 	llvm::Value* object_register = [&] {
-		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(defs.i64, 0), llvm::ConstantInt::get(defs.i32, 4)};
+		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(types.i64, 0), llvm::ConstantInt::get(types.i32, 4)};
 		return ir.CreateInBoundsGEP(registers, indices, "objectRegister");
 	}();
 
@@ -172,14 +172,14 @@ llvm::Function* FunctionBuilder::create_vm_entry_thunk()
 	}
 
 	llvm::Value* program_pointer = [&] {
-		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(defs.i64, 0), llvm::ConstantInt::get(defs.i32, 0)};
+		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(types.i64, 0), llvm::ConstantInt::get(types.i32, 0)};
 
 		return ir.CreateInBoundsGEP(registers, indices, "programPointer");
 	}();
 
 	// Set the program pointer to the RET instruction
 	auto* ret_ptr_value = ir.CreateIntToPtr(
-		llvm::ConstantInt::get(defs.i64, reinterpret_cast<std::uintptr_t>(m_ret_pointer)), defs.pi32);
+		llvm::ConstantInt::get(types.i64, reinterpret_cast<std::uintptr_t>(m_ret_pointer)), types.pi32);
 	ir.CreateStore(ret_ptr_value, program_pointer);
 
 	ir.CreateRetVoid();
@@ -240,7 +240,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	asCScriptEngine&   engine  = m_context.compiler->engine();
 	Builder&           builder = m_context.compiler->builder();
 	llvm::IRBuilder<>& ir      = builder.ir();
-	CommonDefinitions& defs    = builder.definitions();
+	StandardTypes&     types   = builder.standard_types();
 	Runtime&           rt      = m_context.module_builder->runtime();
 
 	ir.SetCurrentDebugLocation(get_debug_location(m_context, ins.offset, m_context.llvm_function->getSubprogram()));
@@ -269,25 +269,25 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_PshGPtr:
 	{
-		m_stack.push(load_global(ins.arg_pword(), defs.iptr), AS_PTR_SIZE);
+		m_stack.push(load_global(ins.arg_pword(), types.iptr), AS_PTR_SIZE);
 		break;
 	}
 
 	case asBC_PshC4:
 	{
-		m_stack.push(llvm::ConstantInt::get(defs.i32, ins.arg_dword()), 1);
+		m_stack.push(llvm::ConstantInt::get(types.i32, ins.arg_dword()), 1);
 		break;
 	}
 
 	case asBC_PshV4:
 	{
-		m_stack.push(m_stack.load(ins.arg_sword0(), defs.i32), 1);
+		m_stack.push(m_stack.load(ins.arg_sword0(), types.i32), 1);
 		break;
 	}
 
 	case asBC_PSF:
 	{
-		m_stack.push(m_stack.pointer_to(ins.arg_sword0(), defs.iptr), AS_PTR_SIZE);
+		m_stack.push(m_stack.pointer_to(ins.arg_sword0(), types.iptr), AS_PTR_SIZE);
 		break;
 	}
 
@@ -295,16 +295,16 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_NOT:
 	{
-		llvm::Value* source = m_stack.load(ins.arg_sword0(), defs.i1);
+		llvm::Value* source = m_stack.load(ins.arg_sword0(), types.i1);
 		llvm::Value* result
-			= ir.CreateSelect(source, llvm::ConstantInt::get(defs.i32, 0), llvm::ConstantInt::get(defs.i32, 1));
+			= ir.CreateSelect(source, llvm::ConstantInt::get(types.i32, 0), llvm::ConstantInt::get(types.i32, 1));
 		m_stack.store(ins.arg_sword0(), result);
 		break;
 	}
 
 	case asBC_PshG4:
 	{
-		m_stack.push(load_global(ins.arg_pword(), defs.i32), 1);
+		m_stack.push(load_global(ins.arg_pword(), types.i32), 1);
 		break;
 	}
 
@@ -321,14 +321,14 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	{
 		const asCDataType& type = m_context.script_function->returnType;
 
-		if (m_context.llvm_function->getReturnType() == defs.tvoid)
+		if (m_context.llvm_function->getReturnType() == types.tvoid)
 		{
 			ir.CreateRetVoid();
 		}
 		else if (type.IsObjectHandle() || type.IsObject())
 		{
 			ir.CreateRet(ir.CreatePointerCast(
-				ir.CreateLoad(defs.pvoid, m_object_register), m_context.llvm_function->getReturnType()));
+				ir.CreateLoad(types.pvoid, m_object_register), m_context.llvm_function->getReturnType()));
 		}
 		else
 		{
@@ -358,55 +358,55 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	case asBC_TNS: emit_condition(llvm::CmpInst::ICMP_SGE); break;
 	case asBC_TP: emit_condition(llvm::CmpInst::ICMP_SGT); break;
 	case asBC_TNP: emit_condition(llvm::CmpInst::ICMP_SLE); break;
-	case asBC_NEGi: emit_neg(ins, defs.i32); break;
-	case asBC_NEGf: emit_neg(ins, defs.f32); break;
-	case asBC_NEGd: emit_neg(ins, defs.f64); break;
-	case asBC_INCi16: emit_increment(defs.i16, 1); break;
-	case asBC_INCi8: emit_increment(defs.i8, 1); break;
-	case asBC_DECi16: emit_increment(defs.i16, -1); break;
-	case asBC_DECi8: emit_increment(defs.i8, -1); break;
-	case asBC_INCi: emit_increment(defs.i32, 1); break;
-	case asBC_DECi: emit_increment(defs.i32, -1); break;
-	case asBC_INCf: emit_increment(defs.f32, 1); break;
-	case asBC_DECf: emit_increment(defs.f32, -1); break;
-	case asBC_INCd: emit_increment(defs.f64, 1); break;
-	case asBC_DECd: emit_increment(defs.f64, -1); break;
+	case asBC_NEGi: emit_neg(ins, types.i32); break;
+	case asBC_NEGf: emit_neg(ins, types.f32); break;
+	case asBC_NEGd: emit_neg(ins, types.f64); break;
+	case asBC_INCi16: emit_increment(types.i16, 1); break;
+	case asBC_INCi8: emit_increment(types.i8, 1); break;
+	case asBC_DECi16: emit_increment(types.i16, -1); break;
+	case asBC_DECi8: emit_increment(types.i8, -1); break;
+	case asBC_INCi: emit_increment(types.i32, 1); break;
+	case asBC_DECi: emit_increment(types.i32, -1); break;
+	case asBC_INCf: emit_increment(types.f32, 1); break;
+	case asBC_DECf: emit_increment(types.f32, -1); break;
+	case asBC_INCd: emit_increment(types.f64, 1); break;
+	case asBC_DECd: emit_increment(types.f64, -1); break;
 
 	case asBC_IncVi:
 	{
-		llvm::Value* value  = m_stack.load(ins.arg_sword0(), defs.i32);
-		llvm::Value* result = ir.CreateAdd(value, llvm::ConstantInt::get(defs.i32, 1));
+		llvm::Value* value  = m_stack.load(ins.arg_sword0(), types.i32);
+		llvm::Value* result = ir.CreateAdd(value, llvm::ConstantInt::get(types.i32, 1));
 		m_stack.store(ins.arg_sword0(), result);
 		break;
 	}
 
 	case asBC_DecVi:
 	{
-		llvm::Value* value  = m_stack.load(ins.arg_sword0(), defs.i32);
-		llvm::Value* result = ir.CreateSub(value, llvm::ConstantInt::get(defs.i32, 1));
+		llvm::Value* value  = m_stack.load(ins.arg_sword0(), types.i32);
+		llvm::Value* result = ir.CreateSub(value, llvm::ConstantInt::get(types.i32, 1));
 		m_stack.store(ins.arg_sword0(), result);
 		break;
 	}
 
-	case asBC_BNOT: emit_bit_not(ins, defs.i32); break;
-	case asBC_BAND: emit_binop(ins, llvm::Instruction::And, defs.i32); break;
-	case asBC_BOR: emit_binop(ins, llvm::Instruction::Or, defs.i32); break;
-	case asBC_BXOR: emit_binop(ins, llvm::Instruction::Xor, defs.i32); break;
-	case asBC_BSLL: emit_binop(ins, llvm::Instruction::Shl, defs.i32); break;
-	case asBC_BSRL: emit_binop(ins, llvm::Instruction::LShr, defs.i32); break;
-	case asBC_BSRA: emit_binop(ins, llvm::Instruction::AShr, defs.i32); break;
+	case asBC_BNOT: emit_bit_not(ins, types.i32); break;
+	case asBC_BAND: emit_binop(ins, llvm::Instruction::And, types.i32); break;
+	case asBC_BOR: emit_binop(ins, llvm::Instruction::Or, types.i32); break;
+	case asBC_BXOR: emit_binop(ins, llvm::Instruction::Xor, types.i32); break;
+	case asBC_BSLL: emit_binop(ins, llvm::Instruction::Shl, types.i32); break;
+	case asBC_BSRL: emit_binop(ins, llvm::Instruction::LShr, types.i32); break;
+	case asBC_BSRA: emit_binop(ins, llvm::Instruction::AShr, types.i32); break;
 
 	case asBC_COPY: unimpl(); break;
 
 	case asBC_PshC8:
 	{
-		m_stack.push(llvm::ConstantInt::get(defs.i64, ins.arg_qword()), 2);
+		m_stack.push(llvm::ConstantInt::get(types.i64, ins.arg_qword()), 2);
 		break;
 	}
 
 	case asBC_PshVPtr:
 	{
-		m_stack.push(m_stack.load(ins.arg_sword0(), defs.iptr), AS_PTR_SIZE);
+		m_stack.push(m_stack.load(ins.arg_sword0(), types.iptr), AS_PTR_SIZE);
 		break;
 	}
 
@@ -415,64 +415,64 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		// Dereference pointer from the top of stack, set the top of the stack to the dereferenced value.
 
 		// FIXME: check pointer and raise VM exception TXT_NULL_POINTER_ACCESS when null
-		llvm::Value* address = m_stack.top(defs.pvoid->getPointerTo());
-		llvm::Value* value   = ir.CreateLoad(defs.pvoid, address);
+		llvm::Value* address = m_stack.top(types.pvoid->getPointerTo());
+		llvm::Value* value   = ir.CreateLoad(types.pvoid, address);
 		m_stack.store(m_stack.current_stack_pointer(), value);
 		break;
 	}
 
 	case asBC_CMPd:
 	{
-		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), defs.f64);
-		llvm::Value* rhs = m_stack.load(ins.arg_sword1(), defs.f64);
+		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), types.f64);
+		llvm::Value* rhs = m_stack.load(ins.arg_sword1(), types.f64);
 		emit_compare(lhs, rhs);
 		break;
 	}
 
 	case asBC_CMPu:
 	{
-		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), defs.i32);
-		llvm::Value* rhs = m_stack.load(ins.arg_sword1(), defs.i32);
+		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), types.i32);
+		llvm::Value* rhs = m_stack.load(ins.arg_sword1(), types.i32);
 		emit_compare(lhs, rhs, false);
 		break;
 	}
 
 	case asBC_CMPf:
 	{
-		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), defs.f32);
-		llvm::Value* rhs = m_stack.load(ins.arg_sword1(), defs.f32);
+		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), types.f32);
+		llvm::Value* rhs = m_stack.load(ins.arg_sword1(), types.f32);
 		emit_compare(lhs, rhs);
 		break;
 	}
 
 	case asBC_CMPi:
 	{
-		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), defs.i32);
-		llvm::Value* rhs = m_stack.load(ins.arg_sword1(), defs.i32);
+		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), types.i32);
+		llvm::Value* rhs = m_stack.load(ins.arg_sword1(), types.i32);
 		emit_compare(lhs, rhs);
 		break;
 	}
 
 	case asBC_CMPIi:
 	{
-		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), defs.i32);
-		llvm::Value* rhs = llvm::ConstantInt::get(defs.i32, ins.arg_int());
+		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), types.i32);
+		llvm::Value* rhs = llvm::ConstantInt::get(types.i32, ins.arg_int());
 		emit_compare(lhs, rhs);
 		break;
 	}
 
 	case asBC_CMPIf:
 	{
-		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), defs.f32);
-		llvm::Value* rhs = llvm::ConstantInt::get(defs.f32, ins.arg_float());
+		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), types.f32);
+		llvm::Value* rhs = llvm::ConstantInt::get(types.f32, ins.arg_float());
 		emit_compare(lhs, rhs);
 		break;
 	}
 
 	case asBC_CMPIu:
 	{
-		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), defs.i32);
-		llvm::Value* rhs = llvm::ConstantInt::get(defs.i32, ins.arg_int());
+		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), types.i32);
+		llvm::Value* rhs = llvm::ConstantInt::get(types.i32, ins.arg_int());
 		emit_compare(lhs, rhs, false);
 		break;
 	}
@@ -483,11 +483,11 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		asllvm_assert(!targets.empty());
 
 		llvm::SwitchInst* inst
-			= ir.CreateSwitch(m_stack.load(ins.arg_sword0(), defs.i32), targets.back(), targets.size());
+			= ir.CreateSwitch(m_stack.load(ins.arg_sword0(), types.i32), targets.back(), targets.size());
 
 		for (std::size_t i = 0; i < targets.size(); ++i)
 		{
-			inst->addCase(llvm::ConstantInt::get(defs.i32, i), targets[i]);
+			inst->addCase(llvm::ConstantInt::get(types.i32, i), targets[i]);
 		}
 
 		break;
@@ -495,13 +495,13 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_PopRPtr:
 	{
-		store_value_register_value(m_stack.pop(AS_PTR_SIZE, defs.iptr));
+		store_value_register_value(m_stack.pop(AS_PTR_SIZE, types.iptr));
 		break;
 	}
 
 	case asBC_PshRPtr:
 	{
-		m_stack.push(load_value_register_value(defs.iptr), AS_PTR_SIZE);
+		m_stack.push(load_value_register_value(types.iptr), AS_PTR_SIZE);
 		break;
 	}
 
@@ -538,7 +538,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		{
 			// Initialize stuff using the scriptobject constructor
 			std::array<llvm::Value*, 1> args{
-				{ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, reinterpret_cast<asPWORD>(&type)), defs.pvoid)}};
+				{ir.CreateIntToPtr(llvm::ConstantInt::get(types.iptr, reinterpret_cast<asPWORD>(&type)), types.pvoid)}};
 
 			llvm::Value* object_memory_pointer
 				= ir.CreateCall(rt.new_script_object, args, fmt::format("dynamic.{}", type.GetName()));
@@ -547,7 +547,8 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 			asCScriptFunction& constructor = *static_cast<asCScriptEngine&>(engine).scriptFunctions[constructor_id];
 
 			llvm::Value* target_pointer = m_stack.load(
-				m_stack.current_stack_pointer() - constructor.GetSpaceNeededForArguments(), defs.pvoid->getPointerTo());
+				m_stack.current_stack_pointer() - constructor.GetSpaceNeededForArguments(),
+				types.pvoid->getPointerTo());
 
 			// TODO: check if target_pointer is null before the store (we really should)
 			ir.CreateStore(object_memory_pointer, target_pointer);
@@ -561,7 +562,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		{
 			// Allocate memory for the object
 			std::array<llvm::Value*, 1> alloc_args{
-				llvm::ConstantInt::get(defs.iptr, type.size) // TODO: align type.size to 4 bytes
+				llvm::ConstantInt::get(types.iptr, type.size) // TODO: align type.size to 4 bytes
 			};
 
 			llvm::Value* object_memory_pointer
@@ -573,7 +574,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 				emit_system_call(*static_cast<asCScriptEngine&>(engine).scriptFunctions[constructor_id]);
 			}
 
-			llvm::Value* target_address = m_stack.pop(AS_PTR_SIZE, defs.pvoid->getPointerTo());
+			llvm::Value* target_address = m_stack.pop(AS_PTR_SIZE, types.pvoid->getPointerTo());
 
 			// FIXME: check for null pointer (check what VM does in that context)
 			ir.CreateStore(object_memory_pointer, target_address);
@@ -591,8 +592,8 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 		// FIXME: check pointer and _ignore if null_
 
-		llvm::Value* variable_pointer = m_stack.pointer_to(ins.arg_sword0(), defs.pvoid);
-		llvm::Value* object_pointer   = ir.CreateLoad(defs.pvoid, variable_pointer);
+		llvm::Value* variable_pointer = m_stack.pointer_to(ins.arg_sword0(), types.pvoid);
+		llvm::Value* object_pointer   = ir.CreateLoad(types.pvoid, variable_pointer);
 
 		if ((object_type.flags & asOBJ_REF) != 0)
 		{
@@ -627,17 +628,17 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_LOADOBJ:
 	{
-		llvm::Value* pointer_to_object = m_stack.load(ins.arg_sword0(), defs.pvoid);
+		llvm::Value* pointer_to_object = m_stack.load(ins.arg_sword0(), types.pvoid);
 		ir.CreateStore(pointer_to_object, m_object_register);
-		m_stack.store(ins.arg_sword0(), ir.CreatePtrToInt(llvm::ConstantInt::get(defs.iptr, 0), defs.pvoid));
+		m_stack.store(ins.arg_sword0(), ir.CreatePtrToInt(llvm::ConstantInt::get(types.iptr, 0), types.pvoid));
 
 		break;
 	}
 
 	case asBC_STOREOBJ:
 	{
-		m_stack.store(ins.arg_sword0(), ir.CreateLoad(defs.pvoid, m_object_register));
-		ir.CreateStore(ir.CreatePtrToInt(llvm::ConstantInt::get(defs.iptr, 0), defs.pvoid), m_object_register);
+		m_stack.store(ins.arg_sword0(), ir.CreateLoad(types.pvoid, m_object_register));
+		ir.CreateStore(ir.CreatePtrToInt(llvm::ConstantInt::get(types.iptr, 0), types.pvoid), m_object_register);
 		break;
 	}
 
@@ -645,20 +646,20 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	{
 		// Replace a variable index by a pointer to the value
 
-		llvm::Value* offset_pointer = m_stack.pointer_to(m_stack.current_stack_pointer() - ins.arg_word0(), defs.iptr);
-		llvm::Value* offset         = ir.CreateLoad(defs.iptr, offset_pointer);
+		llvm::Value* offset_pointer = m_stack.pointer_to(m_stack.current_stack_pointer() - ins.arg_word0(), types.iptr);
+		llvm::Value* offset         = ir.CreateLoad(types.iptr, offset_pointer);
 
 		// Get pointer to where the pointer value on the stack is
 		std::array<llvm::Value*, 2> gep_offset{
-			llvm::ConstantInt::get(defs.iptr, 0),
-			ir.CreateSub(llvm::ConstantInt::get(defs.iptr, m_stack.total_space()), offset, "addr", true, true)};
+			llvm::ConstantInt::get(types.iptr, 0),
+			ir.CreateSub(llvm::ConstantInt::get(types.iptr, m_stack.total_space()), offset, "addr", true, true)};
 
 		llvm::Value* variable_pointer
-			= ir.CreatePointerCast(ir.CreateInBoundsGEP(m_stack.storage_alloca(), gep_offset), defs.piptr);
-		llvm::Value* variable = ir.CreateLoad(defs.iptr, variable_pointer);
+			= ir.CreatePointerCast(ir.CreateInBoundsGEP(m_stack.storage_alloca(), gep_offset), types.piptr);
+		llvm::Value* variable = ir.CreateLoad(types.iptr, variable_pointer);
 
 		ir.CreateStore(variable, offset_pointer);
-		ir.CreateStore(llvm::ConstantInt::get(defs.iptr, 0), variable_pointer);
+		ir.CreateStore(llvm::ConstantInt::get(types.iptr, 0), variable_pointer);
 		break;
 	}
 
@@ -667,8 +668,8 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		asCObjectType&    object_type = *reinterpret_cast<asCObjectType*>(ins.arg_pword());
 		asSTypeBehaviour& beh         = object_type.beh;
 
-		llvm::Value* destination = m_stack.pop(AS_PTR_SIZE, defs.pvoid->getPointerTo());
-		llvm::Value* reference   = m_stack.top(defs.pvoid);
+		llvm::Value* destination = m_stack.pop(AS_PTR_SIZE, types.pvoid->getPointerTo());
+		llvm::Value* reference   = m_stack.top(types.pvoid);
 
 		if ((object_type.flags & asOBJ_NOCOUNT) == 0)
 		{
@@ -688,8 +689,8 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 					reference,
 					ir.CreateIntToPtr(
 						llvm::ConstantInt::get(
-							defs.iptr, reinterpret_cast<asPWORD>(engine.GetScriptFunction(object_type.beh.addref))),
-						defs.pvoid)};
+							types.iptr, reinterpret_cast<asPWORD>(engine.GetScriptFunction(object_type.beh.addref))),
+						types.pvoid)};
 
 				ir.CreateCall(rt.call_object_method, args);
 			}
@@ -709,19 +710,19 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	// Replace a variable index on the stack with the object handle stored in that variable.
 	case asBC_GETOBJREF:
 	{
-		llvm::Value* pointer = m_stack.pointer_to(m_stack.current_stack_pointer() - ins.arg_word0(), defs.iptr);
+		llvm::Value* pointer = m_stack.pointer_to(m_stack.current_stack_pointer() - ins.arg_word0(), types.iptr);
 
-		llvm::Value*                      index = ir.CreateLoad(defs.iptr, pointer);
+		llvm::Value*                      index = ir.CreateLoad(types.iptr, pointer);
 		const std::array<llvm::Value*, 2> indices{
-			llvm::ConstantInt::get(defs.iptr, 0),
-			ir.CreateSub(llvm::ConstantInt::get(defs.iptr, m_stack.total_space()), index)};
+			llvm::ConstantInt::get(types.iptr, 0),
+			ir.CreateSub(llvm::ConstantInt::get(types.iptr, m_stack.total_space()), index)};
 
 		llvm::Value* variable_address = ir.CreatePointerCast(
-			ir.CreateInBoundsGEP(m_stack.storage_alloca(), indices), defs.iptr->getPointerTo()->getPointerTo());
+			ir.CreateInBoundsGEP(m_stack.storage_alloca(), indices), types.iptr->getPointerTo()->getPointerTo());
 
-		llvm::Value* variable = ir.CreateLoad(defs.iptr->getPointerTo(), variable_address);
+		llvm::Value* variable = ir.CreateLoad(types.iptr->getPointerTo(), variable_address);
 
-		ir.CreateStore(variable, ir.CreatePointerCast(pointer, defs.iptr->getPointerTo()->getPointerTo()));
+		ir.CreateStore(variable, ir.CreatePointerCast(pointer, types.iptr->getPointerTo()->getPointerTo()));
 
 		break;
 	}
@@ -729,15 +730,15 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	// Replace a variable index on the stack with the address of the variable.
 	case asBC_GETREF:
 	{
-		llvm::Value* pointer = m_stack.pointer_to(m_stack.current_stack_pointer() - ins.arg_word0(), defs.pi32);
+		llvm::Value* pointer = m_stack.pointer_to(m_stack.current_stack_pointer() - ins.arg_word0(), types.pi32);
 
-		llvm::Value*                      index = ir.CreateLoad(defs.i32, ir.CreatePointerCast(pointer, defs.pi32));
+		llvm::Value*                      index = ir.CreateLoad(types.i32, ir.CreatePointerCast(pointer, types.pi32));
 		const std::array<llvm::Value*, 2> indices{
-			llvm::ConstantInt::get(defs.i64, 0),
-			ir.CreateSub(llvm::ConstantInt::get(defs.i32, m_stack.total_space()), index)};
+			llvm::ConstantInt::get(types.i64, 0),
+			ir.CreateSub(llvm::ConstantInt::get(types.i32, m_stack.total_space()), index)};
 		llvm::Value* variable_address = ir.CreateInBoundsGEP(m_stack.storage_alloca(), indices);
 
-		ir.CreateStore(variable_address, ir.CreatePointerCast(pointer, defs.pi32->getPointerTo()));
+		ir.CreateStore(variable_address, ir.CreatePointerCast(pointer, types.pi32->getPointerTo()));
 
 		break;
 	}
@@ -747,7 +748,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_OBJTYPE:
 	{
-		m_stack.push(llvm::ConstantInt::get(defs.iptr, ins.arg_pword()), AS_PTR_SIZE);
+		m_stack.push(llvm::ConstantInt::get(types.iptr, ins.arg_pword()), AS_PTR_SIZE);
 		break;
 	}
 
@@ -757,24 +758,24 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	case asBC_SetV2:
 	case asBC_SetV4:
 	{
-		m_stack.store(ins.arg_sword0(), llvm::ConstantInt::get(defs.i32, ins.arg_dword()));
+		m_stack.store(ins.arg_sword0(), llvm::ConstantInt::get(types.i32, ins.arg_dword()));
 		break;
 	}
 
 	case asBC_SetV8:
 	{
-		m_stack.store(ins.arg_sword0(), llvm::ConstantInt::get(defs.i64, ins.arg_qword()));
+		m_stack.store(ins.arg_sword0(), llvm::ConstantInt::get(types.i64, ins.arg_qword()));
 		break;
 	}
 
 	case asBC_ADDSi:
 	{
-		llvm::Value* stack_pointer = m_stack.pointer_to(m_stack.current_stack_pointer(), defs.iptr);
+		llvm::Value* stack_pointer = m_stack.pointer_to(m_stack.current_stack_pointer(), types.iptr);
 
 		// TODO: Check for null pointer
-		llvm::Value* original_value = ir.CreateLoad(defs.iptr, stack_pointer);
+		llvm::Value* original_value = ir.CreateLoad(types.iptr, stack_pointer);
 		llvm::Value* incremented_value
-			= ir.CreateAdd(original_value, llvm::ConstantInt::get(defs.iptr, ins.arg_sword0()));
+			= ir.CreateAdd(original_value, llvm::ConstantInt::get(types.iptr, ins.arg_sword0()));
 
 		ir.CreateStore(incremented_value, stack_pointer);
 		break;
@@ -785,7 +786,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		auto target = ins.arg_sword0();
 		auto source = ins.arg_sword1();
 
-		m_stack.store(target, m_stack.load(source, defs.i32));
+		m_stack.store(target, m_stack.load(source, types.i32));
 
 		break;
 	}
@@ -795,131 +796,131 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		auto target = ins.arg_sword0();
 		auto source = ins.arg_sword1();
 
-		m_stack.store(target, m_stack.load(source, defs.i64));
+		m_stack.store(target, m_stack.load(source, types.i64));
 
 		break;
 	}
 
 	case asBC_CpyVtoR4:
 	{
-		store_value_register_value(m_stack.load(ins.arg_sword0(), defs.i32));
+		store_value_register_value(m_stack.load(ins.arg_sword0(), types.i32));
 		break;
 	}
 
 	case asBC_CpyVtoR8:
 	{
-		store_value_register_value(m_stack.load(ins.arg_sword0(), defs.i64));
+		store_value_register_value(m_stack.load(ins.arg_sword0(), types.i64));
 		break;
 	}
 
 	case asBC_CpyVtoG4:
 	{
-		llvm::Value* global_ptr = ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, ins.arg_pword()), defs.pi32);
-		llvm::Value* value      = m_stack.load(ins.arg_sword0(), defs.i32);
+		llvm::Value* global_ptr = ir.CreateIntToPtr(llvm::ConstantInt::get(types.iptr, ins.arg_pword()), types.pi32);
+		llvm::Value* value      = m_stack.load(ins.arg_sword0(), types.i32);
 		ir.CreateStore(value, global_ptr);
 		break;
 	}
 
 	case asBC_CpyRtoV4:
 	{
-		m_stack.store(ins.arg_sword0(), load_value_register_value(defs.i32));
+		m_stack.store(ins.arg_sword0(), load_value_register_value(types.i32));
 		break;
 	}
 
 	case asBC_CpyRtoV8:
 	{
-		m_stack.store(ins.arg_sword0(), load_value_register_value(defs.i64));
+		m_stack.store(ins.arg_sword0(), load_value_register_value(types.i64));
 		break;
 	}
 
 	case asBC_CpyGtoV4:
 	{
-		llvm::Value* global_ptr = ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, ins.arg_pword()), defs.pi32);
-		m_stack.store(ins.arg_sword0(), ir.CreateLoad(global_ptr, defs.i32));
+		llvm::Value* global_ptr = ir.CreateIntToPtr(llvm::ConstantInt::get(types.iptr, ins.arg_pword()), types.pi32);
+		m_stack.store(ins.arg_sword0(), ir.CreateLoad(global_ptr, types.i32));
 		break;
 	}
 
 	case asBC_WRTV1:
 	{
-		llvm::Value* value  = m_stack.load(ins.arg_sword0(), defs.i8);
-		llvm::Value* target = load_value_register_value(defs.pi8);
+		llvm::Value* value  = m_stack.load(ins.arg_sword0(), types.i8);
+		llvm::Value* target = load_value_register_value(types.pi8);
 		ir.CreateStore(value, target);
 		break;
 	}
 
 	case asBC_WRTV2:
 	{
-		llvm::Value* value  = m_stack.load(ins.arg_sword0(), defs.i16);
-		llvm::Value* target = load_value_register_value(defs.pi16);
+		llvm::Value* value  = m_stack.load(ins.arg_sword0(), types.i16);
+		llvm::Value* target = load_value_register_value(types.pi16);
 		ir.CreateStore(value, target);
 		break;
 	}
 
 	case asBC_WRTV4:
 	{
-		llvm::Value* value  = m_stack.load(ins.arg_sword0(), defs.i32);
-		llvm::Value* target = load_value_register_value(defs.pi32);
+		llvm::Value* value  = m_stack.load(ins.arg_sword0(), types.i32);
+		llvm::Value* target = load_value_register_value(types.pi32);
 		ir.CreateStore(value, target);
 		break;
 	}
 
 	case asBC_WRTV8:
 	{
-		llvm::Value* value  = m_stack.load(ins.arg_sword0(), defs.i64);
-		llvm::Value* target = load_value_register_value(defs.pi64);
+		llvm::Value* value  = m_stack.load(ins.arg_sword0(), types.i64);
+		llvm::Value* target = load_value_register_value(types.pi64);
 		ir.CreateStore(value, target);
 		break;
 	}
 
 	case asBC_RDR1:
 	{
-		llvm::Value* source_pointer = load_value_register_value(defs.pi8);
-		llvm::Value* source_word    = ir.CreateLoad(defs.i8, source_pointer);
-		llvm::Value* source         = ir.CreateZExt(source_word, defs.i32);
+		llvm::Value* source_pointer = load_value_register_value(types.pi8);
+		llvm::Value* source_word    = ir.CreateLoad(types.i8, source_pointer);
+		llvm::Value* source         = ir.CreateZExt(source_word, types.i32);
 		m_stack.store(ins.arg_sword0(), source);
 		break;
 	}
 
 	case asBC_RDR2:
 	{
-		llvm::Value* source_pointer = load_value_register_value(defs.pi16);
-		llvm::Value* source_word    = ir.CreateLoad(defs.i16, source_pointer);
-		llvm::Value* source         = ir.CreateZExt(source_word, defs.i32);
+		llvm::Value* source_pointer = load_value_register_value(types.pi16);
+		llvm::Value* source_word    = ir.CreateLoad(types.i16, source_pointer);
+		llvm::Value* source         = ir.CreateZExt(source_word, types.i32);
 		m_stack.store(ins.arg_sword0(), source);
 		break;
 	}
 
 	case asBC_RDR4:
 	{
-		llvm::Value* source_pointer = load_value_register_value(defs.pi32);
-		llvm::Value* source         = ir.CreateLoad(defs.i32, source_pointer);
+		llvm::Value* source_pointer = load_value_register_value(types.pi32);
+		llvm::Value* source         = ir.CreateLoad(types.i32, source_pointer);
 		m_stack.store(ins.arg_sword0(), source);
 		break;
 	}
 
 	case asBC_RDR8:
 	{
-		llvm::Value* source_pointer = load_value_register_value(defs.pi64);
-		llvm::Value* source         = ir.CreateLoad(defs.i64, source_pointer);
+		llvm::Value* source_pointer = load_value_register_value(types.pi64);
+		llvm::Value* source         = ir.CreateLoad(types.i64, source_pointer);
 		m_stack.store(ins.arg_sword0(), source);
 		break;
 	}
 
 	case asBC_LDG:
 	{
-		store_value_register_value(ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, ins.arg_pword()), defs.pvoid));
+		store_value_register_value(ir.CreateIntToPtr(llvm::ConstantInt::get(types.iptr, ins.arg_pword()), types.pvoid));
 		break;
 	}
 
 	case asBC_LDV:
 	{
-		store_value_register_value(m_stack.pointer_to(ins.arg_sword0(), defs.pvoid));
+		store_value_register_value(m_stack.pointer_to(ins.arg_sword0(), types.pvoid));
 		break;
 	}
 
 	case asBC_PGA:
 	{
-		m_stack.push(llvm::ConstantInt::get(defs.i64, ins.arg_pword()), AS_PTR_SIZE);
+		m_stack.push(llvm::ConstantInt::get(types.i64, ins.arg_pword()), AS_PTR_SIZE);
 		break;
 	}
 
@@ -927,58 +928,64 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_VAR:
 	{
-		m_stack.push(llvm::ConstantInt::get(defs.i64, ins.arg_sword0()), AS_PTR_SIZE);
+		m_stack.push(llvm::ConstantInt::get(types.i64, ins.arg_sword0()), AS_PTR_SIZE);
 		break;
 	}
 
-	case asBC_iTOf: emit_cast(ins, llvm::Instruction::SIToFP, defs.i32, defs.f32); break;
-	case asBC_fTOi: emit_cast(ins, llvm::Instruction::FPToSI, defs.f32, defs.i32); break;
-	case asBC_uTOf: emit_cast(ins, llvm::Instruction::UIToFP, defs.i32, defs.f32); break;
-	case asBC_fTOu: emit_cast(ins, llvm::Instruction::FPToUI, defs.f32, defs.i32); break;
+	case asBC_iTOf: emit_cast(ins, llvm::Instruction::SIToFP, types.i32, types.f32); break;
+	case asBC_fTOi: emit_cast(ins, llvm::Instruction::FPToSI, types.f32, types.i32); break;
+	case asBC_uTOf: emit_cast(ins, llvm::Instruction::UIToFP, types.i32, types.f32); break;
+	case asBC_fTOu: emit_cast(ins, llvm::Instruction::FPToUI, types.f32, types.i32); break;
 
-	case asBC_sbTOi: emit_cast(ins, llvm::Instruction::SExt, defs.i8, defs.i32); break;
-	case asBC_swTOi: emit_cast(ins, llvm::Instruction::SExt, defs.i16, defs.i32); break;
-	case asBC_ubTOi: emit_cast(ins, llvm::Instruction::ZExt, defs.i8, defs.i32); break;
-	case asBC_uwTOi: emit_cast(ins, llvm::Instruction::ZExt, defs.i16, defs.i32); break;
+	case asBC_sbTOi: emit_cast(ins, llvm::Instruction::SExt, types.i8, types.i32); break;
+	case asBC_swTOi: emit_cast(ins, llvm::Instruction::SExt, types.i16, types.i32); break;
+	case asBC_ubTOi: emit_cast(ins, llvm::Instruction::ZExt, types.i8, types.i32); break;
+	case asBC_uwTOi: emit_cast(ins, llvm::Instruction::ZExt, types.i16, types.i32); break;
 
-	case asBC_dTOi: emit_cast(ins, llvm::Instruction::FPToSI, defs.f64, defs.i32); break;
-	case asBC_dTOu: emit_cast(ins, llvm::Instruction::FPToUI, defs.f64, defs.i32); break;
-	case asBC_dTOf: emit_cast(ins, llvm::Instruction::FPTrunc, defs.f64, defs.f32); break;
+	case asBC_dTOi: emit_cast(ins, llvm::Instruction::FPToSI, types.f64, types.i32); break;
+	case asBC_dTOu: emit_cast(ins, llvm::Instruction::FPToUI, types.f64, types.i32); break;
+	case asBC_dTOf: emit_cast(ins, llvm::Instruction::FPTrunc, types.f64, types.f32); break;
 
-	case asBC_iTOd: emit_cast(ins, llvm::Instruction::SIToFP, defs.i32, defs.f64); break;
-	case asBC_uTOd: emit_cast(ins, llvm::Instruction::UIToFP, defs.i32, defs.f64); break;
-	case asBC_fTOd: emit_cast(ins, llvm::Instruction::FPExt, defs.f32, defs.f64); break;
+	case asBC_iTOd: emit_cast(ins, llvm::Instruction::SIToFP, types.i32, types.f64); break;
+	case asBC_uTOd: emit_cast(ins, llvm::Instruction::UIToFP, types.i32, types.f64); break;
+	case asBC_fTOd: emit_cast(ins, llvm::Instruction::FPExt, types.f32, types.f64); break;
 
-	case asBC_ADDi: emit_binop(ins, llvm::Instruction::Add, defs.i32); break;
-	case asBC_SUBi: emit_binop(ins, llvm::Instruction::Sub, defs.i32); break;
-	case asBC_MULi: emit_binop(ins, llvm::Instruction::Mul, defs.i32); break;
-	case asBC_DIVi: emit_binop(ins, llvm::Instruction::SDiv, defs.i32); break;
-	case asBC_MODi: emit_binop(ins, llvm::Instruction::SRem, defs.i32); break;
+	case asBC_ADDi: emit_binop(ins, llvm::Instruction::Add, types.i32); break;
+	case asBC_SUBi: emit_binop(ins, llvm::Instruction::Sub, types.i32); break;
+	case asBC_MULi: emit_binop(ins, llvm::Instruction::Mul, types.i32); break;
+	case asBC_DIVi: emit_binop(ins, llvm::Instruction::SDiv, types.i32); break;
+	case asBC_MODi: emit_binop(ins, llvm::Instruction::SRem, types.i32); break;
 
-	case asBC_ADDf: emit_binop(ins, llvm::Instruction::FAdd, defs.f32); break;
-	case asBC_SUBf: emit_binop(ins, llvm::Instruction::FSub, defs.f32); break;
-	case asBC_MULf: emit_binop(ins, llvm::Instruction::FMul, defs.f32); break;
-	case asBC_DIVf: emit_binop(ins, llvm::Instruction::FDiv, defs.f32); break;
-	case asBC_MODf: emit_binop(ins, llvm::Instruction::FRem, defs.f32); break;
+	case asBC_ADDf: emit_binop(ins, llvm::Instruction::FAdd, types.f32); break;
+	case asBC_SUBf: emit_binop(ins, llvm::Instruction::FSub, types.f32); break;
+	case asBC_MULf: emit_binop(ins, llvm::Instruction::FMul, types.f32); break;
+	case asBC_DIVf: emit_binop(ins, llvm::Instruction::FDiv, types.f32); break;
+	case asBC_MODf: emit_binop(ins, llvm::Instruction::FRem, types.f32); break;
 
-	case asBC_ADDd: emit_binop(ins, llvm::Instruction::FAdd, defs.f64); break;
-	case asBC_SUBd: emit_binop(ins, llvm::Instruction::FSub, defs.f64); break;
-	case asBC_MULd: emit_binop(ins, llvm::Instruction::FMul, defs.f64); break;
-	case asBC_DIVd: emit_binop(ins, llvm::Instruction::FDiv, defs.f64); break;
-	case asBC_MODd: emit_binop(ins, llvm::Instruction::FRem, defs.f64); break;
+	case asBC_ADDd: emit_binop(ins, llvm::Instruction::FAdd, types.f64); break;
+	case asBC_SUBd: emit_binop(ins, llvm::Instruction::FSub, types.f64); break;
+	case asBC_MULd: emit_binop(ins, llvm::Instruction::FMul, types.f64); break;
+	case asBC_DIVd: emit_binop(ins, llvm::Instruction::FDiv, types.f64); break;
+	case asBC_MODd: emit_binop(ins, llvm::Instruction::FRem, types.f64); break;
 
-	case asBC_ADDIi: emit_binop(ins, llvm::Instruction::Add, llvm::ConstantInt::get(defs.i32, ins.arg_int(1))); break;
-	case asBC_SUBIi: emit_binop(ins, llvm::Instruction::Sub, llvm::ConstantInt::get(defs.i32, ins.arg_int(1))); break;
-	case asBC_MULIi: emit_binop(ins, llvm::Instruction::Mul, llvm::ConstantInt::get(defs.i32, ins.arg_int(1))); break;
+	case asBC_ADDIi: emit_binop(ins, llvm::Instruction::Add, llvm::ConstantInt::get(types.i32, ins.arg_int(1))); break;
+	case asBC_SUBIi: emit_binop(ins, llvm::Instruction::Sub, llvm::ConstantInt::get(types.i32, ins.arg_int(1))); break;
+	case asBC_MULIi: emit_binop(ins, llvm::Instruction::Mul, llvm::ConstantInt::get(types.i32, ins.arg_int(1))); break;
 
-	case asBC_ADDIf: emit_binop(ins, llvm::Instruction::FAdd, llvm::ConstantFP::get(defs.f32, ins.arg_float(1))); break;
-	case asBC_SUBIf: emit_binop(ins, llvm::Instruction::FSub, llvm::ConstantFP::get(defs.f32, ins.arg_float(1))); break;
-	case asBC_MULIf: emit_binop(ins, llvm::Instruction::FMul, llvm::ConstantFP::get(defs.f32, ins.arg_float(1))); break;
+	case asBC_ADDIf:
+		emit_binop(ins, llvm::Instruction::FAdd, llvm::ConstantFP::get(types.f32, ins.arg_float(1)));
+		break;
+	case asBC_SUBIf:
+		emit_binop(ins, llvm::Instruction::FSub, llvm::ConstantFP::get(types.f32, ins.arg_float(1)));
+		break;
+	case asBC_MULIf:
+		emit_binop(ins, llvm::Instruction::FMul, llvm::ConstantFP::get(types.f32, ins.arg_float(1)));
+		break;
 
 	case asBC_SetG4:
 	{
-		llvm::Value* pointer = ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, ins.arg_pword()), defs.pi32);
-		llvm::Value* value   = llvm::ConstantInt::get(defs.i32, ins.arg_dword(AS_PTR_SIZE));
+		llvm::Value* pointer = ir.CreateIntToPtr(llvm::ConstantInt::get(types.iptr, ins.arg_pword()), types.pi32);
+		llvm::Value* value   = llvm::ConstantInt::get(types.i32, ins.arg_dword(AS_PTR_SIZE));
 		ir.CreateStore(value, pointer);
 		break;
 	}
@@ -998,55 +1005,55 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		break;
 	}
 
-	case asBC_iTOb: emit_cast(ins, llvm::Instruction::Trunc, defs.i32, defs.i8); break;
-	case asBC_iTOw: emit_cast(ins, llvm::Instruction::Trunc, defs.i32, defs.i16); break;
+	case asBC_iTOb: emit_cast(ins, llvm::Instruction::Trunc, types.i32, types.i8); break;
+	case asBC_iTOw: emit_cast(ins, llvm::Instruction::Trunc, types.i32, types.i16); break;
 
 	case asBC_Cast: unimpl(); break;
 
-	case asBC_i64TOi: emit_cast(ins, llvm::Instruction::Trunc, defs.i64, defs.i32); break;
-	case asBC_uTOi64: emit_cast(ins, llvm::Instruction::ZExt, defs.i32, defs.i64); break;
-	case asBC_iTOi64: emit_cast(ins, llvm::Instruction::SExt, defs.i32, defs.i64); break;
+	case asBC_i64TOi: emit_cast(ins, llvm::Instruction::Trunc, types.i64, types.i32); break;
+	case asBC_uTOi64: emit_cast(ins, llvm::Instruction::ZExt, types.i32, types.i64); break;
+	case asBC_iTOi64: emit_cast(ins, llvm::Instruction::SExt, types.i32, types.i64); break;
 
-	case asBC_fTOi64: emit_cast(ins, llvm::Instruction::FPToSI, defs.f32, defs.i64); break;
-	case asBC_dTOi64: emit_cast(ins, llvm::Instruction::FPToSI, defs.f64, defs.i64); break;
-	case asBC_fTOu64: emit_cast(ins, llvm::Instruction::FPToUI, defs.f32, defs.i64); break;
-	case asBC_dTOu64: emit_cast(ins, llvm::Instruction::FPToUI, defs.f64, defs.i64); break;
+	case asBC_fTOi64: emit_cast(ins, llvm::Instruction::FPToSI, types.f32, types.i64); break;
+	case asBC_dTOi64: emit_cast(ins, llvm::Instruction::FPToSI, types.f64, types.i64); break;
+	case asBC_fTOu64: emit_cast(ins, llvm::Instruction::FPToUI, types.f32, types.i64); break;
+	case asBC_dTOu64: emit_cast(ins, llvm::Instruction::FPToUI, types.f64, types.i64); break;
 
-	case asBC_i64TOf: emit_cast(ins, llvm::Instruction::SIToFP, defs.i64, defs.f32); break;
-	case asBC_u64TOf: emit_cast(ins, llvm::Instruction::UIToFP, defs.i64, defs.f32); break;
-	case asBC_i64TOd: emit_cast(ins, llvm::Instruction::SIToFP, defs.i64, defs.f64); break;
-	case asBC_u64TOd: emit_cast(ins, llvm::Instruction::UIToFP, defs.i64, defs.f64); break;
+	case asBC_i64TOf: emit_cast(ins, llvm::Instruction::SIToFP, types.i64, types.f32); break;
+	case asBC_u64TOf: emit_cast(ins, llvm::Instruction::UIToFP, types.i64, types.f32); break;
+	case asBC_i64TOd: emit_cast(ins, llvm::Instruction::SIToFP, types.i64, types.f64); break;
+	case asBC_u64TOd: emit_cast(ins, llvm::Instruction::UIToFP, types.i64, types.f64); break;
 
-	case asBC_NEGi64: emit_neg(ins, defs.i64); break;
-	case asBC_INCi64: emit_increment(defs.i64, 1); break;
-	case asBC_DECi64: emit_increment(defs.i64, -1); break;
-	case asBC_BNOT64: emit_bit_not(ins, defs.i64); break;
+	case asBC_NEGi64: emit_neg(ins, types.i64); break;
+	case asBC_INCi64: emit_increment(types.i64, 1); break;
+	case asBC_DECi64: emit_increment(types.i64, -1); break;
+	case asBC_BNOT64: emit_bit_not(ins, types.i64); break;
 
-	case asBC_ADDi64: emit_binop(ins, llvm::Instruction::Add, defs.i64); break;
-	case asBC_SUBi64: emit_binop(ins, llvm::Instruction::Sub, defs.i64); break;
-	case asBC_MULi64: emit_binop(ins, llvm::Instruction::Mul, defs.i64); break;
-	case asBC_DIVi64: emit_binop(ins, llvm::Instruction::SDiv, defs.i64); break;
-	case asBC_MODi64: emit_binop(ins, llvm::Instruction::SRem, defs.i64); break;
+	case asBC_ADDi64: emit_binop(ins, llvm::Instruction::Add, types.i64); break;
+	case asBC_SUBi64: emit_binop(ins, llvm::Instruction::Sub, types.i64); break;
+	case asBC_MULi64: emit_binop(ins, llvm::Instruction::Mul, types.i64); break;
+	case asBC_DIVi64: emit_binop(ins, llvm::Instruction::SDiv, types.i64); break;
+	case asBC_MODi64: emit_binop(ins, llvm::Instruction::SRem, types.i64); break;
 
-	case asBC_BAND64: emit_binop(ins, llvm::Instruction::And, defs.i64); break;
-	case asBC_BOR64: emit_binop(ins, llvm::Instruction::Or, defs.i64); break;
-	case asBC_BXOR64: emit_binop(ins, llvm::Instruction::Xor, defs.i64); break;
-	case asBC_BSLL64: emit_binop(ins, llvm::Instruction::Shl, defs.i64); break;
-	case asBC_BSRL64: emit_binop(ins, llvm::Instruction::LShr, defs.i64); break;
-	case asBC_BSRA64: emit_binop(ins, llvm::Instruction::AShr, defs.i64); break;
+	case asBC_BAND64: emit_binop(ins, llvm::Instruction::And, types.i64); break;
+	case asBC_BOR64: emit_binop(ins, llvm::Instruction::Or, types.i64); break;
+	case asBC_BXOR64: emit_binop(ins, llvm::Instruction::Xor, types.i64); break;
+	case asBC_BSLL64: emit_binop(ins, llvm::Instruction::Shl, types.i64); break;
+	case asBC_BSRL64: emit_binop(ins, llvm::Instruction::LShr, types.i64); break;
+	case asBC_BSRA64: emit_binop(ins, llvm::Instruction::AShr, types.i64); break;
 
 	case asBC_CMPi64:
 	{
-		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), defs.i64);
-		llvm::Value* rhs = m_stack.load(ins.arg_sword1(), defs.i64);
+		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), types.i64);
+		llvm::Value* rhs = m_stack.load(ins.arg_sword1(), types.i64);
 		emit_compare(lhs, rhs);
 		break;
 	}
 
 	case asBC_CMPu64:
 	{
-		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), defs.i64);
-		llvm::Value* rhs = m_stack.load(ins.arg_sword1(), defs.i64);
+		llvm::Value* lhs = m_stack.load(ins.arg_sword0(), types.i64);
+		llvm::Value* rhs = m_stack.load(ins.arg_sword1(), types.i64);
 		emit_compare(lhs, rhs, false);
 		break;
 	}
@@ -1056,8 +1063,8 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	case asBC_ClrHi:
 	{
 		// TODO: untested. What does emit this? Is it possible to see this in final _optimized_ bytecode?
-		llvm::Value* source_value = load_value_register_value(defs.i8);
-		llvm::Value* extended     = ir.CreateZExt(source_value, defs.i32);
+		llvm::Value* source_value = load_value_register_value(types.i8);
+		llvm::Value* extended     = ir.CreateZExt(source_value, types.i32);
 		store_value_register_value(extended);
 		break;
 	}
@@ -1081,11 +1088,11 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_LoadThisR:
 	{
-		llvm::Value* object = m_stack.load(0, defs.pvoid);
+		llvm::Value* object = m_stack.load(0, types.pvoid);
 
 		// FIXME: check pointer and raise VM exception TXT_NULL_POINTER_ACCESS when null
 
-		std::array<llvm::Value*, 1> indices{{llvm::ConstantInt::get(defs.iptr, ins.arg_sword0())}};
+		std::array<llvm::Value*, 1> indices{{llvm::ConstantInt::get(types.iptr, ins.arg_sword0())}};
 		llvm::Value*                field = ir.CreateInBoundsGEP(object, indices);
 
 		store_value_register_value(field);
@@ -1093,21 +1100,21 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		break;
 	}
 
-	case asBC_PshV8: m_stack.push(m_stack.load(ins.arg_sword0(), defs.i64), 2); break;
+	case asBC_PshV8: m_stack.push(m_stack.load(ins.arg_sword0(), types.i64), 2); break;
 
-	case asBC_DIVu: emit_binop(ins, llvm::Instruction::UDiv, defs.i32); break;
-	case asBC_MODu: emit_binop(ins, llvm::Instruction::URem, defs.i32); break;
+	case asBC_DIVu: emit_binop(ins, llvm::Instruction::UDiv, types.i32); break;
+	case asBC_MODu: emit_binop(ins, llvm::Instruction::URem, types.i32); break;
 
-	case asBC_DIVu64: emit_binop(ins, llvm::Instruction::UDiv, defs.i64); break;
-	case asBC_MODu64: emit_binop(ins, llvm::Instruction::URem, defs.i64); break;
+	case asBC_DIVu64: emit_binop(ins, llvm::Instruction::UDiv, types.i64); break;
+	case asBC_MODu64: emit_binop(ins, llvm::Instruction::URem, types.i64); break;
 
 	case asBC_LoadRObjR:
 	{
-		llvm::Value* base_pointer = m_stack.load(ins.arg_sword0(), defs.pvoid);
+		llvm::Value* base_pointer = m_stack.load(ins.arg_sword0(), types.pvoid);
 
 		// FIXME: check pointer and raise VM exception TXT_NULL_POINTER_ACCESS when null
 
-		std::array<llvm::Value*, 1> offsets{llvm::ConstantInt::get(defs.iptr, ins.arg_sword1())};
+		std::array<llvm::Value*, 1> offsets{llvm::ConstantInt::get(types.iptr, ins.arg_sword1())};
 		llvm::Value*                pointer = ir.CreateInBoundsGEP(base_pointer, offsets, "fieldptr");
 
 		store_value_register_value(pointer);
@@ -1122,8 +1129,8 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		auto& object_type = *reinterpret_cast<asCObjectType*>(ins.arg_pword());
 		// asSTypeBehaviour& beh         = object_type.beh;
 
-		llvm::Value* destination = m_stack.pointer_to(ins.arg_sword0(), defs.pvoid);
-		llvm::Value* s           = m_stack.top(defs.pvoid);
+		llvm::Value* destination = m_stack.pointer_to(ins.arg_sword0(), types.pvoid);
+		llvm::Value* s           = m_stack.top(types.pvoid);
 
 		if ((object_type.flags & asOBJ_NOCOUNT) == 0)
 		{
@@ -1138,8 +1145,8 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 				s,
 				ir.CreateIntToPtr(
 					llvm::ConstantInt::get(
-						defs.iptr, reinterpret_cast<asPWORD>(engine.GetScriptFunction(object_type.beh.addref))),
-					defs.pvoid)};
+						types.iptr, reinterpret_cast<asPWORD>(engine.GetScriptFunction(object_type.beh.addref))),
+					types.pvoid)};
 
 			ir.CreateCall(rt.call_object_method, args);
 		}
@@ -1152,7 +1159,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	case asBC_JLowZ:
 	{
 		llvm::Value* condition = ir.CreateICmp(
-			llvm::CmpInst::ICMP_EQ, load_value_register_value(defs.i8), llvm::ConstantInt::get(defs.i8, 0));
+			llvm::CmpInst::ICMP_EQ, load_value_register_value(types.i8), llvm::ConstantInt::get(types.i8, 0));
 
 		ir.CreateCondBr(condition, get_branch_target(ins), get_conditional_fail_branch_target(ins));
 
@@ -1162,7 +1169,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	case asBC_JLowNZ:
 	{
 		llvm::Value* condition = ir.CreateICmp(
-			llvm::CmpInst::ICMP_NE, load_value_register_value(defs.i8), llvm::ConstantInt::get(defs.i8, 0));
+			llvm::CmpInst::ICMP_NE, load_value_register_value(types.i8), llvm::ConstantInt::get(types.i8, 0));
 
 		ir.CreateCondBr(condition, get_branch_target(ins), get_conditional_fail_branch_target(ins));
 
@@ -1173,7 +1180,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	{
 		const auto bytes = ins.arg_dword();
 
-		std::array<llvm::Value*, 1> args{llvm::ConstantInt::get(defs.iptr, bytes)};
+		std::array<llvm::Value*, 1> args{llvm::ConstantInt::get(types.iptr, bytes)};
 		m_stack.store(ins.arg_sword0(), ir.CreateCall(rt.alloc, args, "listMemory"));
 
 		break;
@@ -1181,24 +1188,24 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_SetListSize:
 	{
-		llvm::Value* list_pointer       = m_stack.load(ins.arg_sword0(), defs.pvoid);
+		llvm::Value* list_pointer       = m_stack.load(ins.arg_sword0(), types.pvoid);
 		const auto   offset_within_list = ins.arg_dword();
 		const auto   size               = ins.arg_dword(1);
 
-		std::array<llvm::Value*, 1> indices{llvm::ConstantInt::get(defs.iptr, offset_within_list)};
+		std::array<llvm::Value*, 1> indices{llvm::ConstantInt::get(types.iptr, offset_within_list)};
 		llvm::Value*                target_pointer = ir.CreateInBoundsGEP(list_pointer, indices);
-		llvm::Value* typed_target_pointer          = ir.CreatePointerCast(target_pointer, defs.pi32, "listSizePointer");
+		llvm::Value* typed_target_pointer = ir.CreatePointerCast(target_pointer, types.pi32, "listSizePointer");
 
-		ir.CreateStore(llvm::ConstantInt::get(defs.i32, size), typed_target_pointer);
+		ir.CreateStore(llvm::ConstantInt::get(types.i32, size), typed_target_pointer);
 		break;
 	}
 
 	case asBC_PshListElmnt:
 	{
-		llvm::Value* list_pointer       = m_stack.load(ins.arg_sword0(), defs.pvoid);
+		llvm::Value* list_pointer       = m_stack.load(ins.arg_sword0(), types.pvoid);
 		const auto   offset_within_list = ins.arg_dword();
 
-		std::array<llvm::Value*, 1> indices{llvm::ConstantInt::get(defs.iptr, offset_within_list)};
+		std::array<llvm::Value*, 1> indices{llvm::ConstantInt::get(types.iptr, offset_within_list)};
 		llvm::Value*                target_pointer = ir.CreateInBoundsGEP(list_pointer, indices);
 
 		m_stack.push(target_pointer, AS_PTR_SIZE);
@@ -1356,10 +1363,10 @@ void FunctionBuilder::emit_allocate_local_structures()
 {
 	Builder&           builder = m_context.compiler->builder();
 	llvm::IRBuilder<>& ir      = builder.ir();
-	CommonDefinitions& defs    = builder.definitions();
+	StandardTypes&     types   = builder.standard_types();
 
-	m_value_register  = ir.CreateAlloca(defs.i64, nullptr, "valueRegister");
-	m_object_register = ir.CreateAlloca(defs.pvoid, nullptr, "objectRegister");
+	m_value_register  = ir.CreateAlloca(types.i64, nullptr, "valueRegister");
+	m_object_register = ir.CreateAlloca(types.pvoid, nullptr, "objectRegister");
 	m_stack.setup();
 }
 
@@ -1371,10 +1378,10 @@ void FunctionBuilder::emit_cast(
 {
 	Builder&           builder = m_context.compiler->builder();
 	llvm::IRBuilder<>& ir      = builder.ir();
-	CommonDefinitions& defs    = builder.definitions();
+	StandardTypes&     types   = builder.standard_types();
 
-	const bool source_64      = source_type == defs.i64 || source_type == defs.f64;
-	const bool destination_64 = destination_type == defs.i64 || destination_type == defs.f64;
+	const bool source_64      = source_type == types.i64 || source_type == types.f64;
+	const bool destination_64 = destination_type == types.i64 || destination_type == types.f64;
 
 	// TODO: more robust check for this
 	const auto stack_offset = (source_64 != destination_64) ? instruction.arg_sword1() : instruction.arg_sword0();
@@ -1431,12 +1438,12 @@ void FunctionBuilder::emit_condition(llvm::CmpInst::Predicate pred)
 {
 	Builder&           builder = m_context.compiler->builder();
 	llvm::IRBuilder<>& ir      = builder.ir();
-	CommonDefinitions& defs    = builder.definitions();
+	StandardTypes&     types   = builder.standard_types();
 
-	llvm::Value* lhs    = load_value_register_value(defs.i32);
-	llvm::Value* rhs    = llvm::ConstantInt::get(defs.i32, 0);
+	llvm::Value* lhs    = load_value_register_value(types.i32);
+	llvm::Value* rhs    = llvm::ConstantInt::get(types.i32, 0);
 	llvm::Value* result = ir.CreateICmp(pred, lhs, rhs);
-	store_value_register_value(ir.CreateZExt(result, defs.i64));
+	store_value_register_value(ir.CreateZExt(result, types.i64));
 }
 
 void FunctionBuilder::emit_increment(llvm::Type* value_type, long by)
@@ -1459,15 +1466,15 @@ void FunctionBuilder::emit_compare(llvm::Value* lhs, llvm::Value* rhs, bool is_s
 {
 	Builder&           builder = m_context.compiler->builder();
 	llvm::IRBuilder<>& ir      = builder.ir();
-	CommonDefinitions& defs    = builder.definitions();
+	StandardTypes&     types   = builder.standard_types();
 
 	asllvm_assert(lhs->getType() == rhs->getType());
 
 	const bool is_float = lhs->getType()->isFloatingPointTy();
 
-	llvm::Value* constant_lt = llvm::ConstantInt::get(defs.i32, -1);
-	llvm::Value* constant_eq = llvm::ConstantInt::get(defs.i32, 0);
-	llvm::Value* constant_gt = llvm::ConstantInt::get(defs.i32, 1);
+	llvm::Value* constant_lt = llvm::ConstantInt::get(types.i32, -1);
+	llvm::Value* constant_eq = llvm::ConstantInt::get(types.i32, 0);
+	llvm::Value* constant_gt = llvm::ConstantInt::get(types.i32, 1);
 
 	llvm::Value *lower_than, *greater_than;
 
@@ -1501,7 +1508,7 @@ void FunctionBuilder::emit_system_call(const asCScriptFunction& function)
 {
 	Builder&                    builder = m_context.compiler->builder();
 	llvm::IRBuilder<>&          ir      = builder.ir();
-	CommonDefinitions&          defs    = builder.definitions();
+	StandardTypes&              types   = builder.standard_types();
 	Runtime&                    rt      = m_context.module_builder->runtime();
 	asSSystemFunctionInterface& intf    = *function.sysFuncIntf;
 
@@ -1622,7 +1629,7 @@ void FunctionBuilder::emit_system_call(const asCScriptFunction& function)
 
 		std::array<llvm::Value*, 2> lookup_args{
 			object,
-			ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, reinterpret_cast<asPWORD>(intf.func)), defs.pvoid)};
+			ir.CreateIntToPtr(llvm::ConstantInt::get(types.iptr, reinterpret_cast<asPWORD>(intf.func)), types.pvoid)};
 
 		callee = ir.CreatePointerCast(ir.CreateCall(rt.system_vtable_lookup, lookup_args), callee_type->getPointerTo());
 
@@ -1640,7 +1647,7 @@ void FunctionBuilder::emit_system_call(const asCScriptFunction& function)
 
 	if (return_pointer == nullptr)
 	{
-		if (return_type != defs.tvoid)
+		if (return_type != types.tvoid)
 		{
 			if (function.returnType.IsObjectHandle())
 			{
@@ -1670,7 +1677,7 @@ std::size_t FunctionBuilder::emit_script_call(const asCScriptFunction& callee, F
 {
 	Builder&           builder = m_context.compiler->builder();
 	llvm::IRBuilder<>& ir      = builder.ir();
-	CommonDefinitions& defs    = builder.definitions();
+	StandardTypes&     types   = builder.standard_types();
 
 	const bool is_vm_entry = ctx.vm_frame_pointer != nullptr;
 
@@ -1688,7 +1695,7 @@ std::size_t FunctionBuilder::emit_script_call(const asCScriptFunction& callee, F
 
 	if (callee.funcType == asFUNC_VIRTUAL)
 	{
-		resolved_function = resolve_virtual_script_function(m_stack.top(defs.pvoid), callee);
+		resolved_function = resolve_virtual_script_function(m_stack.top(types.pvoid), callee);
 	}
 	else
 	{
@@ -1706,7 +1713,7 @@ std::size_t FunctionBuilder::emit_script_call(const asCScriptFunction& callee, F
 
 		if (is_vm_entry)
 		{
-			const std::array<llvm::Value*, 1> offsets{llvm::ConstantInt::get(defs.iptr, -long(old_read_dword_count))};
+			const std::array<llvm::Value*, 1> offsets{llvm::ConstantInt::get(types.iptr, -long(old_read_dword_count))};
 			llvm::Value*                      dword_pointer = ir.CreateInBoundsGEP(ctx.vm_frame_pointer, offsets);
 
 			llvm::Value* pointer = ir.CreatePointerCast(dword_pointer, llvm_parameter_type->getPointerTo());
@@ -1798,11 +1805,12 @@ void FunctionBuilder::emit_object_method_call(const asCScriptFunction& function,
 {
 	Builder&           builder = m_context.compiler->builder();
 	llvm::IRBuilder<>& ir      = builder.ir();
-	CommonDefinitions& defs    = builder.definitions();
+	StandardTypes&     types   = builder.standard_types();
 	Runtime&           rt      = m_context.module_builder->runtime();
 
 	std::array<llvm::Value*, 2> args{
-		object, ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, reinterpret_cast<asPWORD>(&function)), defs.pvoid)};
+		object,
+		ir.CreateIntToPtr(llvm::ConstantInt::get(types.iptr, reinterpret_cast<asPWORD>(&function)), types.pvoid)};
 
 	ir.CreateCall(rt.call_object_method, args);
 }
@@ -1811,10 +1819,10 @@ void FunctionBuilder::emit_conditional_branch(BytecodeInstruction ins, llvm::Cmp
 {
 	Builder&           builder = m_context.compiler->builder();
 	llvm::IRBuilder<>& ir      = builder.ir();
-	CommonDefinitions& defs    = builder.definitions();
+	StandardTypes&     types   = builder.standard_types();
 
 	llvm::Value* condition
-		= ir.CreateICmp(predicate, load_value_register_value(defs.i32), llvm::ConstantInt::get(defs.i32, 0));
+		= ir.CreateICmp(predicate, load_value_register_value(types.i32), llvm::ConstantInt::get(types.i32, 0));
 
 	ir.CreateCondBr(condition, get_branch_target(ins), get_conditional_fail_branch_target(ins));
 }
@@ -1824,7 +1832,7 @@ FunctionBuilder::resolve_virtual_script_function(llvm::Value* script_object, con
 {
 	Builder&           builder = m_context.compiler->builder();
 	llvm::IRBuilder<>& ir      = builder.ir();
-	CommonDefinitions& defs    = builder.definitions();
+	StandardTypes&     types   = builder.standard_types();
 
 	// FIXME: check script_object pointer and raise VM exception TXT_NULL_POINTER_ACCESS when null
 
@@ -1840,8 +1848,8 @@ FunctionBuilder::resolve_virtual_script_function(llvm::Value* script_object, con
 	else
 	{
 		llvm::Value* function_value = ir.CreateIntToPtr(
-			llvm::ConstantInt::get(defs.iptr, reinterpret_cast<asPWORD>(&callee)),
-			defs.pvoid,
+			llvm::ConstantInt::get(types.iptr, reinterpret_cast<asPWORD>(&callee)),
+			types.pvoid,
 			"virtual_script_function");
 
 		llvm::FunctionCallee        lookup = m_context.module_builder->runtime().script_vtable_lookup;
@@ -1993,9 +2001,9 @@ llvm::Value* FunctionBuilder::load_global(asPWORD address, llvm::Type* type)
 {
 	Builder&           builder = m_context.compiler->builder();
 	llvm::IRBuilder<>& ir      = builder.ir();
-	CommonDefinitions& defs    = builder.definitions();
+	StandardTypes&     types   = builder.standard_types();
 
-	llvm::Value* global_address = ir.CreateIntToPtr(llvm::ConstantInt::get(defs.iptr, address), defs.pi32);
+	llvm::Value* global_address = ir.CreateIntToPtr(llvm::ConstantInt::get(types.iptr, address), types.pi32);
 	return ir.CreateLoad(type, global_address);
 }
 } // namespace asllvm::detail

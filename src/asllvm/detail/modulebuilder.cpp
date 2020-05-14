@@ -58,28 +58,29 @@ llvm::Function* ModuleBuilder::get_script_function(const asCScriptFunction& func
 
 llvm::FunctionType* ModuleBuilder::get_script_function_type(const asCScriptFunction& script_function)
 {
-	asCScriptEngine&   engine  = m_compiler.engine();
-	Builder&           builder = m_compiler.builder();
-	CommonDefinitions& defs    = builder.definitions();
+	asCScriptEngine& engine  = m_compiler.engine();
+	Builder&         builder = m_compiler.builder();
+	StandardTypes&   types   = builder.standard_types();
 
 	const auto parameter_count = script_function.parameterTypes.GetLength();
 
-	std::vector<llvm::Type*> types;
+	std::vector<llvm::Type*> parameter_types;
 
 	// TODO: make sret
 	if (script_function.DoesReturnOnStack())
 	{
-		types.push_back(builder.to_llvm_type(script_function.returnType));
+		parameter_types.push_back(builder.to_llvm_type(script_function.returnType));
 	}
 
 	if (asCObjectType* object_type = script_function.objectType; object_type != nullptr)
 	{
-		types.push_back(builder.to_llvm_type(engine.GetDataTypeFromTypeId(script_function.objectType->GetTypeId())));
+		parameter_types.push_back(
+			builder.to_llvm_type(engine.GetDataTypeFromTypeId(script_function.objectType->GetTypeId())));
 	}
 
 	for (std::size_t i = 0; i < parameter_count; ++i)
 	{
-		types.push_back(builder.to_llvm_type(script_function.parameterTypes[i]));
+		parameter_types.push_back(builder.to_llvm_type(script_function.parameterTypes[i]));
 	}
 
 	// If returning on stack, this means the return object will be written to a pointer passed as a param (using PSF).
@@ -89,7 +90,7 @@ llvm::FunctionType* ModuleBuilder::get_script_function_type(const asCScriptFunct
 
 	if (script_function.returnType.GetTokenType() == ttVoid || script_function.DoesReturnOnStack())
 	{
-		return_type = defs.tvoid;
+		return_type = types.tvoid;
 	}
 	else if (script_function.returnType.IsObject() && !script_function.returnType.IsObjectHandle())
 	{
@@ -100,7 +101,7 @@ llvm::FunctionType* ModuleBuilder::get_script_function_type(const asCScriptFunct
 		return_type = m_compiler.builder().to_llvm_type(script_function.returnType);
 	}
 
-	return llvm::FunctionType::get(return_type, types, false);
+	return llvm::FunctionType::get(return_type, parameter_types, false);
 }
 
 llvm::Function* ModuleBuilder::get_system_function(const asCScriptFunction& system_function)
@@ -137,18 +138,18 @@ llvm::Function* ModuleBuilder::get_system_function(const asCScriptFunction& syst
 
 llvm::FunctionType* ModuleBuilder::get_system_function_type(const asCScriptFunction& system_function)
 {
-	CommonDefinitions&          defs = m_compiler.builder().definitions();
-	asSSystemFunctionInterface& intf = *system_function.sysFuncIntf;
+	StandardTypes&              types = m_compiler.builder().standard_types();
+	asSSystemFunctionInterface& intf  = *system_function.sysFuncIntf;
 
-	llvm::Type* return_type = defs.tvoid;
+	llvm::Type* return_type = types.tvoid;
 
 	const std::size_t        param_count = system_function.GetParamCount();
-	std::vector<llvm::Type*> types;
+	std::vector<llvm::Type*> parameter_types;
 
 	if (intf.hostReturnInMemory)
 	{
 		// types[0]
-		types.push_back(m_compiler.builder().to_llvm_type(system_function.returnType)->getPointerTo());
+		parameter_types.push_back(m_compiler.builder().to_llvm_type(system_function.returnType)->getPointerTo());
 	}
 	else
 	{
@@ -157,7 +158,7 @@ llvm::FunctionType* ModuleBuilder::get_system_function_type(const asCScriptFunct
 
 	for (std::size_t i = 0; i < param_count; ++i)
 	{
-		types.push_back(m_compiler.builder().to_llvm_type(system_function.parameterTypes[i]));
+		parameter_types.push_back(m_compiler.builder().to_llvm_type(system_function.parameterTypes[i]));
 	}
 
 	switch (intf.callConv)
@@ -168,13 +169,13 @@ llvm::FunctionType* ModuleBuilder::get_system_function_type(const asCScriptFunct
 	case ICC_THISCALL:
 	case ICC_CDECL_OBJFIRST:
 	{
-		types.insert(types.begin(), defs.pvoid);
+		parameter_types.insert(parameter_types.begin(), types.pvoid);
 		break;
 	}
 
 	case ICC_CDECL_OBJLAST:
 	{
-		types.push_back(defs.pvoid);
+		parameter_types.push_back(types.pvoid);
 		break;
 	}
 
@@ -184,7 +185,7 @@ llvm::FunctionType* ModuleBuilder::get_system_function_type(const asCScriptFunct
 	default: asllvm_assert(false && "unsupported calling convention");
 	}
 
-	return llvm::FunctionType::get(return_type, types, false);
+	return llvm::FunctionType::get(return_type, parameter_types, false);
 }
 
 llvm::DIType* ModuleBuilder::get_debug_type(ModuleDebugInfo::AsTypeIdentifier script_type_id)
@@ -329,17 +330,17 @@ ModuleDebugInfo ModuleBuilder::setup_debug_info()
 
 Runtime ModuleBuilder::setup_runtime()
 {
-	CommonDefinitions& defs = m_compiler.builder().definitions();
+	StandardTypes& types = m_compiler.builder().standard_types();
 
 	Runtime funcs{};
 
 	const auto linkage = llvm::Function::ExternalLinkage;
 
 	{
-		std::array<llvm::Type*, 1> types{defs.iptr};
-		llvm::Type*                return_type = defs.pvoid;
+		std::array<llvm::Type*, 1> parameter_types{types.iptr};
+		llvm::Type*                return_type = types.pvoid;
 
-		llvm::FunctionType* function_type = llvm::FunctionType::get(return_type, types, false);
+		llvm::FunctionType* function_type = llvm::FunctionType::get(return_type, parameter_types, false);
 		llvm::Function*     function
 			= llvm::Function::Create(function_type, linkage, 0, "asllvm.private.alloc", m_llvm_module.get());
 
@@ -352,10 +353,10 @@ Runtime ModuleBuilder::setup_runtime()
 	}
 
 	{
-		std::array<llvm::Type*, 1> types{defs.pvoid};
-		llvm::Type*                return_type = defs.tvoid;
+		std::array<llvm::Type*, 1> parameter_types{types.pvoid};
+		llvm::Type*                return_type = types.tvoid;
 
-		llvm::FunctionType* function_type = llvm::FunctionType::get(return_type, types, false);
+		llvm::FunctionType* function_type = llvm::FunctionType::get(return_type, parameter_types, false);
 		llvm::Function*     function
 			= llvm::Function::Create(function_type, linkage, 0, "asllvm.private.free", m_llvm_module.get());
 
@@ -363,9 +364,9 @@ Runtime ModuleBuilder::setup_runtime()
 	}
 
 	{
-		std::array<llvm::Type*, 1> types{defs.pvoid};
+		std::array<llvm::Type*, 1> parameter_types{types.pvoid};
 
-		llvm::FunctionType* function_type = llvm::FunctionType::get(defs.pvoid, types, false);
+		llvm::FunctionType* function_type = llvm::FunctionType::get(types.pvoid, parameter_types, false);
 		llvm::Function*     function      = llvm::Function::Create(
 			function_type, linkage, 0, "asllvm.private.new_script_object", m_llvm_module.get());
 
@@ -378,9 +379,9 @@ Runtime ModuleBuilder::setup_runtime()
 	}
 
 	{
-		std::array<llvm::Type*, 2> types{defs.pvoid, defs.pvoid};
+		std::array<llvm::Type*, 2> parameter_types{types.pvoid, types.pvoid};
 
-		llvm::FunctionType* function_type = llvm::FunctionType::get(defs.pvoid, types, false);
+		llvm::FunctionType* function_type = llvm::FunctionType::get(types.pvoid, parameter_types, false);
 		llvm::Function*     function      = llvm::Function::Create(
 			function_type, linkage, 0, "asllvm.private.script_vtable_lookup", m_llvm_module.get());
 
@@ -388,9 +389,9 @@ Runtime ModuleBuilder::setup_runtime()
 	}
 
 	{
-		std::array<llvm::Type*, 2> types{defs.pvoid, defs.pvoid};
+		std::array<llvm::Type*, 2> parameter_types{types.pvoid, types.pvoid};
 
-		llvm::FunctionType* function_type = llvm::FunctionType::get(defs.pvoid, types, false);
+		llvm::FunctionType* function_type = llvm::FunctionType::get(types.pvoid, parameter_types, false);
 		llvm::Function*     function      = llvm::Function::Create(
 			function_type, linkage, 0, "asllvm.private.system_vtable_lookup", m_llvm_module.get());
 
@@ -398,9 +399,9 @@ Runtime ModuleBuilder::setup_runtime()
 	}
 
 	{
-		std::array<llvm::Type*, 2> types{defs.pvoid, defs.pvoid};
+		std::array<llvm::Type*, 2> parameter_types{types.pvoid, types.pvoid};
 
-		llvm::FunctionType* function_type = llvm::FunctionType::get(defs.tvoid, types, false);
+		llvm::FunctionType* function_type = llvm::FunctionType::get(types.tvoid, parameter_types, false);
 		llvm::Function*     function      = llvm::Function::Create(
 			function_type, linkage, 0, "asllvm.private.call_object_method", m_llvm_module.get());
 

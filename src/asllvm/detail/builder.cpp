@@ -1,12 +1,12 @@
 #include <asllvm/detail/builder.hpp>
 
+#include <angelscript.h>
 #include <asllvm/detail/asinternalheaders.hpp>
 #include <asllvm/detail/assert.hpp>
 #include <asllvm/detail/jitcompiler.hpp>
 #include <asllvm/detail/llvmglobals.hpp>
 #include <asllvm/detail/modulecommon.hpp>
 #include <asllvm/detail/runtime.hpp>
-#include <angelscript.h>
 #include <fmt/core.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/IPO.h>
@@ -19,7 +19,7 @@ Builder::Builder(JitCompiler& compiler) :
 	m_context{setup_context()},
 	m_pass_manager{setup_pass_manager()},
 	m_ir_builder{*m_context.getContext()},
-	m_defs{setup_common_definitions()}
+	m_types{setup_standard_types()}
 {
 	llvm::FastMathFlags fast_fp;
 
@@ -39,18 +39,18 @@ llvm::Type* Builder::to_llvm_type(const asCDataType& type) const
 
 		switch (type.GetTokenType())
 		{
-		case ttVoid: base_type = m_defs.tvoid; break;
-		case ttBool: base_type = m_defs.i1; break;
+		case ttVoid: base_type = m_types.tvoid; break;
+		case ttBool: base_type = m_types.i1; break;
 		case ttInt8:
-		case ttUInt8: base_type = m_defs.i8; break;
+		case ttUInt8: base_type = m_types.i8; break;
 		case ttInt16:
-		case ttUInt16: base_type = m_defs.i16; break;
+		case ttUInt16: base_type = m_types.i16; break;
 		case ttInt:
-		case ttUInt: base_type = m_defs.i32; break;
+		case ttUInt: base_type = m_types.i32; break;
 		case ttInt64:
-		case ttUInt64: base_type = m_defs.i64; break;
-		case ttFloat: base_type = m_defs.f32; break;
-		case ttDouble: base_type = m_defs.f64; break;
+		case ttUInt64: base_type = m_types.i64; break;
+		case ttFloat: base_type = m_types.f32; break;
+		case ttDouble: base_type = m_types.f64; break;
 		default: asllvm_assert(false && "provided primitive type not supported");
 		}
 
@@ -73,7 +73,7 @@ llvm::Type* Builder::to_llvm_type(const asCDataType& type) const
 			return it->second->getPointerTo();
 		}
 
-		std::array<llvm::Type*, 1> types{{llvm::ArrayType::get(m_defs.i8, type.GetSizeInMemoryBytes())}};
+		std::array<llvm::Type*, 1> types{{llvm::ArrayType::get(m_types.i8, type.GetSizeInMemoryBytes())}};
 
 		llvm::StructType* struct_type = llvm::StructType::create(types, object_type.GetName());
 		m_object_types.emplace(type_id, struct_type);
@@ -86,48 +86,48 @@ llvm::Type* Builder::to_llvm_type(const asCDataType& type) const
 	asllvm_assert(false && "type not supported");
 }
 
-CommonDefinitions Builder::setup_common_definitions()
+StandardTypes Builder::setup_standard_types()
 {
-	CommonDefinitions defs{};
+	StandardTypes types{};
 
 	auto  context_lock = m_context.getLock();
 	auto& context      = *m_context.getContext();
 
-	defs.tvoid = llvm::Type::getVoidTy(context);
-	defs.i1    = llvm::Type::getInt1Ty(context);
-	defs.i8    = llvm::Type::getInt8Ty(context);
-	defs.i16   = llvm::Type::getInt16Ty(context);
-	defs.i32   = llvm::Type::getInt32Ty(context);
-	defs.i64   = llvm::Type::getInt64Ty(context);
-	defs.iptr  = llvm::Type::getInt64Ty(context); // TODO: determine pointer type from target machine
-	defs.f32   = llvm::Type::getFloatTy(context);
-	defs.f64   = llvm::Type::getDoubleTy(context);
+	types.tvoid = llvm::Type::getVoidTy(context);
+	types.i1    = llvm::Type::getInt1Ty(context);
+	types.i8    = llvm::Type::getInt8Ty(context);
+	types.i16   = llvm::Type::getInt16Ty(context);
+	types.i32   = llvm::Type::getInt32Ty(context);
+	types.i64   = llvm::Type::getInt64Ty(context);
+	types.iptr  = llvm::Type::getInt64Ty(context); // TODO: determine pointer type from target machine
+	types.f32   = llvm::Type::getFloatTy(context);
+	types.f64   = llvm::Type::getDoubleTy(context);
 
-	defs.pvoid = defs.i8->getPointerTo();
-	defs.pi8   = defs.i8->getPointerTo();
-	defs.pi16  = defs.i16->getPointerTo();
-	defs.pi32  = defs.i32->getPointerTo();
-	defs.pi64  = defs.i64->getPointerTo();
-	defs.piptr = defs.iptr->getPointerTo();
-	defs.pf32  = defs.f32->getPointerTo();
-	defs.pf64  = defs.f64->getPointerTo();
+	types.pvoid = types.i8->getPointerTo();
+	types.pi8   = types.i8->getPointerTo();
+	types.pi16  = types.i16->getPointerTo();
+	types.pi32  = types.i32->getPointerTo();
+	types.pi64  = types.i64->getPointerTo();
+	types.piptr = types.iptr->getPointerTo();
+	types.pf32  = types.f32->getPointerTo();
+	types.pf64  = types.f64->getPointerTo();
 
 	{
-		std::array<llvm::Type*, 8> types{
-			defs.pi32,  // programPointer
-			defs.pi32,  // stackFramePointer
-			defs.pi32,  // stackPointer
-			defs.iptr,  // valueRegister
-			defs.pvoid, // objectRegister
-			defs.pvoid, // objectType - todo asITypeInfo
-			defs.i1,    // doProcessSuspend
-			defs.pvoid, // ctx - todo asIScriptContext
-		};
-
-		defs.vm_registers = llvm::StructType::create(types, "asSVMRegisters");
+		types.vm_registers = llvm::StructType::create(
+			std::array<llvm::Type*, 8>{
+				types.pi32,  // programPointer
+				types.pi32,  // stackFramePointer
+				types.pi32,  // stackPointer
+				types.iptr,  // valueRegister
+				types.pvoid, // objectRegister
+				types.pvoid, // objectType - todo asITypeInfo
+				types.i1,    // doProcessSuspend
+				types.pvoid, // ctx - todo asIScriptContext
+			},
+			"asSVMRegisters");
 	}
 
-	return defs;
+	return types;
 }
 
 std::unique_ptr<llvm::LLVMContext> Builder::setup_context() { return std::make_unique<llvm::LLVMContext>(); }

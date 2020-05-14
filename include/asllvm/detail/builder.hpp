@@ -1,8 +1,8 @@
 #pragma once
 
+#include <angelscript.h>
 #include <asllvm/detail/asinternalheaders.hpp>
 #include <asllvm/detail/fwd.hpp>
-#include <angelscript.h>
 #include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
@@ -12,7 +12,7 @@
 
 namespace asllvm::detail
 {
-struct CommonDefinitions
+struct StandardTypes
 {
 	//! \brief asSVMRegisters type.
 	llvm::Type* vm_registers;
@@ -34,14 +34,14 @@ class Builder
 	Builder(JitCompiler& compiler);
 
 	llvm::IRBuilder<>&            ir() { return m_ir_builder; }
-	CommonDefinitions&            definitions() { return m_defs; }
+	StandardTypes&                standard_types() { return m_types; }
 	llvm::legacy::PassManager&    optimizer() { return m_pass_manager; }
 	llvm::orc::ThreadSafeContext& llvm_context() { return m_context; }
 
 	llvm::Type* to_llvm_type(const asCDataType& type) const;
 
 	private:
-	CommonDefinitions setup_common_definitions();
+	StandardTypes setup_standard_types();
 
 	std::unique_ptr<llvm::LLVMContext> setup_context();
 	llvm::legacy::PassManager          setup_pass_manager();
@@ -52,7 +52,7 @@ class Builder
 	llvm::legacy::PassManager    m_pass_manager;
 	llvm::IRBuilder<>            m_ir_builder;
 
-	CommonDefinitions m_defs;
+	StandardTypes m_types;
 
 	mutable std::map<int, llvm::StructType*> m_object_types;
 };
