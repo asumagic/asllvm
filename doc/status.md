@@ -36,7 +36,7 @@ This part is fairly incomplete, but provided to give a general idea:
   - [ ] Function pointers
 - [x] Application interface
   - [x] Factories
-  - [ ] List constructors
+  - [x] List constructors
   - [x] Object types
     - [x] Allocation
     - [x] Pass by value
