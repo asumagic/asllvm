@@ -328,21 +328,20 @@ ModuleDebugInfo ModuleBuilder::setup_debug_info()
 	return debug_info;
 }
 
-Runtime ModuleBuilder::setup_runtime()
+StandardFunctions ModuleBuilder::setup_runtime()
 {
 	StandardTypes& types = m_compiler.builder().standard_types();
 
-	Runtime funcs{};
+	StandardFunctions funcs{};
 
 	const auto linkage = llvm::Function::ExternalLinkage;
 
 	{
-		std::array<llvm::Type*, 1> parameter_types{types.iptr};
-		llvm::Type*                return_type = types.pvoid;
-
-		llvm::FunctionType* function_type = llvm::FunctionType::get(return_type, parameter_types, false);
-		llvm::Function*     function
-			= llvm::Function::Create(function_type, linkage, 0, "asllvm.private.alloc", m_llvm_module.get());
+		llvm::Function* function = llvm::Function::Create(
+			llvm::FunctionType::get(types.pvoid, {types.iptr}, false),
+			linkage,
+			"asllvm.private.alloc",
+			m_llvm_module.get());
 
 		// The object we created is unique as it was dynamically allocated
 		function->addAttribute(0, llvm::Attribute::NoAlias);
@@ -353,22 +352,21 @@ Runtime ModuleBuilder::setup_runtime()
 	}
 
 	{
-		std::array<llvm::Type*, 1> parameter_types{types.pvoid};
-		llvm::Type*                return_type = types.tvoid;
-
-		llvm::FunctionType* function_type = llvm::FunctionType::get(return_type, parameter_types, false);
-		llvm::Function*     function
-			= llvm::Function::Create(function_type, linkage, 0, "asllvm.private.free", m_llvm_module.get());
+		llvm::Function* function = llvm::Function::Create(
+			llvm::FunctionType::get(types.tvoid, {types.pvoid}, false),
+			linkage,
+			"asllvm.private.free",
+			m_llvm_module.get());
 
 		funcs.free = function;
 	}
 
 	{
-		std::array<llvm::Type*, 1> parameter_types{types.pvoid};
-
-		llvm::FunctionType* function_type = llvm::FunctionType::get(types.pvoid, parameter_types, false);
-		llvm::Function*     function      = llvm::Function::Create(
-			function_type, linkage, 0, "asllvm.private.new_script_object", m_llvm_module.get());
+		llvm::Function* function = llvm::Function::Create(
+			llvm::FunctionType::get(types.pvoid, {types.pvoid}, false),
+			linkage,
+			"asllvm.private.new_script_object",
+			m_llvm_module.get());
 
 		function->setOnlyAccessesInaccessibleMemOrArgMem();
 
@@ -379,31 +377,32 @@ Runtime ModuleBuilder::setup_runtime()
 	}
 
 	{
-		std::array<llvm::Type*, 2> parameter_types{types.pvoid, types.pvoid};
-
-		llvm::FunctionType* function_type = llvm::FunctionType::get(types.pvoid, parameter_types, false);
-		llvm::Function*     function      = llvm::Function::Create(
-			function_type, linkage, 0, "asllvm.private.script_vtable_lookup", m_llvm_module.get());
+		llvm::Function* function = llvm::Function::Create(
+			llvm::FunctionType::get(types.pvoid, {types.pvoid, types.pvoid}, false),
+			linkage,
+			"asllvm.private.script_vtable_lookup",
+			m_llvm_module.get());
 
 		funcs.script_vtable_lookup = function;
 	}
 
 	{
-		std::array<llvm::Type*, 2> parameter_types{types.pvoid, types.pvoid};
-
-		llvm::FunctionType* function_type = llvm::FunctionType::get(types.pvoid, parameter_types, false);
-		llvm::Function*     function      = llvm::Function::Create(
-			function_type, linkage, 0, "asllvm.private.system_vtable_lookup", m_llvm_module.get());
+		llvm::Function* function = llvm::Function::Create(
+			llvm::FunctionType::get(types.pvoid, {types.pvoid, types.pvoid}, false),
+			linkage,
+			0,
+			"asllvm.private.system_vtable_lookup",
+			m_llvm_module.get());
 
 		funcs.system_vtable_lookup = function;
 	}
 
 	{
-		std::array<llvm::Type*, 2> parameter_types{types.pvoid, types.pvoid};
-
-		llvm::FunctionType* function_type = llvm::FunctionType::get(types.tvoid, parameter_types, false);
-		llvm::Function*     function      = llvm::Function::Create(
-			function_type, linkage, 0, "asllvm.private.call_object_method", m_llvm_module.get());
+		llvm::Function* function = llvm::Function::Create(
+			llvm::FunctionType::get(types.tvoid, {types.pvoid, types.pvoid}, false),
+			linkage,
+			"asllvm.private.call_object_method",
+			m_llvm_module.get());
 
 		funcs.call_object_method = function;
 	}

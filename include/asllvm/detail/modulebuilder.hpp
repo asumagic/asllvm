@@ -5,9 +5,9 @@
 //       this is included in jit.hpp, we do not want LLVM stuff included there.
 #include <llvm/IR/Module.h>
 
+#include <angelscript.h>
 #include <asllvm/detail/asinternalheaders.hpp>
 #include <asllvm/detail/fwd.hpp>
-#include <angelscript.h>
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/PassManager.h>
 #include <map>
@@ -18,7 +18,7 @@
 
 namespace asllvm::detail
 {
-struct Runtime
+struct StandardFunctions
 {
 	llvm::FunctionCallee alloc, free, new_script_object, script_vtable_lookup, system_vtable_lookup, call_object_method;
 };
@@ -63,8 +63,8 @@ class ModuleBuilder
 	void build();
 	void link();
 
-	llvm::Module& module() { return *m_llvm_module; }
-	Runtime&      runtime() { return m_internal_functions; }
+	llvm::Module&      module() { return *m_llvm_module; }
+	StandardFunctions& standard_functions() { return m_internal_functions; }
 
 	llvm::DIBuilder& di_builder() { return *m_di_builder; }
 	ModuleDebugInfo& debug_info() { return m_debug_info; }
@@ -74,8 +74,8 @@ class ModuleBuilder
 	private:
 	bool is_exposed_directly(asIScriptFunction& function) const;
 
-	ModuleDebugInfo setup_debug_info();
-	Runtime         setup_runtime();
+	ModuleDebugInfo   setup_debug_info();
+	StandardFunctions setup_runtime();
 
 	void build_functions();
 	void link_symbols();
@@ -89,7 +89,7 @@ class ModuleBuilder
 	std::vector<JitSymbol>           m_jit_functions;
 	std::map<int, llvm::Function*>   m_script_functions;
 	std::map<int, llvm::Function*>   m_system_functions;
-	Runtime                          m_internal_functions;
+	StandardFunctions                m_internal_functions;
 };
 
 } // namespace asllvm::detail

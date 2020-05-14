@@ -241,7 +241,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	Builder&           builder = m_context.compiler->builder();
 	llvm::IRBuilder<>& ir      = builder.ir();
 	StandardTypes&     types   = builder.standard_types();
-	Runtime&           rt      = m_context.module_builder->runtime();
+	StandardFunctions& funcs   = m_context.module_builder->standard_functions();
 
 	ir.SetCurrentDebugLocation(get_debug_location(m_context, ins.offset, m_context.llvm_function->getSubprogram()));
 
@@ -541,7 +541,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 				{ir.CreateIntToPtr(llvm::ConstantInt::get(types.iptr, reinterpret_cast<asPWORD>(&type)), types.pvoid)}};
 
 			llvm::Value* object_memory_pointer
-				= ir.CreateCall(rt.new_script_object, args, fmt::format("dynamic.{}", type.GetName()));
+				= ir.CreateCall(funcs.new_script_object, args, fmt::format("dynamic.{}", type.GetName()));
 
 			// Constructor
 			asCScriptFunction& constructor = *static_cast<asCScriptEngine&>(engine).scriptFunctions[constructor_id];
@@ -566,7 +566,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 			};
 
 			llvm::Value* object_memory_pointer
-				= ir.CreateCall(rt.alloc, alloc_args, fmt::format("heap.{}", type.GetName()));
+				= ir.CreateCall(funcs.alloc, alloc_args, fmt::format("heap.{}", type.GetName()));
 
 			if (constructor_id != 0)
 			{
@@ -619,7 +619,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 			{
 				std::array<llvm::Value*, 1> args{object_pointer};
-				ir.CreateCall(rt.free, args);
+				ir.CreateCall(funcs.free, args);
 			}
 		}
 
@@ -692,7 +692,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 							types.iptr, reinterpret_cast<asPWORD>(engine.GetScriptFunction(object_type.beh.addref))),
 						types.pvoid)};
 
-				ir.CreateCall(rt.call_object_method, args);
+				ir.CreateCall(funcs.call_object_method, args);
 			}
 		}
 
@@ -1148,7 +1148,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 						types.iptr, reinterpret_cast<asPWORD>(engine.GetScriptFunction(object_type.beh.addref))),
 					types.pvoid)};
 
-			ir.CreateCall(rt.call_object_method, args);
+			ir.CreateCall(funcs.call_object_method, args);
 		}
 
 		ir.CreateStore(s, destination);
@@ -1181,7 +1181,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		const auto bytes = ins.arg_dword();
 
 		std::array<llvm::Value*, 1> args{llvm::ConstantInt::get(types.iptr, bytes)};
-		m_stack.store(ins.arg_sword0(), ir.CreateCall(rt.alloc, args, "listMemory"));
+		m_stack.store(ins.arg_sword0(), ir.CreateCall(funcs.alloc, args, "listMemory"));
 
 		break;
 	}
@@ -1509,7 +1509,7 @@ void FunctionBuilder::emit_system_call(const asCScriptFunction& function)
 	Builder&                    builder = m_context.compiler->builder();
 	llvm::IRBuilder<>&          ir      = builder.ir();
 	StandardTypes&              types   = builder.standard_types();
-	Runtime&                    rt      = m_context.module_builder->runtime();
+	StandardFunctions&          funcs   = m_context.module_builder->standard_functions();
 	asSSystemFunctionInterface& intf    = *function.sysFuncIntf;
 
 	llvm::FunctionType* callee_type = m_context.module_builder->get_system_function_type(function);
@@ -1631,7 +1631,8 @@ void FunctionBuilder::emit_system_call(const asCScriptFunction& function)
 			object,
 			ir.CreateIntToPtr(llvm::ConstantInt::get(types.iptr, reinterpret_cast<asPWORD>(intf.func)), types.pvoid)};
 
-		callee = ir.CreatePointerCast(ir.CreateCall(rt.system_vtable_lookup, lookup_args), callee_type->getPointerTo());
+		callee
+			= ir.CreatePointerCast(ir.CreateCall(funcs.system_vtable_lookup, lookup_args), callee_type->getPointerTo());
 
 		break;
 	}
@@ -1806,13 +1807,13 @@ void FunctionBuilder::emit_object_method_call(const asCScriptFunction& function,
 	Builder&           builder = m_context.compiler->builder();
 	llvm::IRBuilder<>& ir      = builder.ir();
 	StandardTypes&     types   = builder.standard_types();
-	Runtime&           rt      = m_context.module_builder->runtime();
+	StandardFunctions& funcs   = m_context.module_builder->standard_functions();
 
 	std::array<llvm::Value*, 2> args{
 		object,
 		ir.CreateIntToPtr(llvm::ConstantInt::get(types.iptr, reinterpret_cast<asPWORD>(&function)), types.pvoid)};
 
-	ir.CreateCall(rt.call_object_method, args);
+	ir.CreateCall(funcs.call_object_method, args);
 }
 
 void FunctionBuilder::emit_conditional_branch(BytecodeInstruction ins, llvm::CmpInst::Predicate predicate)
@@ -1852,7 +1853,7 @@ FunctionBuilder::resolve_virtual_script_function(llvm::Value* script_object, con
 			types.pvoid,
 			"virtual_script_function");
 
-		llvm::FunctionCallee        lookup = m_context.module_builder->runtime().script_vtable_lookup;
+		llvm::FunctionCallee        lookup = m_context.module_builder->standard_functions().script_vtable_lookup;
 		std::array<llvm::Value*, 2> lookup_args{{script_object, function_value}};
 
 		return ir.CreatePointerCast(
