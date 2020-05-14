@@ -1,10 +1,10 @@
 #pragma once
 
+#include <angelscript.h>
 #include <asllvm/detail/asinternalheaders.hpp>
 #include <asllvm/detail/bytecodeinstruction.hpp>
 #include <asllvm/detail/codegen/stackframe.hpp>
 #include <asllvm/detail/fwd.hpp>
-#include <angelscript.h>
 #include <functional>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Function.h>
@@ -36,11 +36,7 @@ class FunctionBuilder
 
 	public:
 	//! \brief Constructor for FunctionBuilder, usually called by ModuleBuilder::create_function_builder().
-	FunctionBuilder(
-		JitCompiler&       compiler,
-		ModuleBuilder&     module_builder,
-		asCScriptFunction& script_function,
-		llvm::Function*    llvm_function);
+	FunctionBuilder(codegen::FunctionContext context);
 
 	//! \brief Type used by AngelScript for local variable identifiers.
 	//! \details

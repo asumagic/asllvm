@@ -1,12 +1,12 @@
 #include <asllvm/detail/modulebuilder.hpp>
 
+#include <array>
 #include <asllvm/detail/assert.hpp>
 #include <asllvm/detail/functionbuilder.hpp>
 #include <asllvm/detail/jitcompiler.hpp>
 #include <asllvm/detail/llvmglobals.hpp>
 #include <asllvm/detail/modulecommon.hpp>
 #include <asllvm/detail/runtime.hpp>
-#include <array>
 #include <fmt/core.h>
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
 #include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
@@ -428,11 +428,13 @@ void ModuleBuilder::build_functions()
 			continue;
 		}
 
-		FunctionBuilder builder{
-			m_compiler,
-			*this,
-			*static_cast<asCScriptFunction*>(pending.function),
-			get_script_function(*static_cast<asCScriptFunction*>(pending.function))};
+		codegen::FunctionContext context;
+		context.compiler        = &m_compiler;
+		context.module_builder  = this;
+		context.script_function = static_cast<asCScriptFunction*>(pending.function);
+		context.llvm_function   = get_script_function(*static_cast<asCScriptFunction*>(pending.function));
+
+		FunctionBuilder builder{context};
 
 		asUINT   length;
 		asDWORD* bytecode = pending.function->GetByteCode(&length);

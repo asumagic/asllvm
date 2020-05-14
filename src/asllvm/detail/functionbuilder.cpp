@@ -13,13 +13,7 @@
 
 namespace asllvm::detail
 {
-FunctionBuilder::FunctionBuilder(
-	JitCompiler&       compiler,
-	ModuleBuilder&     module_builder,
-	asCScriptFunction& script_function,
-	llvm::Function*    llvm_function) :
-	m_context{&compiler, &module_builder, llvm_function, &script_function}, m_stack{m_context}
-{}
+FunctionBuilder::FunctionBuilder(codegen::FunctionContext context) : m_context{context}, m_stack{m_context} {}
 
 llvm::Function* FunctionBuilder::translate_bytecode(asDWORD* bytecode, asUINT length)
 {
