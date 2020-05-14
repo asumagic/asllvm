@@ -4,9 +4,9 @@
 
 namespace asllvm
 {
-static void delete_compiler(detail::JitCompiler* ptr) { delete ptr; }
-
-JitInterface::JitInterface(JitConfig flags) : m_compiler{new detail::JitCompiler{flags}, delete_compiler} {}
+JitInterface::JitInterface(JitConfig flags) :
+	m_compiler{new detail::JitCompiler{flags}, [](detail::JitCompiler* ptr) { delete ptr; }}
+{}
 
 int JitInterface::CompileFunction(asIScriptFunction* function, asJITFunction* output)
 {
