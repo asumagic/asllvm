@@ -1,6 +1,6 @@
 #pragma once
 
-#include <angelscript-llvm/detail/codegen/functioncontext.hpp>
+#include <asllvm/detail/codegen/functioncontext.hpp>
 #include <llvm/IR/DebugInfoMetadata.h>
 
 namespace asllvm::detail::codegen

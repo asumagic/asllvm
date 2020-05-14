@@ -1,9 +1,9 @@
 #pragma once
 
-#include <angelscript-llvm/detail/asinternalheaders.hpp>
-#include <angelscript-llvm/detail/bytecodeinstruction.hpp>
-#include <angelscript-llvm/detail/codegen/stackframe.hpp>
-#include <angelscript-llvm/detail/fwd.hpp>
+#include <asllvm/detail/asinternalheaders.hpp>
+#include <asllvm/detail/bytecodeinstruction.hpp>
+#include <asllvm/detail/codegen/stackframe.hpp>
+#include <asllvm/detail/fwd.hpp>
 #include <angelscript.h>
 #include <functional>
 #include <llvm/IR/BasicBlock.h>

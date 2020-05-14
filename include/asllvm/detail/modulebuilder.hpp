@@ -5,8 +5,8 @@
 //       this is included in jit.hpp, we do not want LLVM stuff included there.
 #include <llvm/IR/Module.h>
 
-#include <angelscript-llvm/detail/asinternalheaders.hpp>
-#include <angelscript-llvm/detail/fwd.hpp>
+#include <asllvm/detail/asinternalheaders.hpp>
+#include <asllvm/detail/fwd.hpp>
 #include <angelscript.h>
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/PassManager.h>

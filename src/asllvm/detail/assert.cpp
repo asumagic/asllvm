@@ -1,4 +1,4 @@
-#include <angelscript-llvm/detail/assert.hpp>
+#include <asllvm/detail/assert.hpp>
 
 #include <cstdlib>
 #include <fmt/core.h>

@@ -1,10 +1,10 @@
-#include <angelscript-llvm/detail/codegen/stackframe.hpp>
+#include <asllvm/detail/codegen/stackframe.hpp>
 
-#include <angelscript-llvm/detail/assert.hpp>
-#include <angelscript-llvm/detail/builder.hpp>
-#include <angelscript-llvm/detail/codegen/debuginfo.hpp>
-#include <angelscript-llvm/detail/jitcompiler.hpp>
-#include <angelscript-llvm/detail/modulebuilder.hpp>
+#include <asllvm/detail/assert.hpp>
+#include <asllvm/detail/builder.hpp>
+#include <asllvm/detail/codegen/debuginfo.hpp>
+#include <asllvm/detail/jitcompiler.hpp>
+#include <asllvm/detail/modulebuilder.hpp>
 #include <array>
 #include <fmt/core.h>
 #include <llvm/IR/DIBuilder.h>

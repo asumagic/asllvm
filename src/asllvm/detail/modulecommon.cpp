@@ -1,6 +1,6 @@
-#include <angelscript-llvm/detail/modulecommon.hpp>
+#include <asllvm/detail/modulecommon.hpp>
 
-#include <angelscript-llvm/detail/assert.hpp>
+#include <asllvm/detail/assert.hpp>
 #include <fmt/core.h>
 
 namespace asllvm::detail

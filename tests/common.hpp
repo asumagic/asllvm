@@ -2,8 +2,8 @@
 
 #define CATCH_CONFIG_ENABLE_BENCHMARKING
 
-#include <angelscript-llvm/detail/assert.hpp>
-#include <angelscript-llvm/jit.hpp>
+#include <asllvm/detail/assert.hpp>
+#include <asllvm/jit.hpp>
 #include <angelscript.h>
 #include <catch2/catch.hpp>
 #include <sstream>

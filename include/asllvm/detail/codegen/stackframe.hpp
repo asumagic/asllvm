@@ -1,7 +1,7 @@
 #pragma once
 
-#include <angelscript-llvm/detail/asinternalheaders.hpp>
-#include <angelscript-llvm/detail/codegen/functioncontext.hpp>
+#include <asllvm/detail/asinternalheaders.hpp>
+#include <asllvm/detail/codegen/functioncontext.hpp>
 #include <llvm/IR/Instructions.h>
 #include <map>
 

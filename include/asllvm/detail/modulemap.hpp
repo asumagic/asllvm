@@ -1,7 +1,7 @@
 #pragma once
 
-#include <angelscript-llvm/detail/fwd.hpp>
-#include <angelscript-llvm/detail/modulebuilder.hpp>
+#include <asllvm/detail/fwd.hpp>
+#include <asllvm/detail/modulebuilder.hpp>
 
 #include <memory>
 #include <string>

@@ -1,6 +1,6 @@
-#include <angelscript-llvm/detail/runtime.hpp>
+#include <asllvm/detail/runtime.hpp>
 
-#include <angelscript-llvm/detail/modulecommon.hpp>
+#include <asllvm/detail/modulecommon.hpp>
 
 namespace asllvm::detail::runtime
 {

@@ -1,11 +1,11 @@
-#include <angelscript-llvm/detail/jitcompiler.hpp>
+#include <asllvm/detail/jitcompiler.hpp>
 
-#include <angelscript-llvm/detail/assert.hpp>
-#include <angelscript-llvm/detail/builder.hpp>
-#include <angelscript-llvm/detail/functionbuilder.hpp>
-#include <angelscript-llvm/detail/llvmglobals.hpp>
-#include <angelscript-llvm/detail/modulebuilder.hpp>
-#include <angelscript-llvm/detail/modulecommon.hpp>
+#include <asllvm/detail/assert.hpp>
+#include <asllvm/detail/builder.hpp>
+#include <asllvm/detail/functionbuilder.hpp>
+#include <asllvm/detail/llvmglobals.hpp>
+#include <asllvm/detail/modulebuilder.hpp>
+#include <asllvm/detail/modulecommon.hpp>
 #include <fmt/core.h>
 #include <llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h>
 #include <llvm/Support/TargetSelect.h>

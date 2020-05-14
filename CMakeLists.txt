@@ -17,19 +17,19 @@ if(DEFINED ENABLE_TESTING)
 endif()
 
 add_library(angelscript-llvm
-    src/angelscript-llvm/jit.cpp
-    src/angelscript-llvm/detail/ashelper.cpp
-    src/angelscript-llvm/detail/assert.cpp
-    src/angelscript-llvm/detail/builder.cpp
-    src/angelscript-llvm/detail/functionbuilder.cpp
-    src/angelscript-llvm/detail/jitcompiler.cpp
-    src/angelscript-llvm/detail/llvmglobals.cpp
-    src/angelscript-llvm/detail/modulebuilder.cpp
-    src/angelscript-llvm/detail/modulecommon.cpp
-    src/angelscript-llvm/detail/modulemap.cpp
-    src/angelscript-llvm/detail/runtime.cpp
-    src/angelscript-llvm/detail/codegen/debuginfo.cpp
-    src/angelscript-llvm/detail/codegen/stackframe.cpp
+    src/asllvm/jit.cpp
+    src/asllvm/detail/ashelper.cpp
+    src/asllvm/detail/assert.cpp
+    src/asllvm/detail/builder.cpp
+    src/asllvm/detail/functionbuilder.cpp
+    src/asllvm/detail/jitcompiler.cpp
+    src/asllvm/detail/llvmglobals.cpp
+    src/asllvm/detail/modulebuilder.cpp
+    src/asllvm/detail/modulecommon.cpp
+    src/asllvm/detail/modulemap.cpp
+    src/asllvm/detail/runtime.cpp
+    src/asllvm/detail/codegen/debuginfo.cpp
+    src/asllvm/detail/codegen/stackframe.cpp
 )
 
 if(NOT DEFINED ANGELSCRIPT_SDK_DIRECTORY)

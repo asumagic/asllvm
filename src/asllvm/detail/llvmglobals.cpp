@@ -1,4 +1,4 @@
-#include <angelscript-llvm/detail/llvmglobals.hpp>
+#include <asllvm/detail/llvmglobals.hpp>
 
 namespace asllvm::detail
 {

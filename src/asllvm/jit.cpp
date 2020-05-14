@@ -1,6 +1,6 @@
-#include <angelscript-llvm/jit.hpp>
+#include <asllvm/jit.hpp>
 
-#include <angelscript-llvm/detail/jitcompiler.hpp>
+#include <asllvm/detail/jitcompiler.hpp>
 
 namespace asllvm
 {

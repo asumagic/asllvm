@@ -1,4 +1,4 @@
-#include <angelscript-llvm/detail/ashelper.hpp>
+#include <asllvm/detail/ashelper.hpp>
 
 #include <string>
 

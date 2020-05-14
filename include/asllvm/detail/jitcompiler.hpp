@@ -1,8 +1,8 @@
 #pragma once
 
-#include <angelscript-llvm/config.hpp>
-#include <angelscript-llvm/detail/builder.hpp>
-#include <angelscript-llvm/detail/modulemap.hpp>
+#include <asllvm/config.hpp>
+#include <asllvm/detail/builder.hpp>
+#include <asllvm/detail/modulemap.hpp>
 #include <angelscript.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <angelscript-llvm/detail/asinternalheaders.hpp>
+#include <asllvm/detail/asinternalheaders.hpp>
 
 namespace asllvm::detail::runtime
 {

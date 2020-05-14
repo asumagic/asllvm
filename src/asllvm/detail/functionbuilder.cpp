@@ -1,14 +1,14 @@
-#include <angelscript-llvm/detail/functionbuilder.hpp>
+#include <asllvm/detail/functionbuilder.hpp>
 
-#include <angelscript-llvm/detail/ashelper.hpp>
-#include <angelscript-llvm/detail/asinternalheaders.hpp>
-#include <angelscript-llvm/detail/assert.hpp>
-#include <angelscript-llvm/detail/codegen/debuginfo.hpp>
-#include <angelscript-llvm/detail/jitcompiler.hpp>
-#include <angelscript-llvm/detail/llvmglobals.hpp>
-#include <angelscript-llvm/detail/modulebuilder.hpp>
-#include <angelscript-llvm/detail/modulecommon.hpp>
 #include <array>
+#include <asllvm/detail/ashelper.hpp>
+#include <asllvm/detail/asinternalheaders.hpp>
+#include <asllvm/detail/assert.hpp>
+#include <asllvm/detail/codegen/debuginfo.hpp>
+#include <asllvm/detail/jitcompiler.hpp>
+#include <asllvm/detail/llvmglobals.hpp>
+#include <asllvm/detail/modulebuilder.hpp>
+#include <asllvm/detail/modulecommon.hpp>
 #include <fmt/core.h>
 
 namespace asllvm::detail
@@ -1364,8 +1364,8 @@ void FunctionBuilder::emit_allocate_local_structures()
 	llvm::IRBuilder<>& ir      = builder.ir();
 	CommonDefinitions& defs    = builder.definitions();
 
-	m_value_register  = ir.CreateAlloca(defs.i64, nullptr, "valuereg");
-	m_object_register = ir.CreateAlloca(defs.pvoid, nullptr, "objreg");
+	m_value_register  = ir.CreateAlloca(defs.i64, nullptr, "valueRegister");
+	m_object_register = ir.CreateAlloca(defs.pvoid, nullptr, "objectRegister");
 	m_stack.setup();
 }
 
@@ -1397,8 +1397,7 @@ void FunctionBuilder::emit_binop(BytecodeInstruction instruction, llvm::Instruct
 
 void FunctionBuilder::emit_binop(BytecodeInstruction instruction, llvm::Instruction::BinaryOps op, llvm::Value* rhs)
 {
-	llvm::Type* type = rhs->getType();
-	return emit_binop(instruction, op, m_stack.load(instruction.arg_sword1(), type), rhs);
+	return emit_binop(instruction, op, m_stack.load(instruction.arg_sword1(), rhs->getType()), rhs);
 }
 
 void FunctionBuilder::emit_binop(

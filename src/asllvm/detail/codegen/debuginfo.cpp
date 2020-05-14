@@ -1,4 +1,4 @@
-#include <angelscript-llvm/detail/codegen/debuginfo.hpp>
+#include <asllvm/detail/codegen/debuginfo.hpp>
 
 namespace asllvm::detail::codegen
 {
