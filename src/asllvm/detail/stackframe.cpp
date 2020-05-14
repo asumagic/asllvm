@@ -1,15 +1,15 @@
-#include <asllvm/detail/codegen/stackframe.hpp>
+#include <asllvm/detail/stackframe.hpp>
 
+#include <array>
 #include <asllvm/detail/assert.hpp>
 #include <asllvm/detail/builder.hpp>
-#include <asllvm/detail/codegen/debuginfo.hpp>
+#include <asllvm/detail/debuginfo.hpp>
 #include <asllvm/detail/jitcompiler.hpp>
 #include <asllvm/detail/modulebuilder.hpp>
-#include <array>
 #include <fmt/core.h>
 #include <llvm/IR/DIBuilder.h>
 
-namespace asllvm::detail::codegen
+namespace asllvm::detail
 {
 StackFrame::StackFrame(FunctionContext context) : m_context{context} {}
 
@@ -222,4 +222,4 @@ void StackFrame::emit_debug_info()
 		}
 	}
 }
-} // namespace asllvm::detail::codegen
+} // namespace asllvm::detail

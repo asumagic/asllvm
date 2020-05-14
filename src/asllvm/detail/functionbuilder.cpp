@@ -4,7 +4,7 @@
 #include <asllvm/detail/ashelper.hpp>
 #include <asllvm/detail/asinternalheaders.hpp>
 #include <asllvm/detail/assert.hpp>
-#include <asllvm/detail/codegen/debuginfo.hpp>
+#include <asllvm/detail/debuginfo.hpp>
 #include <asllvm/detail/jitcompiler.hpp>
 #include <asllvm/detail/llvmglobals.hpp>
 #include <asllvm/detail/modulebuilder.hpp>
@@ -13,7 +13,7 @@
 
 namespace asllvm::detail
 {
-FunctionBuilder::FunctionBuilder(codegen::FunctionContext context) : m_context{context}, m_stack{m_context} {}
+FunctionBuilder::FunctionBuilder(FunctionContext context) : m_context{context}, m_stack{m_context} {}
 
 llvm::Function* FunctionBuilder::translate_bytecode(asDWORD* bytecode, asUINT length)
 {

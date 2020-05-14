@@ -4,7 +4,7 @@
 #include <asllvm/detail/fwd.hpp>
 #include <llvm/IR/Function.h>
 
-namespace asllvm::detail::codegen
+namespace asllvm::detail
 {
 struct FunctionContext
 {

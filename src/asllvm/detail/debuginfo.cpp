@@ -1,6 +1,6 @@
-#include <asllvm/detail/codegen/debuginfo.hpp>
+#include <asllvm/detail/debuginfo.hpp>
 
-namespace asllvm::detail::codegen
+namespace asllvm::detail
 {
 SourceLocation get_source_location(FunctionContext context, std::size_t bytecode_offset)
 {
@@ -17,4 +17,4 @@ llvm::DebugLoc get_debug_location(FunctionContext context, std::size_t bytecode_
 	const SourceLocation loc = get_source_location(context, bytecode_offset);
 	return llvm::DebugLoc::get(loc.line, loc.column, sp);
 }
-} // namespace asllvm::detail::codegen
+} // namespace asllvm::detail

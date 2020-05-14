@@ -1,11 +1,11 @@
 #pragma once
 
 #include <asllvm/detail/asinternalheaders.hpp>
-#include <asllvm/detail/codegen/functioncontext.hpp>
+#include <asllvm/detail/functioncontext.hpp>
 #include <llvm/IR/Instructions.h>
 #include <map>
 
-namespace asllvm::detail::codegen
+namespace asllvm::detail
 {
 struct Parameter
 {

@@ -428,7 +428,7 @@ void ModuleBuilder::build_functions()
 			continue;
 		}
 
-		codegen::FunctionContext context;
+		FunctionContext context;
 		context.compiler        = &m_compiler;
 		context.module_builder  = this;
 		context.script_function = static_cast<asCScriptFunction*>(pending.function);

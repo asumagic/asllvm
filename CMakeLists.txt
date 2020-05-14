@@ -17,10 +17,10 @@ if(DEFINED ENABLE_TESTING)
 endif()
 
 add_library(angelscript-llvm
-    src/asllvm/jit.cpp
     src/asllvm/detail/ashelper.cpp
     src/asllvm/detail/assert.cpp
     src/asllvm/detail/builder.cpp
+    src/asllvm/detail/debuginfo.cpp
     src/asllvm/detail/functionbuilder.cpp
     src/asllvm/detail/jitcompiler.cpp
     src/asllvm/detail/llvmglobals.cpp
@@ -28,8 +28,8 @@ add_library(angelscript-llvm
     src/asllvm/detail/modulecommon.cpp
     src/asllvm/detail/modulemap.cpp
     src/asllvm/detail/runtime.cpp
-    src/asllvm/detail/codegen/debuginfo.cpp
-    src/asllvm/detail/codegen/stackframe.cpp
+    src/asllvm/detail/stackframe.cpp
+    src/asllvm/jit.cpp
 )
 
 if(NOT DEFINED ANGELSCRIPT_SDK_DIRECTORY)

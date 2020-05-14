@@ -3,8 +3,8 @@
 #include <angelscript.h>
 #include <asllvm/detail/asinternalheaders.hpp>
 #include <asllvm/detail/bytecodeinstruction.hpp>
-#include <asllvm/detail/codegen/stackframe.hpp>
 #include <asllvm/detail/fwd.hpp>
+#include <asllvm/detail/stackframe.hpp>
 #include <functional>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Function.h>
@@ -36,7 +36,7 @@ class FunctionBuilder
 
 	public:
 	//! \brief Constructor for FunctionBuilder, usually called by ModuleBuilder::create_function_builder().
-	FunctionBuilder(codegen::FunctionContext context);
+	FunctionBuilder(FunctionContext context);
 
 	//! \brief Type used by AngelScript for local variable identifiers.
 	//! \details
@@ -178,7 +178,7 @@ class FunctionBuilder
 
 	llvm::Value* load_global(asPWORD address, llvm::Type* type);
 
-	codegen::FunctionContext m_context;
+	FunctionContext m_context;
 
 	//! \brief
 	//!		Value register, used to temporarily store small (<= 64-bit) values (and sometimes for returning data from
@@ -189,7 +189,7 @@ class FunctionBuilder
 	//!		Object register, a temporary register to hold objects.
 	llvm::AllocaInst* m_object_register;
 
-	codegen::StackFrame m_stack;
+	StackFrame m_stack;
 
 	//! \brief Map from a bytecode offset to a BasicBlock.
 	//! \see InstructionContext::offset
