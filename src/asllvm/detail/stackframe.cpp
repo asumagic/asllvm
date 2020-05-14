@@ -1,6 +1,5 @@
 #include <asllvm/detail/stackframe.hpp>
 
-#include <array>
 #include <asllvm/detail/assert.hpp>
 #include <asllvm/detail/builder.hpp>
 #include <asllvm/detail/debuginfo.hpp>
@@ -119,10 +118,10 @@ llvm::Value* StackFrame::pointer_to(StackFrame::AsStackOffset offset)
 	asllvm_assert(real_offset >= 0);
 	asllvm_assert(real_offset <= total_space());
 
-	std::array<llvm::Value*, 2> indices{
-		llvm::ConstantInt::get(types.iptr, 0), llvm::ConstantInt::get(types.iptr, real_offset)};
-
-	return ir.CreateInBoundsGEP(m_storage, indices, fmt::format("local@{}.ptr", offset));
+	return ir.CreateInBoundsGEP(
+		m_storage,
+		{llvm::ConstantInt::get(types.iptr, 0), llvm::ConstantInt::get(types.iptr, real_offset)},
+		fmt::format("local@{}.ptr", offset));
 }
 
 llvm::AllocaInst* StackFrame::storage_alloca() { return m_storage; }
@@ -210,13 +209,11 @@ void StackFrame::emit_debug_info()
 				0,
 				m_context.module_builder->get_debug_type(engine.GetTypeIdFromDataType(var->type)));
 
-			std::array<std::uint64_t, 2> addresses{
-				llvm::dwarf::DW_OP_plus_uconst, std::uint64_t(total_space() - var->stackOffset) * 4};
-
 			di.insertDeclare(
 				m_storage,
 				local,
-				di.createExpression(addresses),
+				di.createExpression(llvm::ArrayRef<std::int64_t>{
+					llvm::dwarf::DW_OP_plus_uconst, std::int64_t(total_space() - var->stackOffset) * 4}),
 				get_debug_location(m_context, 0, sp),
 				ir.GetInsertBlock());
 		}

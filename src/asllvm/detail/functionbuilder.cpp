@@ -1,6 +1,5 @@
 #include <asllvm/detail/functionbuilder.hpp>
 
-#include <array>
 #include <asllvm/detail/ashelper.hpp>
 #include <asllvm/detail/asinternalheaders.hpp>
 #include <asllvm/detail/assert.hpp>
@@ -123,12 +122,8 @@ llvm::Function* FunctionBuilder::create_vm_entry_thunk()
 	auto                          context_lock        = thread_safe_context.getLock();
 	auto&                         context             = *thread_safe_context.getContext();
 
-	const std::array<llvm::Type*, 2> parameter_types{types.vm_registers->getPointerTo(), types.i64};
-
-	llvm::Type* return_type = types.tvoid;
-
 	llvm::Function* wrapper_function = llvm::Function::Create(
-		llvm::FunctionType::get(return_type, parameter_types, false),
+		llvm::FunctionType::get(types.tvoid, {types.vm_registers->getPointerTo(), types.i64}, false),
 		llvm::Function::ExternalLinkage,
 		make_vm_entry_thunk_name(*m_context.script_function),
 		m_context.module_builder->module());
@@ -146,20 +141,21 @@ llvm::Function* FunctionBuilder::create_vm_entry_thunk()
 	arg->setName("jitarg");
 
 	llvm::Value* frame_pointer = [&] {
-		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(types.i64, 0), llvm::ConstantInt::get(types.i32, 1)};
-
-		auto* pointer = ir.CreateInBoundsGEP(registers, indices, "stackFramePointerPointer");
+		auto* pointer = ir.CreateInBoundsGEP(
+			registers,
+			{llvm::ConstantInt::get(types.i64, 0), llvm::ConstantInt::get(types.i32, 1)},
+			"stackFramePointerPointer");
 		return ir.CreateLoad(types.pi32, pointer, "stackFramePointer");
 	}();
 
 	llvm::Value* value_register = [&] {
-		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(types.i64, 0), llvm::ConstantInt::get(types.i32, 3)};
-		return ir.CreateInBoundsGEP(registers, indices, "valueRegister");
+		return ir.CreateInBoundsGEP(
+			registers, {llvm::ConstantInt::get(types.i64, 0), llvm::ConstantInt::get(types.i32, 3)}, "valueRegister");
 	}();
 
 	llvm::Value* object_register = [&] {
-		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(types.i64, 0), llvm::ConstantInt::get(types.i32, 4)};
-		return ir.CreateInBoundsGEP(registers, indices, "objectRegister");
+		return ir.CreateInBoundsGEP(
+			registers, {llvm::ConstantInt::get(types.i64, 0), llvm::ConstantInt::get(types.i32, 4)}, "objectRegister");
 	}();
 
 	{
@@ -172,9 +168,8 @@ llvm::Function* FunctionBuilder::create_vm_entry_thunk()
 	}
 
 	llvm::Value* program_pointer = [&] {
-		std::array<llvm::Value*, 2> indices{llvm::ConstantInt::get(types.i64, 0), llvm::ConstantInt::get(types.i32, 0)};
-
-		return ir.CreateInBoundsGEP(registers, indices, "programPointer");
+		return ir.CreateInBoundsGEP(
+			registers, {llvm::ConstantInt::get(types.i64, 0), llvm::ConstantInt::get(types.i32, 0)}, "programPointer");
 	}();
 
 	// Set the program pointer to the RET instruction
@@ -537,11 +532,10 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		if (type.flags & asOBJ_SCRIPT_OBJECT)
 		{
 			// Initialize stuff using the scriptobject constructor
-			std::array<llvm::Value*, 1> args{
-				{ir.CreateIntToPtr(llvm::ConstantInt::get(types.iptr, reinterpret_cast<asPWORD>(&type)), types.pvoid)}};
-
-			llvm::Value* object_memory_pointer
-				= ir.CreateCall(funcs.new_script_object, args, fmt::format("dynamic.{}", type.GetName()));
+			llvm::Value* object_memory_pointer = ir.CreateCall(
+				funcs.new_script_object,
+				{ir.CreateIntToPtr(llvm::ConstantInt::get(types.iptr, reinterpret_cast<asPWORD>(&type)), types.pvoid)},
+				fmt::format("dynamic.{}", type.GetName()));
 
 			// Constructor
 			asCScriptFunction& constructor = *static_cast<asCScriptEngine&>(engine).scriptFunctions[constructor_id];
@@ -561,12 +555,9 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		else
 		{
 			// Allocate memory for the object
-			std::array<llvm::Value*, 1> alloc_args{
-				llvm::ConstantInt::get(types.iptr, type.size) // TODO: align type.size to 4 bytes
-			};
-
-			llvm::Value* object_memory_pointer
-				= ir.CreateCall(funcs.alloc, alloc_args, fmt::format("heap.{}", type.GetName()));
+			// TODO: align type.size to 4 bytes
+			llvm::Value* object_memory_pointer = ir.CreateCall(
+				funcs.alloc, {llvm::ConstantInt::get(types.iptr, type.size)}, fmt::format("heap.{}", type.GetName()));
 
 			if (constructor_id != 0)
 			{
@@ -617,10 +608,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 					"STUB: asOBJ_LIST_PATTERN free. this will result in a leak.", asMSGTYPE_WARNING);
 			}
 
-			{
-				std::array<llvm::Value*, 1> args{object_pointer};
-				ir.CreateCall(funcs.free, args);
-			}
+			ir.CreateCall(funcs.free, {object_pointer});
 		}
 
 		break;
@@ -649,13 +637,12 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		llvm::Value* offset_pointer = m_stack.pointer_to(m_stack.current_stack_pointer() - ins.arg_word0(), types.iptr);
 		llvm::Value* offset         = ir.CreateLoad(types.iptr, offset_pointer);
 
-		// Get pointer to where the pointer value on the stack is
-		std::array<llvm::Value*, 2> gep_offset{
-			llvm::ConstantInt::get(types.iptr, 0),
-			ir.CreateSub(llvm::ConstantInt::get(types.iptr, m_stack.total_space()), offset, "addr", true, true)};
-
-		llvm::Value* variable_pointer
-			= ir.CreatePointerCast(ir.CreateInBoundsGEP(m_stack.storage_alloca(), gep_offset), types.piptr);
+		llvm::Value* variable_pointer = ir.CreatePointerCast(
+			ir.CreateInBoundsGEP(
+				m_stack.storage_alloca(),
+				{llvm::ConstantInt::get(types.iptr, 0),
+				 ir.CreateSub(llvm::ConstantInt::get(types.iptr, m_stack.total_space()), offset, "addr", true, true)}),
+			types.piptr);
 		llvm::Value* variable = ir.CreateLoad(types.iptr, variable_pointer);
 
 		ir.CreateStore(variable, offset_pointer);
@@ -685,14 +672,13 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 			{
 				m_context.compiler->diagnostic("STUB: not checking for zero in addref");
 
-				std::array<llvm::Value*, 2> args{
-					reference,
-					ir.CreateIntToPtr(
-						llvm::ConstantInt::get(
-							types.iptr, reinterpret_cast<asPWORD>(engine.GetScriptFunction(object_type.beh.addref))),
-						types.pvoid)};
-
-				ir.CreateCall(funcs.call_object_method, args);
+				ir.CreateCall(
+					funcs.call_object_method,
+					{reference,
+					 ir.CreateIntToPtr(
+						 llvm::ConstantInt::get(
+							 types.iptr, reinterpret_cast<asPWORD>(engine.GetScriptFunction(object_type.beh.addref))),
+						 types.pvoid)});
 			}
 		}
 
@@ -712,13 +698,14 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	{
 		llvm::Value* pointer = m_stack.pointer_to(m_stack.current_stack_pointer() - ins.arg_word0(), types.iptr);
 
-		llvm::Value*                      index = ir.CreateLoad(types.iptr, pointer);
-		const std::array<llvm::Value*, 2> indices{
-			llvm::ConstantInt::get(types.iptr, 0),
-			ir.CreateSub(llvm::ConstantInt::get(types.iptr, m_stack.total_space()), index)};
+		llvm::Value* index = ir.CreateLoad(types.iptr, pointer);
 
 		llvm::Value* variable_address = ir.CreatePointerCast(
-			ir.CreateInBoundsGEP(m_stack.storage_alloca(), indices), types.iptr->getPointerTo()->getPointerTo());
+			ir.CreateInBoundsGEP(
+				m_stack.storage_alloca(),
+				{llvm::ConstantInt::get(types.iptr, 0),
+				 ir.CreateSub(llvm::ConstantInt::get(types.iptr, m_stack.total_space()), index)}),
+			types.iptr->getPointerTo()->getPointerTo());
 
 		llvm::Value* variable = ir.CreateLoad(types.iptr->getPointerTo(), variable_address);
 
@@ -732,11 +719,11 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	{
 		llvm::Value* pointer = m_stack.pointer_to(m_stack.current_stack_pointer() - ins.arg_word0(), types.pi32);
 
-		llvm::Value*                      index = ir.CreateLoad(types.i32, ir.CreatePointerCast(pointer, types.pi32));
-		const std::array<llvm::Value*, 2> indices{
-			llvm::ConstantInt::get(types.i64, 0),
-			ir.CreateSub(llvm::ConstantInt::get(types.i32, m_stack.total_space()), index)};
-		llvm::Value* variable_address = ir.CreateInBoundsGEP(m_stack.storage_alloca(), indices);
+		llvm::Value* index            = ir.CreateLoad(types.i32, ir.CreatePointerCast(pointer, types.pi32));
+		llvm::Value* variable_address = ir.CreateInBoundsGEP(
+			m_stack.storage_alloca(),
+			{llvm::ConstantInt::get(types.i64, 0),
+			 ir.CreateSub(llvm::ConstantInt::get(types.i32, m_stack.total_space()), index)});
 
 		ir.CreateStore(variable_address, ir.CreatePointerCast(pointer, types.pi32->getPointerTo()));
 
@@ -1089,11 +1076,9 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	case asBC_LoadThisR:
 	{
 		llvm::Value* object = m_stack.load(0, types.pvoid);
-
 		// FIXME: check pointer and raise VM exception TXT_NULL_POINTER_ACCESS when null
 
-		std::array<llvm::Value*, 1> indices{{llvm::ConstantInt::get(types.iptr, ins.arg_sword0())}};
-		llvm::Value*                field = ir.CreateInBoundsGEP(object, indices);
+		llvm::Value* field = ir.CreateInBoundsGEP(object, {llvm::ConstantInt::get(types.iptr, ins.arg_sword0())});
 
 		store_value_register_value(field);
 
@@ -1114,8 +1099,8 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 		// FIXME: check pointer and raise VM exception TXT_NULL_POINTER_ACCESS when null
 
-		std::array<llvm::Value*, 1> offsets{llvm::ConstantInt::get(types.iptr, ins.arg_sword1())};
-		llvm::Value*                pointer = ir.CreateInBoundsGEP(base_pointer, offsets, "fieldptr");
+		llvm::Value* pointer
+			= ir.CreateInBoundsGEP(base_pointer, {llvm::ConstantInt::get(types.iptr, ins.arg_sword1())}, "fieldptr");
 
 		store_value_register_value(pointer);
 
@@ -1130,7 +1115,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		// asSTypeBehaviour& beh         = object_type.beh;
 
 		llvm::Value* destination = m_stack.pointer_to(ins.arg_sword0(), types.pvoid);
-		llvm::Value* s           = m_stack.top(types.pvoid);
+		llvm::Value* source      = m_stack.top(types.pvoid);
 
 		if ((object_type.flags & asOBJ_NOCOUNT) == 0)
 		{
@@ -1141,17 +1126,16 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 			m_context.compiler->diagnostic("STUB: not checking for zero in addref");
 
-			std::array<llvm::Value*, 2> args{
-				s,
-				ir.CreateIntToPtr(
-					llvm::ConstantInt::get(
-						types.iptr, reinterpret_cast<asPWORD>(engine.GetScriptFunction(object_type.beh.addref))),
-					types.pvoid)};
-
-			ir.CreateCall(funcs.call_object_method, args);
+			ir.CreateCall(
+				funcs.call_object_method,
+				{source,
+				 ir.CreateIntToPtr(
+					 llvm::ConstantInt::get(
+						 types.iptr, reinterpret_cast<asPWORD>(engine.GetScriptFunction(object_type.beh.addref))),
+					 types.pvoid)});
 		}
 
-		ir.CreateStore(s, destination);
+		ir.CreateStore(source, destination);
 
 		break;
 	}
@@ -1180,8 +1164,8 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	{
 		const auto bytes = ins.arg_dword();
 
-		std::array<llvm::Value*, 1> args{llvm::ConstantInt::get(types.iptr, bytes)};
-		m_stack.store(ins.arg_sword0(), ir.CreateCall(funcs.alloc, args, "listMemory"));
+		m_stack.store(
+			ins.arg_sword0(), ir.CreateCall(funcs.alloc, {llvm::ConstantInt::get(types.iptr, bytes)}, "listMemory"));
 
 		break;
 	}
@@ -1192,8 +1176,8 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		const auto   offset_within_list = ins.arg_dword();
 		const auto   size               = ins.arg_dword(1);
 
-		std::array<llvm::Value*, 1> indices{llvm::ConstantInt::get(types.iptr, offset_within_list)};
-		llvm::Value*                target_pointer = ir.CreateInBoundsGEP(list_pointer, indices);
+		llvm::Value* target_pointer
+			= ir.CreateInBoundsGEP(list_pointer, {llvm::ConstantInt::get(types.iptr, offset_within_list)});
 		llvm::Value* typed_target_pointer = ir.CreatePointerCast(target_pointer, types.pi32, "listSizePointer");
 
 		ir.CreateStore(llvm::ConstantInt::get(types.i32, size), typed_target_pointer);
@@ -1205,8 +1189,8 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 		llvm::Value* list_pointer       = m_stack.load(ins.arg_sword0(), types.pvoid);
 		const auto   offset_within_list = ins.arg_dword();
 
-		std::array<llvm::Value*, 1> indices{llvm::ConstantInt::get(types.iptr, offset_within_list)};
-		llvm::Value*                target_pointer = ir.CreateInBoundsGEP(list_pointer, indices);
+		llvm::Value* target_pointer
+			= ir.CreateInBoundsGEP(list_pointer, {llvm::ConstantInt::get(types.iptr, offset_within_list)});
 
 		m_stack.push(target_pointer, AS_PTR_SIZE);
 		break;
@@ -1627,12 +1611,13 @@ void FunctionBuilder::emit_system_call(const asCScriptFunction& function)
 	{
 		asllvm_assert(object != nullptr);
 
-		std::array<llvm::Value*, 2> lookup_args{
-			object,
-			ir.CreateIntToPtr(llvm::ConstantInt::get(types.iptr, reinterpret_cast<asPWORD>(intf.func)), types.pvoid)};
-
-		callee
-			= ir.CreatePointerCast(ir.CreateCall(funcs.system_vtable_lookup, lookup_args), callee_type->getPointerTo());
+		callee = ir.CreatePointerCast(
+			ir.CreateCall(
+				funcs.system_vtable_lookup,
+				{object,
+				 ir.CreateIntToPtr(
+					 llvm::ConstantInt::get(types.iptr, reinterpret_cast<asPWORD>(intf.func)), types.pvoid)}),
+			callee_type->getPointerTo());
 
 		break;
 	}
@@ -1714,8 +1699,8 @@ std::size_t FunctionBuilder::emit_script_call(const asCScriptFunction& callee, F
 
 		if (is_vm_entry)
 		{
-			const std::array<llvm::Value*, 1> offsets{llvm::ConstantInt::get(types.iptr, -long(old_read_dword_count))};
-			llvm::Value*                      dword_pointer = ir.CreateInBoundsGEP(ctx.vm_frame_pointer, offsets);
+			llvm::Value* dword_pointer = ir.CreateInBoundsGEP(
+				ctx.vm_frame_pointer, {llvm::ConstantInt::get(types.iptr, -long(old_read_dword_count))});
 
 			llvm::Value* pointer = ir.CreatePointerCast(dword_pointer, llvm_parameter_type->getPointerTo());
 			return ir.CreateLoad(llvm_parameter_type, pointer);
@@ -1809,11 +1794,10 @@ void FunctionBuilder::emit_object_method_call(const asCScriptFunction& function,
 	StandardTypes&     types   = builder.standard_types();
 	StandardFunctions& funcs   = m_context.module_builder->standard_functions();
 
-	std::array<llvm::Value*, 2> args{
-		object,
-		ir.CreateIntToPtr(llvm::ConstantInt::get(types.iptr, reinterpret_cast<asPWORD>(&function)), types.pvoid)};
-
-	ir.CreateCall(funcs.call_object_method, args);
+	ir.CreateCall(
+		funcs.call_object_method,
+		{object,
+		 ir.CreateIntToPtr(llvm::ConstantInt::get(types.iptr, reinterpret_cast<asPWORD>(&function)), types.pvoid)});
 }
 
 void FunctionBuilder::emit_conditional_branch(BytecodeInstruction ins, llvm::CmpInst::Predicate predicate)
@@ -1834,6 +1818,7 @@ FunctionBuilder::resolve_virtual_script_function(llvm::Value* script_object, con
 	Builder&           builder = m_context.compiler->builder();
 	llvm::IRBuilder<>& ir      = builder.ir();
 	StandardTypes&     types   = builder.standard_types();
+	StandardFunctions& funcs   = m_context.module_builder->standard_functions();
 
 	// FIXME: check script_object pointer and raise VM exception TXT_NULL_POINTER_ACCESS when null
 
@@ -1853,11 +1838,8 @@ FunctionBuilder::resolve_virtual_script_function(llvm::Value* script_object, con
 			types.pvoid,
 			"virtual_script_function");
 
-		llvm::FunctionCallee        lookup = m_context.module_builder->standard_functions().script_vtable_lookup;
-		std::array<llvm::Value*, 2> lookup_args{{script_object, function_value}};
-
 		return ir.CreatePointerCast(
-			ir.CreateCall(lookup, lookup_args),
+			ir.CreateCall(funcs.script_vtable_lookup, {script_object, function_value}),
 			m_context.module_builder->get_script_function_type(callee)->getPointerTo(),
 			"resolved_vcall");
 	}

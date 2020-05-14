@@ -1,6 +1,5 @@
 #include <asllvm/detail/modulebuilder.hpp>
 
-#include <array>
 #include <asllvm/detail/assert.hpp>
 #include <asllvm/detail/functionbuilder.hpp>
 #include <asllvm/detail/jitcompiler.hpp>

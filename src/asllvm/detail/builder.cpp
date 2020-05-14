@@ -73,9 +73,9 @@ llvm::Type* Builder::to_llvm_type(const asCDataType& type) const
 			return it->second->getPointerTo();
 		}
 
-		std::array<llvm::Type*, 1> types{{llvm::ArrayType::get(m_types.i8, type.GetSizeInMemoryBytes())}};
+		llvm::StructType* struct_type = llvm::StructType::create(
+			{llvm::ArrayType::get(m_types.i8, type.GetSizeInMemoryBytes())}, object_type.GetName());
 
-		llvm::StructType* struct_type = llvm::StructType::create(types, object_type.GetName());
 		m_object_types.emplace(type_id, struct_type);
 
 		// TODO: what makes most sense between declaring this as non-const and having a non-mutable m_object_types
@@ -114,7 +114,7 @@ StandardTypes Builder::setup_standard_types()
 
 	{
 		types.vm_registers = llvm::StructType::create(
-			std::array<llvm::Type*, 8>{
+			{
 				types.pi32,  // programPointer
 				types.pi32,  // stackFramePointer
 				types.pi32,  // stackPointer
