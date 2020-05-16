@@ -1,5 +1,6 @@
 #include <asllvm/detail/runtime.hpp>
 
+#include <asllvm/detail/assert.hpp>
 #include <asllvm/detail/modulecommon.hpp>
 
 namespace asllvm::detail::runtime
@@ -40,4 +41,14 @@ void* new_script_object(asCObjectType* object_type)
 
 void panic() { std::abort(); }
 
+void set_internal_exception(VmState state)
+{
+	asCContext* context = static_cast<asCContext*>(asGetActiveContext());
+
+	switch (state)
+	{
+	case VmState::ExceptionNullPointer: context->SetInternalException(TXT_NULL_POINTER_ACCESS); break;
+	default: asllvm_assert(false && "unexpected");
+	}
+}
 } // namespace asllvm::detail::runtime

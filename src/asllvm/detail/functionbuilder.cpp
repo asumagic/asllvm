@@ -24,6 +24,8 @@ llvm::Function* FunctionBuilder::translate_bytecode(asDWORD* bytecode, asUINT le
 	auto                          context_lock        = thread_safe_context.getLock();
 	auto&                         context             = *thread_safe_context.getContext();
 
+	m_generated_type = GeneratedFunctionType::Implementation;
+
 	ir.SetInsertPoint(llvm::BasicBlock::Create(context, "entry", m_context.llvm_function));
 
 	const auto walk_bytecode = [&](auto&& func) {
@@ -122,6 +124,8 @@ llvm::Function* FunctionBuilder::create_vm_entry_thunk()
 	llvm::orc::ThreadSafeContext& thread_safe_context = builder.llvm_context();
 	auto                          context_lock        = thread_safe_context.getLock();
 	auto&                         context             = *thread_safe_context.getContext();
+
+	m_generated_type = GeneratedFunctionType::VmEntryThunk;
 
 	llvm::Function* wrapper_function = llvm::Function::Create(
 		llvm::FunctionType::get(types.tvoid, {types.vm_registers->getPointerTo(), types.i64}, false),
@@ -1778,6 +1782,7 @@ std::size_t FunctionBuilder::emit_script_call(const asCScriptFunction& callee, F
 	}
 
 	llvm::CallInst* vm_state = ir.CreateCall(callee_type, resolved_function, args);
+	emit_check_vm_state(vm_state);
 
 	return read_dword_count;
 }
@@ -2012,8 +2017,7 @@ void FunctionBuilder::emit_check_null_pointer(llvm::Value* pointer)
 {
 	Builder&           builder = m_context.compiler->builder();
 	llvm::IRBuilder<>& ir      = builder.ir();
-	// StandardTypes&     types   = builder.standard_types();
-	StandardFunctions& funcs   = m_context.module_builder->standard_functions();
+	StandardTypes&     types   = builder.standard_types();
 	llvm::LLVMContext& context = *m_context.compiler->builder().llvm_context().getContext();
 
 	llvm::Function* parent = ir.GetInsertBlock()->getParent();
@@ -2027,9 +2031,61 @@ void FunctionBuilder::emit_check_null_pointer(llvm::Value* pointer)
 	ir.CreateCondBr(is_null, on_null, on_non_null);
 
 	ir.SetInsertPoint(on_null);
-	ir.CreateCall(funcs.panic);
-	ir.CreateUnreachable();
+	emit_vm_exception_return(llvm::ConstantInt::get(types.vm_state, std::uint64_t(VmState::ExceptionNullPointer)));
+
+	if (m_generated_type == GeneratedFunctionType::VmEntryThunk)
+	{
+		ir.CreateBr(on_non_null);
+	}
 
 	ir.SetInsertPoint(on_non_null);
+}
+
+void FunctionBuilder::emit_check_vm_state(llvm::Value* state)
+{
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
+	llvm::LLVMContext& context = *m_context.compiler->builder().llvm_context().getContext();
+	StandardTypes&     types   = builder.standard_types();
+
+	llvm::Function*   parent          = ir.GetInsertBlock()->getParent();
+	llvm::BasicBlock* on_vm_exception = llvm::BasicBlock::Create(context, "onVmException", parent);
+	llvm::BasicBlock* on_vm_ok        = llvm::BasicBlock::Create(context, "onVmOkState", parent);
+
+	llvm::Value* is_exception = ir.CreateICmp(
+		llvm::CmpInst::ICMP_NE, state, llvm::ConstantInt::get(types.vm_state, std::uint64_t(VmState::Ok)));
+
+	ir.CreateCondBr(is_exception, on_vm_exception, on_vm_ok);
+
+	ir.SetInsertPoint(on_vm_exception);
+	emit_vm_exception_return(state);
+
+	if (m_generated_type == GeneratedFunctionType::VmEntryThunk)
+	{
+		ir.CreateBr(on_vm_ok);
+	}
+
+	ir.SetInsertPoint(on_vm_ok);
+}
+
+void FunctionBuilder::emit_vm_exception_return(llvm::Value* state)
+{
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
+	StandardFunctions& funcs   = m_context.module_builder->standard_functions();
+
+	if (m_generated_type == GeneratedFunctionType::Implementation)
+	{
+		// TODO: object cleanup as the VM does
+		ir.CreateRet(state);
+	}
+	else if (m_generated_type == GeneratedFunctionType::VmEntryThunk)
+	{
+		ir.CreateCall(funcs.set_internal_exception, {state});
+	}
+	else
+	{
+		asllvm_assert(false && "unhandled function kind");
+	}
 }
 } // namespace asllvm::detail

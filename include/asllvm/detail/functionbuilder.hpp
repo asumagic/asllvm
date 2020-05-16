@@ -179,8 +179,13 @@ class FunctionBuilder
 	llvm::Value* load_global(asPWORD address, llvm::Type* type);
 
 	void emit_check_null_pointer(llvm::Value* pointer);
+	void emit_check_vm_state(llvm::Value* state);
+	void emit_vm_exception_return(llvm::Value* state);
 
 	FunctionContext m_context;
+
+	//! \brief Kind of the function being generated right now.
+	GeneratedFunctionType m_generated_type;
 
 	//! \brief
 	//!		Value register, used to temporarily store small (<= 64-bit) values (and sometimes for returning data from
