@@ -2019,9 +2019,8 @@ void FunctionBuilder::emit_check_null_pointer(llvm::Value* pointer)
 	llvm::BasicBlock* on_null     = llvm::BasicBlock::Create(context, "nullPointerHandler", parent);
 	llvm::BasicBlock* on_non_null = llvm::BasicBlock::Create(context, "nonNullPointerContinue", parent);
 
-	llvm::Value* pointer_int = ir.CreatePtrToInt(pointer, types.iptr);
 	llvm::Value* is_null
-		= ir.CreateICmp(llvm::CmpInst::ICMP_EQ, pointer_int, llvm::ConstantInt::get(types.iptr, 0), "isNull");
+		= ir.CreateICmp(llvm::CmpInst::ICMP_EQ, pointer, llvm::ConstantInt::getNullValue(pointer->getType()), "isNull");
 
 	ir.CreateCondBr(is_null, on_null, on_non_null);
 
