@@ -178,8 +178,13 @@ class FunctionBuilder
 
 	llvm::Value* load_global(asPWORD address, llvm::Type* type);
 
+	//! \brief
+	//!		If i1 value is true, then the state_if_true vm state will be set.
+	void emit_check_boolean(llvm::Value* value, llvm::Value* state_if_true);
+
 	void emit_check_null_pointer(llvm::Value* pointer);
-	void emit_check_vm_state(llvm::Value* state);
+	void emit_check_vm_state(llvm::Value* state); // TODO: better naming for this one <-
+	void emit_check_context_state();
 	void emit_vm_exception_return(llvm::Value* state);
 
 	FunctionContext m_context;

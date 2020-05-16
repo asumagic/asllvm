@@ -416,6 +416,26 @@ StandardFunctions ModuleBuilder::setup_runtime()
 		funcs.set_internal_exception = function;
 	}
 
+	{
+		llvm::Function* function = llvm::Function::Create(
+			llvm::FunctionType::get(types.tvoid, {types.pvoid}, false),
+			linkage,
+			"asllvm.private.prepare_system_call",
+			m_llvm_module.get());
+
+		funcs.prepare_system_call = function;
+	}
+
+	{
+		llvm::Function* function = llvm::Function::Create(
+			llvm::FunctionType::get(types.vm_state, {}, false),
+			linkage,
+			"asllvm.private.check_execution_status",
+			m_llvm_module.get());
+
+		funcs.check_execution_status = function;
+	}
+
 	return funcs;
 }
 
@@ -501,6 +521,8 @@ void ModuleBuilder::link_symbols()
 	define_function(runtime::call_object_method, "asllvm.private.call_object_method");
 	define_function(runtime::panic, "asllvm.private.panic");
 	define_function(runtime::set_internal_exception, "asllvm.private.set_internal_exception");
+	define_function(runtime::prepare_system_call, "asllvm.private.prepare_system_call");
+	define_function(runtime::check_execution_status, "asllvm.private.check_execution_status");
 
 	define_function(fmodf, "fmodf");
 	define_function(fmod, "fmod");

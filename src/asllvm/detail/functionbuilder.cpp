@@ -1652,7 +1652,11 @@ void FunctionBuilder::emit_system_call(const asCScriptFunction& function)
 	}
 	}
 
+	ir.CreateCall(
+		funcs.prepare_system_call,
+		{ir.CreateIntToPtr(llvm::ConstantInt::get(types.iptr, reinterpret_cast<asPWORD>(&callee)), types.pvoid)});
 	llvm::Value* result = ir.CreateCall(callee_type, callee, args);
+	emit_check_context_state();
 
 	if (return_pointer == nullptr)
 	{
@@ -2013,59 +2017,66 @@ llvm::Value* FunctionBuilder::load_global(asPWORD address, llvm::Type* type)
 	return ir.CreateLoad(type, global_address);
 }
 
+void FunctionBuilder::emit_check_boolean(llvm::Value* value, llvm::Value* state_if_true)
+{
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
+	llvm::LLVMContext& context = *m_context.compiler->builder().llvm_context().getContext();
+
+	llvm::Function* parent = ir.GetInsertBlock()->getParent();
+
+	llvm::BasicBlock* on_true  = llvm::BasicBlock::Create(context, "setVmException", parent);
+	llvm::BasicBlock* on_false = llvm::BasicBlock::Create(context, "doNotSetVmException", parent);
+
+	ir.CreateCondBr(value, on_true, on_false);
+
+	ir.SetInsertPoint(on_true);
+	emit_vm_exception_return(state_if_true);
+
+	if (m_generated_type == GeneratedFunctionType::VmEntryThunk)
+	{
+		ir.CreateBr(on_false);
+	}
+
+	ir.SetInsertPoint(on_false);
+}
+
 void FunctionBuilder::emit_check_null_pointer(llvm::Value* pointer)
 {
 	Builder&           builder = m_context.compiler->builder();
 	llvm::IRBuilder<>& ir      = builder.ir();
 	StandardTypes&     types   = builder.standard_types();
-	llvm::LLVMContext& context = *m_context.compiler->builder().llvm_context().getContext();
 
-	llvm::Function* parent = ir.GetInsertBlock()->getParent();
-
-	llvm::BasicBlock* on_null     = llvm::BasicBlock::Create(context, "nullPointerHandler", parent);
-	llvm::BasicBlock* on_non_null = llvm::BasicBlock::Create(context, "nonNullPointerContinue", parent);
-
-	llvm::Value* is_null
-		= ir.CreateICmp(llvm::CmpInst::ICMP_EQ, pointer, llvm::ConstantInt::getNullValue(pointer->getType()), "isNull");
-
-	ir.CreateCondBr(is_null, on_null, on_non_null);
-
-	ir.SetInsertPoint(on_null);
-	emit_vm_exception_return(llvm::ConstantInt::get(types.vm_state, std::uint64_t(VmState::ExceptionNullPointer)));
-
-	if (m_generated_type == GeneratedFunctionType::VmEntryThunk)
-	{
-		ir.CreateBr(on_non_null);
-	}
-
-	ir.SetInsertPoint(on_non_null);
+	emit_check_boolean(
+		ir.CreateICmp(llvm::CmpInst::ICMP_EQ, pointer, llvm::ConstantInt::getNullValue(pointer->getType()), "isNull"),
+		llvm::ConstantInt::get(types.vm_state, std::uint64_t(VmState::ExceptionNullPointer)));
 }
 
 void FunctionBuilder::emit_check_vm_state(llvm::Value* state)
 {
 	Builder&           builder = m_context.compiler->builder();
 	llvm::IRBuilder<>& ir      = builder.ir();
-	llvm::LLVMContext& context = *m_context.compiler->builder().llvm_context().getContext();
 	StandardTypes&     types   = builder.standard_types();
 
-	llvm::Function*   parent          = ir.GetInsertBlock()->getParent();
-	llvm::BasicBlock* on_vm_exception = llvm::BasicBlock::Create(context, "onVmException", parent);
-	llvm::BasicBlock* on_vm_ok        = llvm::BasicBlock::Create(context, "onVmOkState", parent);
+	emit_check_boolean(
+		ir.CreateICmp(
+			llvm::CmpInst::ICMP_NE, state, llvm::ConstantInt::get(types.vm_state, std::uint64_t(VmState::Ok))),
+		state);
+}
 
-	llvm::Value* is_exception = ir.CreateICmp(
-		llvm::CmpInst::ICMP_NE, state, llvm::ConstantInt::get(types.vm_state, std::uint64_t(VmState::Ok)));
+void FunctionBuilder::emit_check_context_state()
+{
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
+	StandardTypes&     types   = builder.standard_types();
+	StandardFunctions& funcs   = m_context.module_builder->standard_functions();
 
-	ir.CreateCondBr(is_exception, on_vm_exception, on_vm_ok);
-
-	ir.SetInsertPoint(on_vm_exception);
-	emit_vm_exception_return(state);
-
-	if (m_generated_type == GeneratedFunctionType::VmEntryThunk)
-	{
-		ir.CreateBr(on_vm_ok);
-	}
-
-	ir.SetInsertPoint(on_vm_ok);
+	emit_check_boolean(
+		ir.CreateICmp(
+			llvm::CmpInst::ICMP_NE,
+			ir.CreateCall(funcs.check_execution_status, {}),
+			llvm::ConstantInt::get(types.vm_state, 0)),
+		llvm::ConstantInt::get(types.vm_state, std::uint64_t(VmState::ExceptionExternal)));
 }
 
 void FunctionBuilder::emit_vm_exception_return(llvm::Value* state)

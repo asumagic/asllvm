@@ -21,7 +21,7 @@ namespace asllvm::detail
 struct StandardFunctions
 {
 	llvm::FunctionCallee alloc, free, new_script_object, script_vtable_lookup, system_vtable_lookup, call_object_method,
-		panic, set_internal_exception;
+		panic, set_internal_exception, prepare_system_call, check_execution_status;
 };
 
 struct GlobalVariables

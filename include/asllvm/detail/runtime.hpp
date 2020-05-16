@@ -11,4 +11,6 @@ void              call_object_method(void* object, asCScriptFunction* function);
 void*             new_script_object(asCObjectType* object_type);
 [[noreturn]] void panic();
 void              set_internal_exception(VmState state);
+void              prepare_system_call(asCScriptFunction* callee);
+VmState           check_execution_status();
 } // namespace asllvm::detail::runtime
