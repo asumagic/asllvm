@@ -22,6 +22,8 @@ struct StandardTypes
 
 	llvm::IntegerType *i1, *i8, *i16, *i32, *i64, *iptr;
 
+	llvm::Type* vm_state;
+
 	llvm::Type *f32, *f64;
 
 	// Shorthands for someCommonType->getPointerTo()

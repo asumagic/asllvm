@@ -12,5 +12,7 @@
 #include <as_typeinfo.h>
 #include <as_objecttype.h>
 #include <as_scriptengine.h>
+#include <as_context.h>
+#include <as_texts.h>
 // clang-format on
 #pragma GCC diagnostic pop

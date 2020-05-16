@@ -8,6 +8,7 @@
 #include <asllvm/detail/llvmglobals.hpp>
 #include <asllvm/detail/modulebuilder.hpp>
 #include <asllvm/detail/modulecommon.hpp>
+#include <asllvm/detail/vmstate.hpp>
 #include <fmt/core.h>
 
 namespace asllvm::detail
@@ -22,6 +23,8 @@ llvm::Function* FunctionBuilder::translate_bytecode(asDWORD* bytecode, asUINT le
 	llvm::orc::ThreadSafeContext& thread_safe_context = builder.llvm_context();
 	auto                          context_lock        = thread_safe_context.getLock();
 	auto&                         context             = *thread_safe_context.getContext();
+
+	m_generated_type = GeneratedFunctionType::Implementation;
 
 	ir.SetInsertPoint(llvm::BasicBlock::Create(context, "entry", m_context.llvm_function));
 
@@ -121,6 +124,8 @@ llvm::Function* FunctionBuilder::create_vm_entry_thunk()
 	llvm::orc::ThreadSafeContext& thread_safe_context = builder.llvm_context();
 	auto                          context_lock        = thread_safe_context.getLock();
 	auto&                         context             = *thread_safe_context.getContext();
+
+	m_generated_type = GeneratedFunctionType::VmEntryThunk;
 
 	llvm::Function* wrapper_function = llvm::Function::Create(
 		llvm::FunctionType::get(types.tvoid, {types.vm_registers->getPointerTo(), types.i64}, false),
@@ -316,19 +321,23 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	{
 		const asCDataType& type = m_context.script_function->returnType;
 
-		if (m_context.llvm_function->getReturnType() == types.tvoid)
+		if (type.GetTokenType() != ttVoid && !m_context.script_function->DoesReturnOnStack())
 		{
-			ir.CreateRetVoid();
+			llvm::Value* return_pointer = &*(m_context.llvm_function->arg_begin() + 0);
+			llvm::Type*  llvm_type      = builder.to_llvm_type(type);
+
+			if (type.IsObjectHandle() || type.IsObject())
+			{
+				ir.CreateStore(
+					ir.CreatePointerCast(ir.CreateLoad(types.pvoid, m_object_register), llvm_type), return_pointer);
+			}
+			else
+			{
+				ir.CreateStore(load_value_register_value(llvm_type), return_pointer);
+			}
 		}
-		else if (type.IsObjectHandle() || type.IsObject())
-		{
-			ir.CreateRet(ir.CreatePointerCast(
-				ir.CreateLoad(types.pvoid, m_object_register), m_context.llvm_function->getReturnType()));
-		}
-		else
-		{
-			ir.CreateRet(load_value_register_value(m_context.llvm_function->getReturnType()));
-		}
+
+		ir.CreateRet(llvm::ConstantInt::get(types.vm_state, std::uint64_t(VmState::Ok)));
 
 		m_ret_pointer = ins.pointer;
 		break;
@@ -409,9 +418,9 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	{
 		// Dereference pointer from the top of stack, set the top of the stack to the dereferenced value.
 
-		// FIXME: check pointer and raise VM exception TXT_NULL_POINTER_ACCESS when null
 		llvm::Value* address = m_stack.top(types.pvoid->getPointerTo());
 		llvm::Value* value   = ir.CreateLoad(types.pvoid, address);
+		emit_check_null_pointer(value);
 		m_stack.store(m_stack.current_stack_pointer(), value);
 		break;
 	}
@@ -567,7 +576,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 			llvm::Value* target_address = m_stack.pop(AS_PTR_SIZE, types.pvoid->getPointerTo());
 
-			// FIXME: check for null pointer (check what VM does in that context)
+			// FIXME: check for null pointer and do nothing if null
 			ir.CreateStore(object_memory_pointer, target_address);
 
 			// TODO: check for suspend?
@@ -689,7 +698,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_CHKREF:
 	{
-		// FIXME: check pointer and raise VM exception TXT_NULL_POINTER_ACCESS when null
+		emit_check_null_pointer(m_stack.top(types.pvoid));
 		break;
 	}
 
@@ -981,7 +990,8 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_ChkNullV:
 	{
-		// FIXME: check pointer and raise VM exception TXT_NULL_POINTER_ACCESS when null
+		llvm::Value* var = m_stack.load(ins.arg_sword0(), types.pvoid);
+		emit_check_null_pointer(var);
 		break;
 	}
 
@@ -1076,7 +1086,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	case asBC_LoadThisR:
 	{
 		llvm::Value* object = m_stack.load(0, types.pvoid);
-		// FIXME: check pointer and raise VM exception TXT_NULL_POINTER_ACCESS when null
+		emit_check_null_pointer(object);
 
 		llvm::Value* field = ir.CreateInBoundsGEP(object, {llvm::ConstantInt::get(types.iptr, ins.arg_sword0())});
 
@@ -1097,7 +1107,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	{
 		llvm::Value* base_pointer = m_stack.load(ins.arg_sword0(), types.pvoid);
 
-		// FIXME: check pointer and raise VM exception TXT_NULL_POINTER_ACCESS when null
+		emit_check_null_pointer(base_pointer);
 
 		llvm::Value* pointer
 			= ir.CreateInBoundsGEP(base_pointer, {llvm::ConstantInt::get(types.iptr, ins.arg_sword1())}, "fieldptr");
@@ -1352,6 +1362,14 @@ void FunctionBuilder::emit_allocate_local_structures()
 	m_value_register  = ir.CreateAlloca(types.i64, nullptr, "valueRegister");
 	m_object_register = ir.CreateAlloca(types.pvoid, nullptr, "objectRegister");
 	m_stack.setup();
+
+	ir.CreateStore(llvm::ConstantInt::get(types.i64, 0), m_value_register);
+	ir.CreateStore(ir.CreateIntToPtr(llvm::ConstantInt::get(types.iptr, 0), types.pvoid), m_object_register);
+	ir.CreateMemSet(
+		m_stack.storage_alloca(),
+		llvm::ConstantInt::get(types.i8, 0),
+		llvm::ConstantInt::get(types.iptr, m_stack.total_space() * 4),
+		llvm::MaybeAlign());
 }
 
 void FunctionBuilder::emit_cast(
@@ -1604,6 +1622,11 @@ void FunctionBuilder::emit_system_call(const asCScriptFunction& function)
 
 	llvm::Value* callee = nullptr;
 
+	if (object != nullptr)
+	{
+		emit_check_null_pointer(object);
+	}
+
 	switch (intf.callConv)
 	{
 	// Virtual
@@ -1629,7 +1652,11 @@ void FunctionBuilder::emit_system_call(const asCScriptFunction& function)
 	}
 	}
 
+	ir.CreateCall(
+		funcs.prepare_system_call,
+		{ir.CreateIntToPtr(llvm::ConstantInt::get(types.iptr, reinterpret_cast<asPWORD>(&callee)), types.pvoid)});
 	llvm::Value* result = ir.CreateCall(callee_type, callee, args);
+	emit_check_context_state();
 
 	if (return_pointer == nullptr)
 	{
@@ -1712,14 +1739,42 @@ std::size_t FunctionBuilder::emit_script_call(const asCScriptFunction& callee, F
 
 	std::vector<llvm::Value*> args;
 
-	if (callee.DoesReturnOnStack())
+	if (callee.returnType.GetTokenType() != ttVoid)
 	{
-		args.push_back(pop(callee.returnType));
+		if (callee.DoesReturnOnStack())
+		{
+			args.push_back(pop(callee.returnType));
+		}
+		else
+		{
+			llvm::Type* return_type = *(callee_type->param_begin() + 0);
+
+			if (callee.returnType.IsObjectHandle() || callee.returnType.IsObject())
+			{
+				llvm::Value* typed_object_register
+					= ir.CreatePointerCast(is_vm_entry ? ctx.object_register : m_object_register, return_type);
+
+				args.push_back(typed_object_register);
+			}
+			else if (callee.returnType.IsPrimitive())
+			{
+				llvm::Value* typed_value_register
+					= ir.CreatePointerCast(is_vm_entry ? ctx.value_register : m_value_register, return_type);
+
+				args.push_back(typed_value_register);
+			}
+			else
+			{
+				asllvm_assert(false && "unhandled return type");
+			}
+		}
 	}
 
 	if (callee.GetObjectType() != nullptr)
 	{
-		args.push_back(pop(m_context.compiler->engine().GetDataTypeFromTypeId(callee.objectType->GetTypeId())));
+		llvm::Value* object = pop(m_context.compiler->engine().GetDataTypeFromTypeId(callee.objectType->GetTypeId()));
+		emit_check_null_pointer(object);
+		args.push_back(object);
 	}
 
 	{
@@ -1730,33 +1785,8 @@ std::size_t FunctionBuilder::emit_script_call(const asCScriptFunction& callee, F
 		}
 	}
 
-	llvm::CallInst* ret = ir.CreateCall(callee_type, resolved_function, args);
-
-	if (callee.returnType.GetTokenType() != ttVoid && !callee.DoesReturnOnStack())
-	{
-		if (callee.returnType.IsObjectHandle() || callee.returnType.IsObject())
-		{
-			// Store to the object register
-			llvm::Value* typed_object_register = ir.CreatePointerCast(
-				is_vm_entry ? ctx.object_register : m_object_register, ret->getType()->getPointerTo());
-
-			ir.CreateStore(ret, typed_object_register);
-		}
-		else if (callee.returnType.IsPrimitive())
-		{
-			// TODO: code is similar with the above branch
-
-			// Store to the value register
-			llvm::Value* typed_value_register = ir.CreatePointerCast(
-				is_vm_entry ? ctx.value_register : m_value_register, ret->getType()->getPointerTo());
-
-			ir.CreateStore(ret, typed_value_register);
-		}
-		else
-		{
-			asllvm_assert(false && "unhandled return type");
-		}
-	}
+	llvm::CallInst* vm_state = ir.CreateCall(callee_type, resolved_function, args);
+	emit_check_vm_state(vm_state);
 
 	return read_dword_count;
 }
@@ -1820,7 +1850,7 @@ FunctionBuilder::resolve_virtual_script_function(llvm::Value* script_object, con
 	StandardTypes&     types   = builder.standard_types();
 	StandardFunctions& funcs   = m_context.module_builder->standard_functions();
 
-	// FIXME: check script_object pointer and raise VM exception TXT_NULL_POINTER_ACCESS when null
+	emit_check_null_pointer(script_object);
 
 	const bool is_final = callee.IsFinal() || ((callee.objectType->flags & asOBJ_NOINHERIT) != 0);
 
@@ -1930,13 +1960,10 @@ void FunctionBuilder::create_function_debug_info(llvm::Function* function, Gener
 
 	std::vector<llvm::Metadata*> types;
 	{
-		types.push_back(m_context.module_builder->get_debug_type(m_context.script_function->GetReturnTypeId()));
+		types.push_back(m_context.module_builder->get_debug_type(asTYPEID_INT8)); // TODO: make a separate type for ret
 
-		if (m_context.script_function->DoesReturnOnStack())
-		{
-			types.push_back(m_context.module_builder->get_debug_type(
-				engine.GetTypeIdFromDataType(m_context.script_function->returnType)));
-		}
+		types.push_back(m_context.module_builder->get_debug_type(
+			engine.GetTypeIdFromDataType(m_context.script_function->returnType)));
 
 		if (m_context.script_function->objectType != nullptr)
 		{
@@ -1988,5 +2015,88 @@ llvm::Value* FunctionBuilder::load_global(asPWORD address, llvm::Type* type)
 
 	llvm::Value* global_address = ir.CreateIntToPtr(llvm::ConstantInt::get(types.iptr, address), types.pi32);
 	return ir.CreateLoad(type, global_address);
+}
+
+void FunctionBuilder::emit_check_boolean(llvm::Value* value, llvm::Value* state_if_true)
+{
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
+	llvm::LLVMContext& context = *m_context.compiler->builder().llvm_context().getContext();
+
+	llvm::Function* parent = ir.GetInsertBlock()->getParent();
+
+	llvm::BasicBlock* on_true  = llvm::BasicBlock::Create(context, "setVmException", parent);
+	llvm::BasicBlock* on_false = llvm::BasicBlock::Create(context, "doNotSetVmException", parent);
+
+	ir.CreateCondBr(value, on_true, on_false);
+
+	ir.SetInsertPoint(on_true);
+	emit_vm_exception_return(state_if_true);
+
+	if (m_generated_type == GeneratedFunctionType::VmEntryThunk)
+	{
+		ir.CreateBr(on_false);
+	}
+
+	ir.SetInsertPoint(on_false);
+}
+
+void FunctionBuilder::emit_check_null_pointer(llvm::Value* pointer)
+{
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
+	StandardTypes&     types   = builder.standard_types();
+
+	emit_check_boolean(
+		ir.CreateICmp(llvm::CmpInst::ICMP_EQ, pointer, llvm::ConstantInt::getNullValue(pointer->getType()), "isNull"),
+		llvm::ConstantInt::get(types.vm_state, std::uint64_t(VmState::ExceptionNullPointer)));
+}
+
+void FunctionBuilder::emit_check_vm_state(llvm::Value* state)
+{
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
+	StandardTypes&     types   = builder.standard_types();
+
+	emit_check_boolean(
+		ir.CreateICmp(
+			llvm::CmpInst::ICMP_NE, state, llvm::ConstantInt::get(types.vm_state, std::uint64_t(VmState::Ok))),
+		state);
+}
+
+void FunctionBuilder::emit_check_context_state()
+{
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
+	StandardTypes&     types   = builder.standard_types();
+	StandardFunctions& funcs   = m_context.module_builder->standard_functions();
+
+	emit_check_boolean(
+		ir.CreateICmp(
+			llvm::CmpInst::ICMP_NE,
+			ir.CreateCall(funcs.check_execution_status, {}),
+			llvm::ConstantInt::get(types.vm_state, 0)),
+		llvm::ConstantInt::get(types.vm_state, std::uint64_t(VmState::ExceptionExternal)));
+}
+
+void FunctionBuilder::emit_vm_exception_return(llvm::Value* state)
+{
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
+	StandardFunctions& funcs   = m_context.module_builder->standard_functions();
+
+	if (m_generated_type == GeneratedFunctionType::Implementation)
+	{
+		// TODO: object cleanup as the VM does
+		ir.CreateRet(state);
+	}
+	else if (m_generated_type == GeneratedFunctionType::VmEntryThunk)
+	{
+		ir.CreateCall(funcs.set_internal_exception, {state});
+	}
+	else
+	{
+		asllvm_assert(false && "unhandled function kind");
+	}
 }
 } // namespace asllvm::detail
