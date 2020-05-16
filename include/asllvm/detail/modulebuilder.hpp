@@ -25,9 +25,7 @@ struct StandardFunctions
 };
 
 struct GlobalVariables
-{
-	llvm::GlobalVariable* vm_state;
-};
+{};
 
 struct PendingFunction
 {
