@@ -151,9 +151,17 @@ void StackFrame::allocate_parameter_storage()
 		++argument_it;
 	};
 
-	if (m_context.script_function->DoesReturnOnStack())
+	if (m_context.script_function->returnType.GetTokenType() != ttVoid)
 	{
-		allocate_parameter(m_context.script_function->returnType, "stackRetPtr");
+		if (m_context.script_function->DoesReturnOnStack())
+		{
+			allocate_parameter(m_context.script_function->returnType, "stackRetPtr");
+		}
+		else
+		{
+			// Pointer to return value as the first arg
+			++argument_it;
+		}
 	}
 
 	// is method?

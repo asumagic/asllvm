@@ -93,15 +93,16 @@ StandardTypes Builder::setup_standard_types()
 	auto  context_lock = m_context.getLock();
 	auto& context      = *m_context.getContext();
 
-	types.tvoid = llvm::Type::getVoidTy(context);
-	types.i1    = llvm::Type::getInt1Ty(context);
-	types.i8    = llvm::Type::getInt8Ty(context);
-	types.i16   = llvm::Type::getInt16Ty(context);
-	types.i32   = llvm::Type::getInt32Ty(context);
-	types.i64   = llvm::Type::getInt64Ty(context);
-	types.iptr  = llvm::Type::getInt64Ty(context); // TODO: determine pointer type from target machine
-	types.f32   = llvm::Type::getFloatTy(context);
-	types.f64   = llvm::Type::getDoubleTy(context);
+	types.tvoid    = llvm::Type::getVoidTy(context);
+	types.i1       = llvm::Type::getInt1Ty(context);
+	types.i8       = llvm::Type::getInt8Ty(context);
+	types.i16      = llvm::Type::getInt16Ty(context);
+	types.i32      = llvm::Type::getInt32Ty(context);
+	types.i64      = llvm::Type::getInt64Ty(context);
+	types.iptr     = llvm::Type::getInt64Ty(context); // TODO: determine pointer type from target machine
+	types.vm_state = types.i8;
+	types.f32      = llvm::Type::getFloatTy(context);
+	types.f64      = llvm::Type::getDoubleTy(context);
 
 	types.pvoid = types.i8->getPointerTo();
 	types.pi8   = types.i8->getPointerTo();

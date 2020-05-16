@@ -1,6 +1,7 @@
 #pragma once
 
 #include <asllvm/detail/asinternalheaders.hpp>
+#include <cstdint>
 
 namespace asllvm::detail::runtime
 {

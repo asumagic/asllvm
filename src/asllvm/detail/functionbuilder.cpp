@@ -8,6 +8,7 @@
 #include <asllvm/detail/llvmglobals.hpp>
 #include <asllvm/detail/modulebuilder.hpp>
 #include <asllvm/detail/modulecommon.hpp>
+#include <asllvm/detail/vmstate.hpp>
 #include <fmt/core.h>
 
 namespace asllvm::detail
@@ -316,19 +317,23 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	{
 		const asCDataType& type = m_context.script_function->returnType;
 
-		if (m_context.llvm_function->getReturnType() == types.tvoid)
+		if (type.GetTokenType() != ttVoid && !m_context.script_function->DoesReturnOnStack())
 		{
-			ir.CreateRetVoid();
+			llvm::Value* return_pointer = &*(m_context.llvm_function->arg_begin() + 0);
+			llvm::Type*  llvm_type      = builder.to_llvm_type(type);
+
+			if (type.IsObjectHandle() || type.IsObject())
+			{
+				ir.CreateStore(
+					ir.CreatePointerCast(ir.CreateLoad(types.pvoid, m_object_register), llvm_type), return_pointer);
+			}
+			else
+			{
+				ir.CreateStore(load_value_register_value(llvm_type), return_pointer);
+			}
 		}
-		else if (type.IsObjectHandle() || type.IsObject())
-		{
-			ir.CreateRet(ir.CreatePointerCast(
-				ir.CreateLoad(types.pvoid, m_object_register), m_context.llvm_function->getReturnType()));
-		}
-		else
-		{
-			ir.CreateRet(load_value_register_value(m_context.llvm_function->getReturnType()));
-		}
+
+		ir.CreateRet(llvm::ConstantInt::get(types.vm_state, std::uint64_t(VmState::Ok)));
 
 		m_ret_pointer = ins.pointer;
 		break;
@@ -1726,9 +1731,35 @@ std::size_t FunctionBuilder::emit_script_call(const asCScriptFunction& callee, F
 
 	std::vector<llvm::Value*> args;
 
-	if (callee.DoesReturnOnStack())
+	if (callee.returnType.GetTokenType() != ttVoid)
 	{
-		args.push_back(pop(callee.returnType));
+		if (callee.DoesReturnOnStack())
+		{
+			args.push_back(pop(callee.returnType));
+		}
+		else
+		{
+			llvm::Type* return_type = *(callee_type->param_begin() + 0);
+
+			if (callee.returnType.IsObjectHandle() || callee.returnType.IsObject())
+			{
+				llvm::Value* typed_object_register
+					= ir.CreatePointerCast(is_vm_entry ? ctx.object_register : m_object_register, return_type);
+
+				args.push_back(typed_object_register);
+			}
+			else if (callee.returnType.IsPrimitive())
+			{
+				llvm::Value* typed_value_register
+					= ir.CreatePointerCast(is_vm_entry ? ctx.value_register : m_value_register, return_type);
+
+				args.push_back(typed_value_register);
+			}
+			else
+			{
+				asllvm_assert(false && "unhandled return type");
+			}
+		}
 	}
 
 	if (callee.GetObjectType() != nullptr)
@@ -1746,33 +1777,7 @@ std::size_t FunctionBuilder::emit_script_call(const asCScriptFunction& callee, F
 		}
 	}
 
-	llvm::CallInst* ret = ir.CreateCall(callee_type, resolved_function, args);
-
-	if (callee.returnType.GetTokenType() != ttVoid && !callee.DoesReturnOnStack())
-	{
-		if (callee.returnType.IsObjectHandle() || callee.returnType.IsObject())
-		{
-			// Store to the object register
-			llvm::Value* typed_object_register = ir.CreatePointerCast(
-				is_vm_entry ? ctx.object_register : m_object_register, ret->getType()->getPointerTo());
-
-			ir.CreateStore(ret, typed_object_register);
-		}
-		else if (callee.returnType.IsPrimitive())
-		{
-			// TODO: code is similar with the above branch
-
-			// Store to the value register
-			llvm::Value* typed_value_register = ir.CreatePointerCast(
-				is_vm_entry ? ctx.value_register : m_value_register, ret->getType()->getPointerTo());
-
-			ir.CreateStore(ret, typed_value_register);
-		}
-		else
-		{
-			asllvm_assert(false && "unhandled return type");
-		}
-	}
+	llvm::CallInst* vm_state = ir.CreateCall(callee_type, resolved_function, args);
 
 	return read_dword_count;
 }
@@ -1946,13 +1951,10 @@ void FunctionBuilder::create_function_debug_info(llvm::Function* function, Gener
 
 	std::vector<llvm::Metadata*> types;
 	{
-		types.push_back(m_context.module_builder->get_debug_type(m_context.script_function->GetReturnTypeId()));
+		types.push_back(m_context.module_builder->get_debug_type(asTYPEID_INT8)); // TODO: make a separate type for ret
 
-		if (m_context.script_function->DoesReturnOnStack())
-		{
-			types.push_back(m_context.module_builder->get_debug_type(
-				engine.GetTypeIdFromDataType(m_context.script_function->returnType)));
-		}
+		types.push_back(m_context.module_builder->get_debug_type(
+			engine.GetTypeIdFromDataType(m_context.script_function->returnType)));
 
 		if (m_context.script_function->objectType != nullptr)
 		{
@@ -2010,7 +2012,7 @@ void FunctionBuilder::emit_check_null_pointer(llvm::Value* pointer)
 {
 	Builder&           builder = m_context.compiler->builder();
 	llvm::IRBuilder<>& ir      = builder.ir();
-	StandardTypes&     types   = builder.standard_types();
+	// StandardTypes&     types   = builder.standard_types();
 	StandardFunctions& funcs   = m_context.module_builder->standard_functions();
 	llvm::LLVMContext& context = *m_context.compiler->builder().llvm_context().getContext();
 

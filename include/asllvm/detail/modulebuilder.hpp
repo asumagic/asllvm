@@ -24,6 +24,11 @@ struct StandardFunctions
 		panic;
 };
 
+struct GlobalVariables
+{
+	llvm::GlobalVariable* vm_state;
+};
+
 struct PendingFunction
 {
 	asCScriptFunction* function;
@@ -66,6 +71,7 @@ class ModuleBuilder
 
 	llvm::Module&      module() { return *m_llvm_module; }
 	StandardFunctions& standard_functions() { return m_internal_functions; }
+	GlobalVariables&   global_variables() { return m_global_variables; }
 
 	llvm::DIBuilder& di_builder() { return *m_di_builder; }
 	ModuleDebugInfo& debug_info() { return m_debug_info; }
@@ -77,6 +83,7 @@ class ModuleBuilder
 
 	ModuleDebugInfo   setup_debug_info();
 	StandardFunctions setup_runtime();
+	GlobalVariables   setup_global_variables();
 
 	void build_functions();
 	void link_symbols();
@@ -91,6 +98,7 @@ class ModuleBuilder
 	std::map<int, llvm::Function*>   m_script_functions;
 	std::map<int, llvm::Function*>   m_system_functions;
 	StandardFunctions                m_internal_functions;
+	GlobalVariables                  m_global_variables;
 };
 
 } // namespace asllvm::detail

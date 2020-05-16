@@ -6,6 +6,7 @@
 #include <asllvm/detail/llvmglobals.hpp>
 #include <asllvm/detail/modulecommon.hpp>
 #include <asllvm/detail/runtime.hpp>
+#include <asllvm/detail/vmstate.hpp>
 #include <fmt/core.h>
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
 #include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
@@ -20,7 +21,8 @@ ModuleBuilder::ModuleBuilder(JitCompiler& compiler, asIScriptModule* module) :
 		std::make_unique<llvm::Module>(make_module_name(module), *compiler.builder().llvm_context().getContext())},
 	m_di_builder{std::make_unique<llvm::DIBuilder>(*m_llvm_module)},
 	m_debug_info{setup_debug_info()},
-	m_internal_functions{setup_runtime()}
+	m_internal_functions{setup_runtime()},
+	m_global_variables{setup_global_variables()}
 {}
 
 void ModuleBuilder::append(PendingFunction function) { m_pending_functions.push_back(function); }
@@ -66,9 +68,16 @@ llvm::FunctionType* ModuleBuilder::get_script_function_type(const asCScriptFunct
 	std::vector<llvm::Type*> parameter_types;
 
 	// TODO: make sret
-	if (script_function.DoesReturnOnStack())
+	if (script_function.returnType.GetTokenType() != ttVoid)
 	{
-		parameter_types.push_back(builder.to_llvm_type(script_function.returnType));
+		if (script_function.DoesReturnOnStack())
+		{
+			parameter_types.push_back(builder.to_llvm_type(script_function.returnType));
+		}
+		else
+		{
+			parameter_types.push_back(builder.to_llvm_type(script_function.returnType)->getPointerTo());
+		}
 	}
 
 	if (asCObjectType* object_type = script_function.objectType; object_type != nullptr)
@@ -82,25 +91,7 @@ llvm::FunctionType* ModuleBuilder::get_script_function_type(const asCScriptFunct
 		parameter_types.push_back(builder.to_llvm_type(script_function.parameterTypes[i]));
 	}
 
-	// If returning on stack, this means the return object will be written to a pointer passed as a param (using PSF).
-	// Otherwise, an handle to the actual object is returned.
-	// That is, of course, unless the return type is void, in which case we don't need to care.
-	llvm::Type* return_type;
-
-	if (script_function.returnType.GetTokenType() == ttVoid || script_function.DoesReturnOnStack())
-	{
-		return_type = types.tvoid;
-	}
-	else if (script_function.returnType.IsObject() && !script_function.returnType.IsObjectHandle())
-	{
-		return_type = m_compiler.builder().to_llvm_type(script_function.returnType)->getPointerTo();
-	}
-	else
-	{
-		return_type = m_compiler.builder().to_llvm_type(script_function.returnType);
-	}
-
-	return llvm::FunctionType::get(return_type, parameter_types, false);
+	return llvm::FunctionType::get(types.vm_state, parameter_types, false);
 }
 
 llvm::Function* ModuleBuilder::get_system_function(const asCScriptFunction& system_function)
@@ -416,6 +407,13 @@ StandardFunctions ModuleBuilder::setup_runtime()
 	}
 
 	return funcs;
+}
+
+GlobalVariables ModuleBuilder::setup_global_variables()
+{
+	GlobalVariables globals;
+
+	return globals;
 }
 
 void ModuleBuilder::build_functions()
