@@ -171,7 +171,6 @@ void StackFrame::allocate_parameter_storage()
 
 void StackFrame::emit_debug_info()
 {
-	// FIXME: debug info
 	asCScriptEngine&   engine = m_context.compiler->engine();
 	llvm::IRBuilder<>& ir     = m_context.compiler->builder().ir();
 	llvm::DIBuilder&   di     = m_context.module_builder->di_builder();
