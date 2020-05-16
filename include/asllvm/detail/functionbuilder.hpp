@@ -178,6 +178,8 @@ class FunctionBuilder
 
 	llvm::Value* load_global(asPWORD address, llvm::Type* type);
 
+	void emit_check_null_pointer(llvm::Value* pointer);
+
 	FunctionContext m_context;
 
 	//! \brief

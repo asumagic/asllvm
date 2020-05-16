@@ -20,7 +20,8 @@ namespace asllvm::detail
 {
 struct StandardFunctions
 {
-	llvm::FunctionCallee alloc, free, new_script_object, script_vtable_lookup, system_vtable_lookup, call_object_method;
+	llvm::FunctionCallee alloc, free, new_script_object, script_vtable_lookup, system_vtable_lookup, call_object_method,
+		panic;
 };
 
 struct PendingFunction

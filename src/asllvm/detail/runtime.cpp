@@ -37,4 +37,7 @@ void* new_script_object(asCObjectType* object_type)
 	ScriptObject_Construct(object_type, object);
 	return object;
 }
+
+void panic() { std::abort(); }
+
 } // namespace asllvm::detail::runtime

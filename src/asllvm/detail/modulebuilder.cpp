@@ -406,6 +406,15 @@ StandardFunctions ModuleBuilder::setup_runtime()
 		funcs.call_object_method = function;
 	}
 
+	{
+		llvm::Function* function = llvm::Function::Create(
+			llvm::FunctionType::get(types.tvoid, {}, false), linkage, "asllvm.private.panic", m_llvm_module.get());
+
+		function->setDoesNotReturn();
+
+		funcs.panic = function;
+	}
+
 	return funcs;
 }
 
@@ -482,6 +491,7 @@ void ModuleBuilder::link_symbols()
 	define_function(runtime::script_vtable_lookup, "asllvm.private.script_vtable_lookup");
 	define_function(runtime::system_vtable_lookup, "asllvm.private.system_vtable_lookup");
 	define_function(runtime::call_object_method, "asllvm.private.call_object_method");
+	define_function(runtime::panic, "asllvm.private.panic");
 
 	define_function(fmodf, "fmodf");
 	define_function(fmod, "fmod");

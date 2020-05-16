@@ -409,9 +409,9 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	{
 		// Dereference pointer from the top of stack, set the top of the stack to the dereferenced value.
 
-		// FIXME: check pointer and raise VM exception TXT_NULL_POINTER_ACCESS when null
 		llvm::Value* address = m_stack.top(types.pvoid->getPointerTo());
 		llvm::Value* value   = ir.CreateLoad(types.pvoid, address);
+		emit_check_null_pointer(value);
 		m_stack.store(m_stack.current_stack_pointer(), value);
 		break;
 	}
@@ -567,7 +567,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 			llvm::Value* target_address = m_stack.pop(AS_PTR_SIZE, types.pvoid->getPointerTo());
 
-			// FIXME: check for null pointer (check what VM does in that context)
+			// FIXME: check for null pointer and do nothing if null
 			ir.CreateStore(object_memory_pointer, target_address);
 
 			// TODO: check for suspend?
@@ -689,7 +689,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_CHKREF:
 	{
-		// FIXME: check pointer and raise VM exception TXT_NULL_POINTER_ACCESS when null
+		emit_check_null_pointer(m_stack.top(types.pvoid));
 		break;
 	}
 
@@ -981,7 +981,8 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 
 	case asBC_ChkNullV:
 	{
-		// FIXME: check pointer and raise VM exception TXT_NULL_POINTER_ACCESS when null
+		llvm::Value* var = m_stack.load(ins.arg_sword0(), types.pvoid);
+		emit_check_null_pointer(var);
 		break;
 	}
 
@@ -1076,7 +1077,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	case asBC_LoadThisR:
 	{
 		llvm::Value* object = m_stack.load(0, types.pvoid);
-		// FIXME: check pointer and raise VM exception TXT_NULL_POINTER_ACCESS when null
+		emit_check_null_pointer(object);
 
 		llvm::Value* field = ir.CreateInBoundsGEP(object, {llvm::ConstantInt::get(types.iptr, ins.arg_sword0())});
 
@@ -1097,7 +1098,7 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	{
 		llvm::Value* base_pointer = m_stack.load(ins.arg_sword0(), types.pvoid);
 
-		// FIXME: check pointer and raise VM exception TXT_NULL_POINTER_ACCESS when null
+		emit_check_null_pointer(base_pointer);
 
 		llvm::Value* pointer
 			= ir.CreateInBoundsGEP(base_pointer, {llvm::ConstantInt::get(types.iptr, ins.arg_sword1())}, "fieldptr");
@@ -1352,6 +1353,14 @@ void FunctionBuilder::emit_allocate_local_structures()
 	m_value_register  = ir.CreateAlloca(types.i64, nullptr, "valueRegister");
 	m_object_register = ir.CreateAlloca(types.pvoid, nullptr, "objectRegister");
 	m_stack.setup();
+
+	ir.CreateStore(llvm::ConstantInt::get(types.i64, 0), m_value_register);
+	ir.CreateStore(ir.CreateIntToPtr(llvm::ConstantInt::get(types.iptr, 0), types.pvoid), m_object_register);
+	ir.CreateMemSet(
+		m_stack.storage_alloca(),
+		llvm::ConstantInt::get(types.i8, 0),
+		llvm::ConstantInt::get(types.iptr, m_stack.total_space() * 4),
+		llvm::MaybeAlign());
 }
 
 void FunctionBuilder::emit_cast(
@@ -1604,6 +1613,11 @@ void FunctionBuilder::emit_system_call(const asCScriptFunction& function)
 
 	llvm::Value* callee = nullptr;
 
+	if (object != nullptr)
+	{
+		emit_check_null_pointer(object);
+	}
+
 	switch (intf.callConv)
 	{
 	// Virtual
@@ -1719,7 +1733,9 @@ std::size_t FunctionBuilder::emit_script_call(const asCScriptFunction& callee, F
 
 	if (callee.GetObjectType() != nullptr)
 	{
-		args.push_back(pop(m_context.compiler->engine().GetDataTypeFromTypeId(callee.objectType->GetTypeId())));
+		llvm::Value* object = pop(m_context.compiler->engine().GetDataTypeFromTypeId(callee.objectType->GetTypeId()));
+		emit_check_null_pointer(object);
+		args.push_back(object);
 	}
 
 	{
@@ -1820,7 +1836,7 @@ FunctionBuilder::resolve_virtual_script_function(llvm::Value* script_object, con
 	StandardTypes&     types   = builder.standard_types();
 	StandardFunctions& funcs   = m_context.module_builder->standard_functions();
 
-	// FIXME: check script_object pointer and raise VM exception TXT_NULL_POINTER_ACCESS when null
+	emit_check_null_pointer(script_object);
 
 	const bool is_final = callee.IsFinal() || ((callee.objectType->flags & asOBJ_NOINHERIT) != 0);
 
@@ -1988,5 +2004,31 @@ llvm::Value* FunctionBuilder::load_global(asPWORD address, llvm::Type* type)
 
 	llvm::Value* global_address = ir.CreateIntToPtr(llvm::ConstantInt::get(types.iptr, address), types.pi32);
 	return ir.CreateLoad(type, global_address);
+}
+
+void FunctionBuilder::emit_check_null_pointer(llvm::Value* pointer)
+{
+	Builder&           builder = m_context.compiler->builder();
+	llvm::IRBuilder<>& ir      = builder.ir();
+	StandardTypes&     types   = builder.standard_types();
+	StandardFunctions& funcs   = m_context.module_builder->standard_functions();
+	llvm::LLVMContext& context = *m_context.compiler->builder().llvm_context().getContext();
+
+	llvm::Function* parent = ir.GetInsertBlock()->getParent();
+
+	llvm::BasicBlock* on_null     = llvm::BasicBlock::Create(context, "nullPointerHandler", parent);
+	llvm::BasicBlock* on_non_null = llvm::BasicBlock::Create(context, "nonNullPointerContinue", parent);
+
+	llvm::Value* pointer_int = ir.CreatePtrToInt(pointer, types.iptr);
+	llvm::Value* is_null
+		= ir.CreateICmp(llvm::CmpInst::ICMP_EQ, pointer_int, llvm::ConstantInt::get(types.iptr, 0), "isNull");
+
+	ir.CreateCondBr(is_null, on_null, on_non_null);
+
+	ir.SetInsertPoint(on_null);
+	ir.CreateCall(funcs.panic);
+	ir.CreateUnreachable();
+
+	ir.SetInsertPoint(on_non_null);
 }
 } // namespace asllvm::detail
