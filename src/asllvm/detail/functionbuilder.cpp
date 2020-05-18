@@ -1081,7 +1081,12 @@ void FunctionBuilder::translate_instruction(BytecodeInstruction ins)
 	}
 
 	case asBC_CallPtr: unimpl(); break;
-	case asBC_FuncPtr: unimpl(); break;
+
+	case asBC_FuncPtr:
+	{
+		m_stack.push(llvm::ConstantInt::get(types.iptr, ins.arg_pword()), AS_PTR_SIZE);
+		break;
+	}
 
 	case asBC_LoadThisR:
 	{
