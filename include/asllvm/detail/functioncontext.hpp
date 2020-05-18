@@ -13,4 +13,4 @@ struct FunctionContext
 	llvm::Function*          llvm_function;
 	const asCScriptFunction* script_function;
 };
-} // namespace asllvm::detail::codegen
+} // namespace asllvm::detail
