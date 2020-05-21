@@ -29,5 +29,6 @@ You have to register the JIT as usual. In its current state (this should be chan
 
 ## Resources
 
+- **[Compatibility considerations (README!)](doc/compat.md)**
 - [Implementation status](doc/status.md)
 - [Performance recommendations when using asllvm](doc/performance.md)
