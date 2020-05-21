@@ -86,4 +86,4 @@ class StackFrame
 	//! \see asSVMRegisters::stackPointer
 	AsStackOffset m_stack_pointer;
 };
-} // namespace asllvm::detail::codegen
+} // namespace asllvm::detail
