@@ -154,7 +154,7 @@ llvm::FunctionType* ModuleBuilder::get_system_function_type(const asCScriptFunct
 	switch (intf.callConv)
 	{
 	// thiscall: add this as first parameter
-	// HACK: this is probably not very crossplatform to do
+	// FIXME: this is ABI-specific - make it easy to handle different ABIs
 	case ICC_VIRTUAL_THISCALL:
 	case ICC_THISCALL:
 	case ICC_CDECL_OBJFIRST:
