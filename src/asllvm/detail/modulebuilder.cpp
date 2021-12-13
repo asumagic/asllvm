@@ -8,7 +8,11 @@
 #include <asllvm/detail/runtime.hpp>
 #include <asllvm/detail/vmstate.hpp>
 #include <fmt/core.h>
+#include <llvm/ADT/StringRef.h>
+#include <llvm/ExecutionEngine/JITSymbol.h>
+#include <llvm/ExecutionEngine/Orc/Core.h>
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
+#include <llvm/ExecutionEngine/Orc/Mangling.h>
 #include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
 #include <llvm/Support/TargetSelect.h>
 
@@ -494,16 +498,28 @@ void ModuleBuilder::build_functions()
 
 void ModuleBuilder::link_symbols()
 {
-	const auto define_function = [&](auto* address, const std::string& name) {
+	llvm::orc::MangleAndInterner mangle(
+		m_compiler.jit().getExecutionSession(),
+		m_compiler.jit().getDataLayout()
+	);
+
+	llvm::orc::SymbolMap symbols;
+
+	auto& dylib = m_compiler.jit().getMainJITDylib();
+
+	const auto define_function = [&](auto& function, llvm::StringRef name) {
 		if (m_compiler.jit().lookup(name))
 		{
-			// Symbol already defined
 			return;
 		}
 
-		llvm::JITEvaluatedSymbol symbol(llvm::pointerToJITTargetAddress(address), llvm::JITSymbolFlags::Callable);
+		llvm::JITEvaluatedSymbol symbol(
+			llvm::pointerToJITTargetAddress(function),
+			llvm::JITSymbolFlags::Callable |
+			llvm::JITSymbolFlags::Absolute
+		);
 
-		ExitOnError(m_compiler.jit().defineAbsolute(name, symbol));
+		symbols.insert({mangle(name), symbol});
 	};
 
 	for (const auto& it : m_system_functions)
@@ -526,5 +542,7 @@ void ModuleBuilder::link_symbols()
 
 	define_function(fmodf, "fmodf");
 	define_function(fmod, "fmod");
+
+	ExitOnError(dylib.define(llvm::orc::absoluteSymbols(symbols)));
 }
 } // namespace asllvm::detail
