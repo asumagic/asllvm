@@ -1659,7 +1659,7 @@ void FunctionBuilder::emit_system_call(const asCScriptFunction& function)
 
 	ir.CreateCall(
 		funcs.prepare_system_call,
-		{ir.CreateIntToPtr(llvm::ConstantInt::get(types.iptr, reinterpret_cast<asPWORD>(&callee)), types.pvoid)});
+		{ir.CreatePointerCast(callee, types.pvoid)});
 	llvm::Value* result = ir.CreateCall(callee_type, callee, args);
 	emit_check_context_state();
 
