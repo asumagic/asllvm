@@ -1,4 +1,5 @@
 #include <asllvm/detail/debuginfo.hpp>
+#include <llvm/IR/Metadata.h>
 
 namespace asllvm::detail
 {
@@ -15,6 +16,7 @@ SourceLocation get_source_location(FunctionContext context, std::size_t bytecode
 llvm::DebugLoc get_debug_location(FunctionContext context, std::size_t bytecode_offset, llvm::DISubprogram* sp)
 {
 	const SourceLocation loc = get_source_location(context, bytecode_offset);
-	return llvm::DebugLoc::get(loc.line, loc.column, sp);
+	const auto di_loc = llvm::DILocation::get(context.llvm_function->getContext(), loc.line, loc.column, sp);
+	return llvm::DebugLoc(di_loc);
 }
 } // namespace asllvm::detail
