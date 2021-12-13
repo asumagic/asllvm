@@ -7,6 +7,7 @@
 #include <asllvm/detail/modulebuilder.hpp>
 #include <asllvm/detail/modulecommon.hpp>
 #include <fmt/core.h>
+#include <llvm/ExecutionEngine/JITEventListener.h>
 #include <llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h>
 #include <llvm/Support/TargetSelect.h>
 
@@ -68,8 +69,15 @@ std::unique_ptr<llvm::orc::LLJIT> JitCompiler::setup_jit()
 	auto jit = ExitOnError(llvm::orc::LLJITBuilder().create());
 
 	auto& object_linking_layer = static_cast<llvm::orc::RTDyldObjectLinkingLayer&>(jit->getObjLinkingLayer());
-	object_linking_layer.setNotifyLoaded([this](auto a, auto& b, auto& c) {
-		m_gdb_listener->notifyObjectLoaded(a, b, c);
+	object_linking_layer.setNotifyLoaded([this](
+		[[maybe_unused]] llvm::orc::MaterializationResponsibility& a,
+		const llvm::object::ObjectFile& b,
+		const llvm::RuntimeDyld::LoadedObjectInfo& c) {
+		m_gdb_listener->notifyObjectLoaded(
+			reinterpret_cast<llvm::JITEventListener::ObjectKey>(&b),
+			b,
+			c
+		);
 
 #if LLVM_USE_PERF
 		m_perf_listener->notifyObjectLoaded(a, b, c);
