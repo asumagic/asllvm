@@ -1,5 +1,7 @@
 # asllvm
 
+# NOTICE: asllvm was never completed; the spiritual (and more functional) successor is [`angelsea`](https://github.com/asumagic/angelsea)
+
 A JIT compiler for AngelScript using LLVM and OrcV2.
 
 **asllvm is not production-ready and many features are not supported yet.**
